@@ -223,6 +223,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
           </button>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.0</span>
           <span>Round {gameState.roundNumber}</span>
         </div>
 
@@ -579,6 +580,17 @@ export const GameTable: React.FC<GameTableProps> = ({
                   className="bg-white text-black font-bold px-2.5 py-1 rounded text-xs hover:bg-neutral-200 cursor-pointer transition-colors"
                 >
                   Lay Selected ({selectedCards.length}) as {m.label}
+                </button>
+              ))}
+
+              {isMyTurn && gameState.turnStage === 'draw' && selectedRequirementMatches.map(m => (
+                <button
+                  key={m.index}
+                  type="button"
+                  disabled
+                  className="bg-neutral-900 text-neutral-400 border border-neutral-700 px-2.5 py-1 rounded text-xs cursor-not-allowed"
+                >
+                  Draw Card First to Lay {m.label}
                 </button>
               ))}
 

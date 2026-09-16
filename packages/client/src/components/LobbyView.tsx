@@ -44,7 +44,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       <div className="min-h-screen bg-black text-white font-mono flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm border border-neutral-700 bg-neutral-950 p-5 rounded space-y-4">
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
-            <h1 className="text-base font-bold uppercase tracking-wider">Phase 10 Online</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold uppercase tracking-wider">Phase 10 Online</h1>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.0</span>
+            </div>
             <button
               onClick={onOpenRules}
               className="text-xs text-neutral-400 hover:text-white underline"
