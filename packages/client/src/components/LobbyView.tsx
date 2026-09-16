@@ -7,7 +7,8 @@ interface LobbyViewProps {
   playerName: string;
   setPlayerName: (name: string) => void;
   onCreateRoom: () => void;
-  onJoinRoom: (code: string) => void;
+  onJoinRoom: (code: string, isSpectator?: boolean, claimPlayerId?: string) => void;
+  onClaimSeat?: (targetPlayerId: string) => void;
   onUpdateSettings: (settings: Partial<GameSettings>) => void;
   onStartGame: () => void;
   onOpenRules: () => void;
@@ -21,6 +22,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   setPlayerName,
   onCreateRoom,
   onJoinRoom,
+  onClaimSeat,
   onUpdateSettings,
   onStartGame,
   onOpenRules,
@@ -156,6 +158,24 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             ))}
           </div>
         </div>
+
+        {/* Waitlist Section */}
+        {roomState.waitlist && roomState.waitlist.length > 0 && (
+          <div>
+            <div className="text-xs text-neutral-400 uppercase mb-2 flex items-center justify-between">
+              <span>Waitlist (Waiting for next match)</span>
+              <span className="text-[10px] text-neutral-500">({roomState.waitlist.length})</span>
+            </div>
+            <div className="border border-neutral-800 rounded divide-y divide-neutral-800 bg-black">
+              {roomState.waitlist.map(w => (
+                <div key={w.id} className="p-2 text-xs flex justify-between items-center text-neutral-400">
+                  <span>{w.name} {w.id === secretToken && '(You)'}</span>
+                  <span className="text-[10px] text-neutral-600">On Waitlist</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Turn Timer Setting */}
         <div className="border border-neutral-800 p-2.5 rounded flex justify-between items-center text-xs">

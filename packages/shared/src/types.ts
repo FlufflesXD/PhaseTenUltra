@@ -43,6 +43,7 @@ export interface PlayerPublic {
   name: string;
   isHost: boolean;
   isSpectator: boolean;
+  isBot?: boolean;
   connected: boolean;
   score: number;
   currentPhase: number;
@@ -72,6 +73,11 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface WaitlistPlayer {
+  id: string;
+  name: string;
+}
+
 export interface PublicGameState {
   roomCode: string;
   status: 'lobby' | 'in_game' | 'round_end' | 'game_over';
@@ -83,6 +89,7 @@ export interface PublicGameState {
   topDiscard: Card | null;
   discardHistory: Card[];
   players: PlayerPublic[];
+  waitlist?: WaitlistPlayer[];
   allLaidDownPhases: LaidDownPhaseGroup[];
   winnerId?: string;
   roundWinnerId?: string;
@@ -96,6 +103,7 @@ export interface RoomState {
   status: 'lobby' | 'in_game' | 'round_end' | 'game_over';
   settings: GameSettings;
   players: PlayerPublic[];
+  waitlist?: WaitlistPlayer[];
   chatMessages: ChatMessage[];
 }
 

@@ -28,6 +28,7 @@ interface GameTableProps {
   onLayExtraMeld: (cardIds: string[]) => void;
   onHitCard: (cardId: string | string[], targetGroupId: string, targetEnd?: 'low' | 'high') => void;
   onDiscardCard: (cardId: string, skipTargetId?: string) => void;
+  onClaimSeat?: (targetPlayerId: string) => void;
   onOpenRules: () => void;
 }
 
@@ -42,6 +43,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   onLayExtraMeld,
   onHitCard,
   onDiscardCard,
+  onClaimSeat,
   onOpenRules
 }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -63,8 +65,10 @@ export const GameTable: React.FC<GameTableProps> = ({
   }, [hand]);
 
   const me = gameState.players.find(p => p.id === secretToken);
+  const isSpectator = !me || me.isSpectator;
   const isMyTurn = gameState.currentTurnPlayerId === secretToken;
-  const opponents = gameState.players.filter(p => p.id !== secretToken);
+  const opponents = isSpectator ? gameState.players : gameState.players.filter(p => p.id !== secretToken);
+  const botPlayers = gameState.players.filter(p => p.isBot || !p.connected);
   const currentPhaseDef = gameState.phaseDefinitions.find(p => p.phaseNumber === me?.currentPhase);
 
   const selectedCard = useMemo(() => {
@@ -146,6 +150,11 @@ export const GameTable: React.FC<GameTableProps> = ({
           </button>
           <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.3</span>
           <span>Round {gameState.roundNumber}</span>
+          {gameState.waitlist && gameState.waitlist.length > 0 && (
+            <span className="text-[10px] text-neutral-400 border border-neutral-800 px-1.5 py-0.5 rounded">
+              Waitlist: {gameState.waitlist.map(w => w.name).join(', ')}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -172,6 +181,32 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       </header>
 
+      {/* Waitlist Banner for Spectators */}
+      {isSpectator && (
+        <div className="bg-neutral-900 border border-neutral-700 p-2.5 rounded my-2 text-center text-xs space-y-1.5">
+          <div className="text-white font-bold flex items-center justify-center gap-2">
+            <span>👀 MATCH IN PROGRESS — YOU ARE ON THE WAITLIST</span>
+          </div>
+          <p className="text-neutral-400 text-[11px]">
+            You are in the lobby with this room and will join the next match when this round/match finishes.
+          </p>
+          {botPlayers.length > 0 && onClaimSeat && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <span className="text-neutral-300 font-bold">Disconnected player available:</span>
+              {botPlayers.map(bot => (
+                <button
+                  key={bot.id}
+                  onClick={() => onClaimSeat(bot.id)}
+                  className="bg-white text-black font-bold px-3 py-1 rounded text-xs border border-white hover:bg-neutral-200 cursor-pointer shadow"
+                >
+                  Take Back Seat: {bot.name} (Stage {bot.currentPhase})
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 2. Opponents Bar */}
       <section className="py-2 flex items-center justify-center gap-2 overflow-x-auto">
         {opponents.map(opp => {
@@ -184,13 +219,28 @@ export const GameTable: React.FC<GameTableProps> = ({
               }`}
             >
               <div className="flex justify-between items-center">
-                <span>{opp.name}</span>
+                <span className="flex items-center gap-1">
+                  <span>{opp.name}</span>
+                  {opp.isBot && (
+                    <span className="text-[9px] bg-neutral-800 text-neutral-400 px-1 py-0.2 rounded border border-neutral-700 font-normal">
+                      [BOT]
+                    </span>
+                  )}
+                </span>
                 {opp.isSkipped && <span className="text-neutral-400">[SKIPPED]</span>}
               </div>
               <div className="text-[11px] text-neutral-400 mt-1 flex justify-between">
                 <span>S{opp.currentPhase} {opp.phaseCompletedInRound && '✓'}</span>
                 <span>{opp.cardCount} cards ({opp.score}pts)</span>
               </div>
+              {isSpectator && opp.isBot && onClaimSeat && (
+                <button
+                  onClick={() => onClaimSeat(opp.id)}
+                  className="w-full mt-1.5 bg-white text-black text-[10px] font-bold py-0.5 rounded hover:bg-neutral-200 cursor-pointer"
+                >
+                  Take Over Seat
+                </button>
+              )}
             </div>
           );
         })}

@@ -101,11 +101,11 @@ export function useSocket() {
     );
   }, [playerName, secretToken]);
 
-  const joinRoom = useCallback((roomCode: string, isSpectator = false, callback?: (res: any) => void) => {
+  const joinRoom = useCallback((roomCode: string, isSpectator = false, claimPlayerId?: string, callback?: (res: any) => void) => {
     if (!socketRef.current) return;
     socketRef.current.emit(
       'join_room',
-      { roomCode: roomCode.toUpperCase(), name: playerName, secretToken, isSpectator },
+      { roomCode: roomCode.toUpperCase(), name: playerName, secretToken, isSpectator, claimPlayerId },
       (res: any) => {
         if (!res.success && res.error) setError(res.error);
         if (callback) callback(res);
@@ -201,6 +201,14 @@ export function useSocket() {
     socketRef.current.emit('send_chat', { roomCode: code, secretToken, text });
   }, [gameState, roomState, secretToken]);
 
+  const claimSeat = useCallback((targetPlayerId: string, callback?: (res: any) => void) => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('claim_seat', { roomCode: code, secretToken, targetPlayerId }, (res: any) => {
+      if (callback) callback(res);
+    });
+  }, [gameState, roomState, secretToken]);
+
   return {
     connected,
     secretToken,
@@ -214,6 +222,7 @@ export function useSocket() {
     error,
     createRoom,
     joinRoom,
+    claimSeat,
     updateSettings,
     startGame,
     drawCard,

@@ -2,6 +2,8 @@ import {
   Card,
   CardColor,
   CLASSIC_PHASES,
+  findExtraMeldMatch,
+  findValidPhaseCombination,
   GameNotification,
   GameSettings,
   LaidDownPhaseGroup,
@@ -162,6 +164,10 @@ export class GameSession {
     this.turnStage = 'draw';
     this.resetTurnTimer();
     this.onStateChange();
+
+    if (current.isBot || !current.connected) {
+      this.scheduleBotTurn(current);
+    }
   }
 
   private resetTurnTimer(): void {
@@ -182,6 +188,7 @@ export class GameSession {
           this.onStateChange();
         }
       }, 1000);
+      this.turnTimerInterval.unref?.();
     } else {
       this.turnTimeRemaining = 0;
     }
@@ -662,6 +669,7 @@ export class GameSession {
         name: p.name,
         isHost: p.isHost,
         isSpectator: p.isSpectator,
+        isBot: p.isBot,
         connected: p.connected,
         score: p.score,
         currentPhase: p.currentPhase,
@@ -682,6 +690,168 @@ export class GameSession {
   public getPlayerHand(playerId: string): Card[] {
     const p = this.players.find(pl => pl.id === playerId);
     return p ? p.cards : [];
+  }
+
+  private botActionTimeout?: NodeJS.Timeout;
+
+  public scheduleBotTurn(bot: GamePlayerInternal): void {
+    if (this.botActionTimeout) {
+      clearTimeout(this.botActionTimeout);
+      this.botActionTimeout = undefined;
+    }
+
+    this.botActionTimeout = setTimeout(() => {
+      if (this.status !== 'in_game') return;
+      const current = this.getCurrentPlayer();
+      if (current && current.id === bot.id && (current.isBot || !current.connected)) {
+        this.executeBotTurn(current);
+      }
+    }, 1200);
+    this.botActionTimeout.unref?.();
+  }
+
+  public executeBotTurn(bot: GamePlayerInternal): void {
+    if (this.status !== 'in_game') return;
+    const current = this.getCurrentPlayer();
+    if (!current || current.id !== bot.id) return;
+
+    // 1. Draw
+    if (this.turnStage === 'draw') {
+      try {
+        this.drawCard(bot.id, 'deck');
+      } catch (e) {
+        return;
+      }
+    }
+
+    if (this.turnStage !== 'play') return;
+
+    const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === bot.currentPhase);
+
+    // 2. Play Stage if not yet completed
+    if (!bot.phaseCompletedInRound && phaseDef) {
+      const combination = findValidPhaseCombination(bot.cards, phaseDef);
+      if (combination) {
+        try {
+          this.layDownPhase(bot.id, combination);
+        } catch (e) {}
+      }
+    }
+
+    // 3. Play extra melds and hit onto table groups if stage is made
+    if (bot.phaseCompletedInRound && phaseDef) {
+      if (this.settings.allowPartialAndExtraSets) {
+        const extra = findExtraMeldMatch(bot.cards, phaseDef);
+        if (extra && extra.cards.length > 0) {
+          try {
+            this.layExtraGroup(bot.id, extra.cards.map(c => c.id));
+          } catch (e) {}
+        }
+      }
+
+      if (bot.cards.length > 0) {
+        for (const group of this.allLaidDownPhases) {
+          if (bot.cards.length === 0) break;
+          const candidateCards = [...bot.cards];
+          for (const card of candidateCards) {
+            if (bot.cards.length === 0) break;
+            if (validateHit(card, group, 'high')) {
+              try {
+                this.hitCard(bot.id, card.id, group.id, 'high');
+              } catch (e) {}
+            } else if (validateHit(card, group, 'low')) {
+              try {
+                this.hitCard(bot.id, card.id, group.id, 'low');
+              } catch (e) {}
+            }
+          }
+        }
+      }
+    }
+
+    if (bot.cards.length === 0 || this.status !== 'in_game') {
+      return;
+    }
+
+    // 4. Discard
+    if (this.turnStage === 'play' || this.turnStage === 'discard') {
+      const nonSkipCards = bot.cards.filter(c => c.type !== 'skip');
+      const cardToDiscard = nonSkipCards.length > 0
+        ? nonSkipCards.sort((a, b) => b.points - a.points)[0]
+        : bot.cards[0];
+
+      let skipTargetId: string | undefined = undefined;
+      if (cardToDiscard.type === 'skip') {
+        const opponents = this.getActivePlayers().filter(p => p.id !== bot.id);
+        const target = opponents.find(p => !p.isBot && !p.isSkipped) || opponents.find(p => !p.isSkipped) || opponents[0];
+        skipTargetId = target?.id;
+      }
+
+      try {
+        this.discardCard(bot.id, cardToDiscard.id, skipTargetId);
+      } catch (e) {
+        if (bot.cards.length > 0) {
+          try {
+            this.discardCard(bot.id, bot.cards[0].id);
+          } catch (err) {}
+        }
+      }
+    }
+  }
+
+  public replaceWithBot(secretTokenOrId: string): void {
+    const player = this.players.find(p => p.secretToken === secretTokenOrId || p.id === secretTokenOrId);
+    if (!player) return;
+
+    player.connected = false;
+    player.isBot = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `${player.name} disconnected. A bot is now playing for them.`,
+      playerId: player.id,
+      timestamp: Date.now()
+    });
+
+    this.onStateChange();
+
+    if (this.status === 'in_game') {
+      const cur = this.getCurrentPlayer();
+      if (cur && cur.id === player.id) {
+        this.scheduleBotTurn(player);
+      }
+    }
+  }
+
+  public reclaimPlayerSeat(targetIdOrToken: string, newSecretToken: string, newName?: string): GamePlayerInternal | null {
+    const player = this.players.find(p => p.id === targetIdOrToken || p.secretToken === targetIdOrToken);
+    if (!player) return null;
+
+    player.id = newSecretToken;
+    player.secretToken = newSecretToken;
+    if (newName && newName.trim()) {
+      player.name = newName.trim();
+    }
+    player.connected = true;
+    player.isBot = false;
+
+    if (this.botActionTimeout) {
+      clearTimeout(this.botActionTimeout);
+      this.botActionTimeout = undefined;
+    }
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `${player.name} reconnected and took back their seat!`,
+      playerId: player.id,
+      timestamp: Date.now()
+    });
+
+    this.resumeTimer();
+    this.onStateChange();
+    return player;
   }
 
   public pauseTimer(): void {
@@ -705,6 +875,7 @@ export class GameSession {
           this.onStateChange();
         }
       }, 1000);
+      this.turnTimerInterval.unref?.();
     }
   }
 
@@ -712,6 +883,10 @@ export class GameSession {
     if (this.turnTimerInterval) {
       clearInterval(this.turnTimerInterval);
       this.turnTimerInterval = undefined;
+    }
+    if (this.botActionTimeout) {
+      clearTimeout(this.botActionTimeout);
+      this.botActionTimeout = undefined;
     }
   }
 }

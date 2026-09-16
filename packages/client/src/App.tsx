@@ -20,6 +20,7 @@ export function App() {
     error,
     createRoom,
     joinRoom,
+    claimSeat,
     updateSettings,
     startGame,
     drawCard,
@@ -69,6 +70,7 @@ export function App() {
           onLayExtraMeld={layExtraMeld}
           onHitCard={hitCard}
           onDiscardCard={discardCard}
+          onClaimSeat={claimSeat}
           onOpenRules={() => setRulesOpen(true)}
         />
       ) : (
@@ -78,7 +80,8 @@ export function App() {
           playerName={playerName}
           setPlayerName={setPlayerName}
           onCreateRoom={() => createRoom()}
-          onJoinRoom={(code) => joinRoom(code)}
+          onJoinRoom={(code, isSpec, claimId) => joinRoom(code, isSpec, claimId)}
+          onClaimSeat={claimSeat}
           onUpdateSettings={updateSettings}
           onStartGame={startGame}
           onOpenRules={() => setRulesOpen(true)}

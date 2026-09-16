@@ -58,6 +58,7 @@ function broadcastRoom(room: Room): void {
 function broadcastGame(room: Room): void {
   if (!room.gameSession) return;
   const publicState = room.gameSession.getPublicState();
+  publicState.waitlist = room.getWaitlist();
   io.to(room.code).emit('game_state', publicState);
 
   // Send private hands
@@ -105,7 +106,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('join_room', (data: { roomCode: string; name: string; secretToken: string; isSpectator?: boolean }, callback) => {
+  socket.on('join_room', (data: { roomCode: string; name: string; secretToken: string; isSpectator?: boolean; claimPlayerId?: string }, callback) => {
     try {
       const room = roomManager.getRoom(data.roomCode);
       if (!room) {
@@ -120,11 +121,16 @@ io.on('connection', (socket) => {
         isSpectator: !!data.isSpectator
       };
 
-      room.addOrReconnectUser(user);
+      const result = room.addOrReconnectUser(user, data.claimPlayerId);
       socket.join(room.code);
 
+      if (room.gameSession) {
+        const hand = room.gameSession.getPlayerHand(user.secretToken);
+        socket.emit('player_hand', hand);
+      }
+
       if (typeof callback === 'function') {
-        callback({ success: true, roomCode: room.code, secretToken: user.secretToken });
+        callback({ success: true, roomCode: room.code, secretToken: user.secretToken, reconnected: result.reconnected });
       }
     } catch (err: any) {
       if (typeof callback === 'function') {
@@ -239,6 +245,24 @@ io.on('connection', (socket) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.hostSecretToken === data.secretToken) {
       room.returnToLobby(data.secretToken);
+    }
+  });
+
+  socket.on('claim_seat', (data: { roomCode: string; secretToken: string; targetPlayerId: string }, callback) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room) {
+      try {
+        const reclaimed = room.claimSeat(data.secretToken, data.targetPlayerId);
+        if (reclaimed) {
+          const hand = room.gameSession!.getPlayerHand(reclaimed.user.secretToken);
+          socket.emit('player_hand', hand);
+          if (typeof callback === 'function') callback({ success: true });
+        } else {
+          if (typeof callback === 'function') callback({ success: false, error: 'Seat not available' });
+        }
+      } catch (err: any) {
+        if (typeof callback === 'function') callback({ success: false, error: err.message });
+      }
     }
   });
 

@@ -78,6 +78,18 @@ export class Room {
     return list;
   }
 
+  public getWaitlist(): { id: string; name: string }[] {
+    if (!this.gameSession) {
+      return Array.from(this.users.values())
+        .filter(u => u.isSpectator)
+        .map(u => ({ id: u.secretToken, name: u.name }));
+    }
+    const activePlayerTokens = new Set(this.gameSession.players.map(p => p.secretToken));
+    return Array.from(this.users.values())
+      .filter(u => !activePlayerTokens.has(u.secretToken) || u.isSpectator)
+      .map(u => ({ id: u.secretToken, name: u.name }));
+  }
+
   public getRoomState(): RoomState {
     return {
       code: this.code,
@@ -85,11 +97,12 @@ export class Room {
       status: this.gameSession ? this.gameSession.status : 'lobby',
       settings: this.settings,
       players: this.getPlayers(),
+      waitlist: this.getWaitlist(),
       chatMessages: this.chatMessages.slice(-50)
     };
   }
 
-  public addOrReconnectUser(user: RoomUser): void {
+  public addOrReconnectUser(user: RoomUser, claimPlayerId?: string): { reconnected: boolean } {
     if (this.emptyRoomTimeout) {
       clearTimeout(this.emptyRoomTimeout);
       this.emptyRoomTimeout = undefined;
@@ -108,19 +121,48 @@ export class Room {
     }
     this.users.set(user.socketId, user);
 
+    let reconnected = false;
+
     if (this.gameSession) {
-      const p = this.gameSession.players.find(pl => pl.secretToken === user.secretToken);
-      if (p) {
-        p.id = user.secretToken;
-        p.connected = true;
+      let p = this.gameSession.players.find(pl => pl.secretToken === user.secretToken || pl.id === user.secretToken);
+
+      if (!p && claimPlayerId) {
+        p = this.gameSession.players.find(pl => (pl.id === claimPlayerId || pl.secretToken === claimPlayerId) && (pl.isBot || !pl.connected));
       }
-      this.gameSession.resumeTimer();
+
+      if (!p && user.name) {
+        p = this.gameSession.players.find(pl => (pl.isBot || !pl.connected) && pl.name.trim().toLowerCase() === user.name.trim().toLowerCase());
+      }
+
+      if (p) {
+        this.gameSession.reclaimPlayerSeat(p.id, user.secretToken, user.name);
+        user.isSpectator = false;
+        reconnected = true;
+      } else {
+        user.isSpectator = true;
+      }
     }
 
     this.onBroadcastRoom(this);
     if (this.gameSession) {
       this.onBroadcastGame(this);
     }
+
+    return { reconnected };
+  }
+
+  public claimSeat(userSecretToken: string, targetPlayerId: string): { user: RoomUser; player: any } | null {
+    if (!this.gameSession) return null;
+    const user = Array.from(this.users.values()).find(u => u.secretToken === userSecretToken);
+    if (!user) return null;
+
+    const player = this.gameSession.reclaimPlayerSeat(targetPlayerId, user.secretToken, user.name);
+    if (!player) return null;
+
+    user.isSpectator = false;
+    this.onBroadcastRoom(this);
+    this.onBroadcastGame(this);
+    return { user, player };
   }
 
   public removeSocket(socketId: string): void {
@@ -130,10 +172,7 @@ export class Room {
     this.users.delete(socketId);
 
     if (this.gameSession) {
-      const p = this.gameSession.players.find(pl => pl.secretToken === user.secretToken);
-      if (p) {
-        p.connected = false;
-      }
+      this.gameSession.replaceWithBot(user.secretToken);
       this.onBroadcastGame(this);
     } else {
       if (user.secretToken === this.hostSecretToken && this.users.size > 0) {
