@@ -149,7 +149,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
           </button>
-          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.5</span>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.6</span>
           <span>Round {gameState.roundNumber}</span>
           {gameState.waitlist && gameState.waitlist.length > 0 && (
             <span className="text-[10px] text-neutral-400 border border-neutral-800 px-1.5 py-0.5 rounded">
