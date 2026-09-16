@@ -1,4 +1,4 @@
-import { Card, CardColor, LaidDownPhaseGroup, PhaseDefinition, PhaseRequirement } from './types.js';
+import { Card, CardColor, LaidDownPhaseGroup, PhaseDefinition, PhaseRequirement, RequirementType } from './types.js';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -183,7 +183,74 @@ export function validatePhase(
   return { isValid: true, annotatedGroups };
 }
 
-export function validateHit(card: Card, targetGroup: LaidDownPhaseGroup): boolean {
+export function sortGroupCards(
+  cards: Card[],
+  type: RequirementType,
+  runMin?: number,
+  runMax?: number
+): Card[] {
+  if (cards.length <= 1) return [...cards];
+
+  if (type === 'set') {
+    return [...cards].sort((a, b) => {
+      if (a.type === 'number' && b.type === 'wild') return -1;
+      if (a.type === 'wild' && b.type === 'number') return 1;
+      return a.value - b.value;
+    });
+  }
+
+  if (type === 'color') {
+    return [...cards].sort((a, b) => {
+      if (a.type === 'number' && b.type === 'wild') return -1;
+      if (a.type === 'wild' && b.type === 'number') return 1;
+      return a.value - b.value;
+    });
+  }
+
+  if (type === 'run') {
+    const min = runMin ?? 1;
+    const max = runMax ?? (min + cards.length - 1);
+
+    const naturalCards = cards.filter(c => c.type === 'number');
+    const wildCards = cards.filter(c => c.type === 'wild');
+
+    const naturalMap = new Map<number, Card[]>();
+    for (const c of naturalCards) {
+      if (!naturalMap.has(c.value)) naturalMap.set(c.value, []);
+      naturalMap.get(c.value)!.push(c);
+    }
+
+    const sortedRun: Card[] = [];
+    let wildIdx = 0;
+
+    for (let val = min; val <= max; val++) {
+      if (naturalMap.has(val) && naturalMap.get(val)!.length > 0) {
+        sortedRun.push(naturalMap.get(val)!.shift()!);
+      } else if (wildIdx < wildCards.length) {
+        sortedRun.push(wildCards[wildIdx++]);
+      }
+    }
+
+    for (const remainingList of naturalMap.values()) {
+      for (const rem of remainingList) {
+        sortedRun.push(rem);
+      }
+    }
+    while (wildIdx < wildCards.length) {
+      sortedRun.push(wildCards[wildIdx++]);
+    }
+
+    return sortedRun;
+  }
+
+  return [...cards];
+}
+
+export function validateHit(
+  card: Card,
+  targetGroup: LaidDownPhaseGroup,
+  targetEnd?: 'low' | 'high'
+): boolean {
   if (card.type === 'skip') return false;
   const isWild = card.type === 'wild';
 
@@ -202,6 +269,8 @@ export function validateHit(card: Card, targetGroup: LaidDownPhaseGroup): boolea
     const max = targetGroup.runMax ?? 12;
 
     if (isWild) {
+      if (targetEnd === 'low') return min > 1;
+      if (targetEnd === 'high') return max < 12;
       return min > 1 || max < 12;
     }
 

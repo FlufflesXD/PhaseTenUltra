@@ -155,13 +155,25 @@ export class Room {
     if (this.emptyRoomTimeout) {
       clearTimeout(this.emptyRoomTimeout);
     }
-    const timeoutMs = this.gameSession ? 20000 : 10000;
+    const timeoutMs = (this.gameSession && this.gameSession.status === 'in_game') ? 15000 : 5000;
     this.emptyRoomTimeout = setTimeout(() => {
       if (this.users.size === 0) {
         this.cleanup();
         this.onDeleteRoom(this.code);
       }
     }, timeoutMs);
+    this.emptyRoomTimeout.unref?.();
+  }
+
+  public returnToLobby(hostToken: string): void {
+    if (this.hostSecretToken !== hostToken) {
+      throw new Error('Only the lobby host can return to lobby');
+    }
+    if (this.gameSession) {
+      this.gameSession.cleanup();
+      this.gameSession = null;
+    }
+    this.onBroadcastRoom(this);
   }
 
   public updateSettings(hostToken: string, newSettings: Partial<GameSettings>): void {
@@ -248,6 +260,23 @@ export class Room {
 
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
+  private sweeperInterval?: NodeJS.Timeout;
+
+  constructor() {
+    this.sweeperInterval = setInterval(() => {
+      this.cleanupEmptyRooms();
+    }, 15000);
+    this.sweeperInterval.unref?.();
+  }
+
+  public cleanupEmptyRooms(): void {
+    for (const [code, room] of this.rooms.entries()) {
+      if (room.users.size === 0) {
+        room.cleanup();
+        this.rooms.delete(code);
+      }
+    }
+  }
 
   public createRoom(
     hostUser: RoomUser,
@@ -272,10 +301,18 @@ export class RoomManager {
   }
 
   public deleteRoom(code: string): void {
-    const room = this.rooms.get(code);
+    const upper = code.toUpperCase();
+    const room = this.rooms.get(upper);
     if (room) {
       room.cleanup();
-      this.rooms.delete(code);
+      this.rooms.delete(upper);
+    }
+  }
+
+  public leaveRoom(socketId: string): void {
+    const room = this.findRoomBySocketId(socketId);
+    if (room) {
+      room.removeSocket(socketId);
     }
   }
 

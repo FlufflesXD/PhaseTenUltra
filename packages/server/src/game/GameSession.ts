@@ -10,6 +10,7 @@ import {
   PublicGameState,
   RequirementType,
   sortCardsByValue,
+  sortGroupCards,
   TurnStage,
   validateColorGroup,
   validateHit,
@@ -261,13 +262,14 @@ export class GameSession {
     current.phaseCompletedInRound = true;
 
     validation.annotatedGroups.forEach((group, index) => {
+      const sortedCards = sortGroupCards(group.cards, group.type, group.runMin, group.runMax);
       const laidDownGroup: LaidDownPhaseGroup = {
         id: `group_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 5)}`,
         playerId: current.id,
         playerName: current.name,
         requirementIndex: index,
         type: group.type,
-        cards: group.cards,
+        cards: sortedCards,
         targetValue: group.targetValue,
         targetColor: group.targetColor,
         runMin: group.runMin,
@@ -341,13 +343,14 @@ export class GameSession {
     current.cards = current.cards.filter(c => !usedCardIds.has(c.id));
     current.cardCount = current.cards.length;
 
+    const sortedCards = sortGroupCards(cards, req.type, runMin, runMax);
     const laidGroup: LaidDownPhaseGroup = {
       id: `group_${Date.now()}_${reqIndex}_${Math.random().toString(36).substring(2, 5)}`,
       playerId: current.id,
       playerName: current.name,
       requirementIndex: reqIndex,
       type: req.type,
-      cards,
+      cards: sortedCards,
       targetValue,
       targetColor,
       runMin,
@@ -424,13 +427,14 @@ export class GameSession {
     current.cards = current.cards.filter(c => !usedCardIds.has(c.id));
     current.cardCount = current.cards.length;
 
+    const sortedCards = sortGroupCards(cards, groupType, runMin, runMax);
     const laidGroup: LaidDownPhaseGroup = {
       id: `group_${Date.now()}_extra_${Math.random().toString(36).substring(2, 6)}`,
       playerId: current.id,
       playerName: current.name,
       requirementIndex: 99,
       type: groupType,
-      cards,
+      cards: sortedCards,
       targetValue,
       runMin,
       runMax
@@ -455,7 +459,12 @@ export class GameSession {
     this.onStateChange();
   }
 
-  public hitCard(playerId: string, cardId: string | string[], targetGroupId: string): void {
+  public hitCard(
+    playerId: string,
+    cardId: string | string[],
+    targetGroupId: string,
+    targetEnd?: 'low' | 'high'
+  ): void {
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw first');
@@ -472,38 +481,47 @@ export class GameSession {
       if (cardIndex === -1) throw new Error('Card not in hand');
       const card = current.cards[cardIndex];
 
-      const canHit = validateHit(card, targetGroup);
+      const canHit = validateHit(card, targetGroup, targetEnd);
       if (!canHit) throw new Error('Card cannot hit this group');
 
       current.cards.splice(cardIndex, 1);
       current.cardCount = current.cards.length;
 
+      targetGroup.cards.push(card);
+
       if (targetGroup.type === 'run') {
+        const min = targetGroup.runMin ?? 1;
+        const max = targetGroup.runMax ?? 12;
+
         if (card.type === 'number') {
-          if (targetGroup.runMin !== undefined && card.value < targetGroup.runMin) {
+          if (card.value < min) {
             targetGroup.runMin = card.value;
-            targetGroup.cards.unshift(card);
-          } else {
-            targetGroup.cards.push(card);
-            if (targetGroup.runMax !== undefined && card.value > targetGroup.runMax) {
-              targetGroup.runMax = card.value;
-            }
+          } else if (card.value > max) {
+            targetGroup.runMax = card.value;
           }
         } else {
           // Wild card on run
-          if (targetGroup.runMax !== undefined && targetGroup.runMax < 12) {
-            targetGroup.runMax += 1;
-            targetGroup.cards.push(card);
-          } else if (targetGroup.runMin !== undefined && targetGroup.runMin > 1) {
-            targetGroup.runMin -= 1;
-            targetGroup.cards.unshift(card);
-          } else {
-            targetGroup.cards.push(card);
+          // If high end is already 12 or targetEnd is 'low', extend low end!
+          // If low end is already 1 or targetEnd is 'high', extend high end!
+          if (targetEnd === 'low' || (max >= 12 && min > 1)) {
+            targetGroup.runMin = min - 1;
+          } else if (targetEnd === 'high' || (min <= 1 && max < 12)) {
+            targetGroup.runMax = max + 1;
+          } else if (min > 1) {
+            targetGroup.runMin = min - 1;
+          } else if (max < 12) {
+            targetGroup.runMax = max + 1;
           }
         }
-      } else {
-        targetGroup.cards.push(card);
       }
+
+      // Always maintain strictly ordered cards in the group!
+      targetGroup.cards = sortGroupCards(
+        targetGroup.cards,
+        targetGroup.type,
+        targetGroup.runMin,
+        targetGroup.runMax
+      );
     }
 
     this.notify({
@@ -591,7 +609,12 @@ export class GameSession {
       }
 
       if (player.phaseCompletedInRound) {
-        player.currentPhase += 1;
+        if (player.currentPhase >= 10) {
+          player.completedAllPhases = true;
+          player.currentPhase = 10;
+        } else {
+          player.currentPhase += 1;
+        }
       }
     }
 
@@ -603,7 +626,7 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    const winningCandidates = this.getActivePlayers().filter(p => p.currentPhase > 10);
+    const winningCandidates = this.getActivePlayers().filter(p => p.completedAllPhases);
     if (winningCandidates.length > 0) {
       winningCandidates.sort((a, b) => a.score - b.score);
       const gameWinner = winningCandidates[0];
@@ -622,7 +645,36 @@ export class GameSession {
     this.onStateChange();
   }
 
+  public restartGame(): void {
+    if (this.turnTimerInterval) {
+      clearInterval(this.turnTimerInterval);
+      this.turnTimerInterval = undefined;
+    }
+    this.status = 'in_game';
+    this.roundNumber = 1;
+    this.allLaidDownPhases = [];
+    this.winnerId = undefined;
+    this.roundWinnerId = undefined;
+
+    for (const player of this.players) {
+      player.score = 0;
+      player.currentPhase = 1;
+      player.phaseCompletedInRound = false;
+      player.completedAllPhases = false;
+      player.cards = [];
+      player.cardCount = 0;
+      player.laidDownPhases = [];
+      player.isSkipped = false;
+    }
+
+    this.startRound();
+  }
+
   public nextRound(): void {
+    if (this.status === 'game_over') {
+      this.restartGame();
+      return;
+    }
     if (this.status !== 'round_end') return;
     this.roundNumber += 1;
     this.startRound();
@@ -667,6 +719,7 @@ export class GameSession {
         score: p.score,
         currentPhase: p.currentPhase,
         phaseCompletedInRound: p.phaseCompletedInRound,
+        completedAllPhases: p.completedAllPhases,
         cardCount: p.cards.length,
         laidDownPhases: p.laidDownPhases,
         isSkipped: p.isSkipped

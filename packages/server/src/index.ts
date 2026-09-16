@@ -199,11 +199,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('hit_card', (data: { roomCode: string; secretToken: string; cardId: string | string[]; targetGroupId: string }) => {
+  socket.on('hit_card', (data: { roomCode: string; secretToken: string; cardId: string | string[]; targetGroupId: string; targetEnd?: 'low' | 'high' }) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.gameSession) {
       try {
-        room.gameSession.hitCard(data.secretToken, data.cardId, data.targetGroupId);
+        room.gameSession.hitCard(data.secretToken, data.cardId, data.targetGroupId, data.targetEnd);
       } catch (err: any) {
         socket.emit('error_message', err.message);
       }
@@ -225,6 +225,31 @@ io.on('connection', (socket) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.gameSession && room.hostSecretToken === data.secretToken) {
       room.gameSession.nextRound();
+    }
+  });
+
+  socket.on('start_new_match', (data: { roomCode: string; secretToken: string }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession && room.hostSecretToken === data.secretToken) {
+      room.gameSession.restartGame();
+    }
+  });
+
+  socket.on('return_to_lobby', (data: { roomCode: string; secretToken: string }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.hostSecretToken === data.secretToken) {
+      room.returnToLobby(data.secretToken);
+    }
+  });
+
+  socket.on('leave_room', (data: { roomCode: string; secretToken: string }, callback) => {
+    const room = roomManager.findRoomBySocketId(socket.id);
+    if (room) {
+      room.removeSocket(socket.id);
+      socket.leave(room.code);
+    }
+    if (typeof callback === 'function') {
+      callback({ success: true });
     }
   });
 

@@ -47,6 +47,7 @@ export interface PlayerPublic {
   score: number;
   currentPhase: number;
   phaseCompletedInRound: boolean;
+  completedAllPhases?: boolean;
   cardCount: number;
   laidDownPhases: LaidDownPhaseGroup[];
   isSkipped: boolean;

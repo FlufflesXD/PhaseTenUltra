@@ -11,6 +11,7 @@ interface LobbyViewProps {
   onUpdateSettings: (settings: Partial<GameSettings>) => void;
   onStartGame: () => void;
   onOpenRules: () => void;
+  onLeaveRoom?: () => void;
 }
 
 export const LobbyView: React.FC<LobbyViewProps> = ({
@@ -22,7 +23,8 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onJoinRoom,
   onUpdateSettings,
   onStartGame,
-  onOpenRules
+  onOpenRules,
+  onLeaveRoom
 }) => {
   const [joinCode, setJoinCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -123,6 +125,15 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             >
               Rules
             </button>
+            {onLeaveRoom && (
+              <button
+                type="button"
+                onClick={onLeaveRoom}
+                className="px-2 py-1 text-xs border border-neutral-700 rounded hover:bg-neutral-900 text-neutral-400 hover:text-white cursor-pointer"
+              >
+                Leave
+              </button>
+            )}
           </div>
         </div>
 

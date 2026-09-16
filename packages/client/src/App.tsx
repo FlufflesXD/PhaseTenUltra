@@ -29,6 +29,9 @@ export function App() {
     hitCard,
     discardCard,
     nextRound,
+    startNewMatch,
+    returnToLobby,
+    leaveRoom,
     sendChat
   } = useSocket();
 
@@ -79,6 +82,7 @@ export function App() {
           onUpdateSettings={updateSettings}
           onStartGame={startGame}
           onOpenRules={() => setRulesOpen(true)}
+          onLeaveRoom={leaveRoom}
         />
       )}
 
@@ -96,6 +100,8 @@ export function App() {
           gameState={gameState}
           isHost={isHost}
           onNextRound={nextRound}
+          onStartNewMatch={startNewMatch}
+          onReturnToLobby={returnToLobby}
         />
       )}
 

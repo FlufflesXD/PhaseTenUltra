@@ -5,15 +5,32 @@ interface RoundEndModalProps {
   gameState: PublicGameState;
   isHost: boolean;
   onNextRound: () => void;
+  onStartNewMatch?: () => void;
+  onReturnToLobby?: () => void;
 }
 
 export const RoundEndModal: React.FC<RoundEndModalProps> = ({
   gameState,
   isHost,
-  onNextRound
+  onNextRound,
+  onStartNewMatch,
+  onReturnToLobby
 }) => {
   const isGameOver = gameState.status === 'game_over';
   const winner = gameState.players.find(p => p.id === (isGameOver ? gameState.winnerId : gameState.roundWinnerId));
+
+  const getPhaseStatusText = (p: typeof gameState.players[0]) => {
+    if (p.completedAllPhases) {
+      return 'Completed All 10 Phases (Winner!)';
+    }
+    if (p.phaseCompletedInRound) {
+      if (p.currentPhase >= 10) {
+        return 'Completed Phase 10!';
+      }
+      return `Advanced to Phase ${p.currentPhase}`;
+    }
+    return `Repeating Phase ${p.currentPhase}`;
+  };
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
@@ -32,13 +49,21 @@ export const RoundEndModal: React.FC<RoundEndModalProps> = ({
           <div className="border border-neutral-800 rounded divide-y divide-neutral-800">
             {gameState.players
               .slice()
-              .sort((a, b) => b.currentPhase !== a.currentPhase ? b.currentPhase - a.currentPhase : a.score - b.score)
+              .sort((a, b) => {
+                if (a.completedAllPhases !== b.completedAllPhases) {
+                  return a.completedAllPhases ? -1 : 1;
+                }
+                if (b.currentPhase !== a.currentPhase) {
+                  return b.currentPhase - a.currentPhase;
+                }
+                return a.score - b.score;
+              })
               .map(p => (
                 <div key={p.id} className="p-2 flex items-center justify-between">
                   <div>
                     <div className="font-bold text-white">{p.name}</div>
                     <div className="text-[10px] text-neutral-400">
-                      {p.phaseCompletedInRound ? 'Advanced to Phase ' + p.currentPhase : 'Repeating Phase ' + p.currentPhase}
+                      {getPhaseStatusText(p)}
                     </div>
                   </div>
                   <div className="text-right">
@@ -52,12 +77,24 @@ export const RoundEndModal: React.FC<RoundEndModalProps> = ({
 
         <div>
           {isHost ? (
-            <button
-              onClick={onNextRound}
-              className="w-full py-2 bg-white text-black font-bold uppercase rounded hover:bg-neutral-200"
-            >
-              {isGameOver ? 'Start New Match' : 'Next Round'}
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={isGameOver ? (onStartNewMatch || onNextRound) : onNextRound}
+                className="w-full py-2 bg-white text-black font-bold uppercase rounded hover:bg-neutral-200 cursor-pointer"
+              >
+                {isGameOver ? 'Start New Match' : 'Next Round'}
+              </button>
+              {isGameOver && onReturnToLobby && (
+                <button
+                  type="button"
+                  onClick={onReturnToLobby}
+                  className="w-full py-2 bg-neutral-900 border border-neutral-700 text-white font-bold uppercase rounded hover:bg-neutral-800 cursor-pointer"
+                >
+                  Return to Lobby
+                </button>
+              )}
+            </div>
           ) : (
             <div className="text-center text-neutral-500 italic">
               Waiting for host to continue...

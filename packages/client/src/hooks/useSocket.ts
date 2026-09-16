@@ -153,10 +153,10 @@ export function useSocket() {
     socketRef.current.emit('lay_extra_meld', { roomCode: code, secretToken, cardIds });
   }, [gameState, roomState, secretToken]);
 
-  const hitCard = useCallback((cardId: string | string[], targetGroupId: string) => {
+  const hitCard = useCallback((cardId: string | string[], targetGroupId: string, targetEnd?: 'low' | 'high') => {
     const code = gameState?.roomCode || roomState?.code;
     if (!socketRef.current || !code) return;
-    socketRef.current.emit('hit_card', { roomCode: code, secretToken, cardId, targetGroupId });
+    socketRef.current.emit('hit_card', { roomCode: code, secretToken, cardId, targetGroupId, targetEnd });
   }, [gameState, roomState, secretToken]);
 
   const discardCard = useCallback((cardId: string, skipTargetPlayerId?: string) => {
@@ -169,6 +169,30 @@ export function useSocket() {
     const code = gameState?.roomCode || roomState?.code;
     if (!socketRef.current || !code) return;
     socketRef.current.emit('next_round', { roomCode: code, secretToken });
+  }, [gameState, roomState, secretToken]);
+
+  const startNewMatch = useCallback(() => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('start_new_match', { roomCode: code, secretToken });
+  }, [gameState, roomState, secretToken]);
+
+  const returnToLobby = useCallback(() => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('return_to_lobby', { roomCode: code, secretToken });
+    setGameState(null);
+  }, [gameState, roomState, secretToken]);
+
+  const leaveRoom = useCallback(() => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('leave_room', { roomCode: code, secretToken }, () => {
+      setRoomState(null);
+      setGameState(null);
+      setHand([]);
+      setChatMessages([]);
+    });
   }, [gameState, roomState, secretToken]);
 
   const sendChat = useCallback((text: string) => {
@@ -199,6 +223,9 @@ export function useSocket() {
     hitCard,
     discardCard,
     nextRound,
+    startNewMatch,
+    returnToLobby,
+    leaveRoom,
     sendChat
   };
 }
