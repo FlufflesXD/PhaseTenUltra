@@ -20,6 +20,8 @@ export const CardView: React.FC<CardViewProps> = ({
   onClick,
   badge
 }) => {
+  const [imageError, setImageError] = React.useState(false);
+
   const sizeClasses = {
     sm: 'w-12 h-16 text-[10px]',
     md: 'w-16 h-24 sm:w-20 sm:h-28 text-xs',
@@ -35,7 +37,32 @@ export const CardView: React.FC<CardViewProps> = ({
 
   const colorLabel = card.color !== 'none' ? card.color.toUpperCase() : '';
 
-  const innerContent = (
+  const imageSrc = React.useMemo(() => {
+    if (card.type === 'wild') return '/cards/wild.png';
+    if (card.type === 'skip') return '/cards/skip.png';
+    if (card.type === 'number') return `/cards/${card.color}_${card.value}.png`;
+    return null;
+  }, [card.type, card.color, card.value]);
+
+  React.useEffect(() => {
+    setImageError(false);
+  }, [card.id, card.type, card.color, card.value]);
+
+  const innerContent = imageSrc && !imageError ? (
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded">
+      <img
+        src={imageSrc}
+        alt={`${card.color} ${card.value || card.type}`}
+        onError={() => setImageError(true)}
+        className="w-full h-full object-contain pointer-events-none rounded"
+      />
+      {badge && (
+        <span className="absolute -top-2 -right-1 bg-white text-black border border-black text-[9px] font-bold px-1 rounded z-10">
+          {badge}
+        </span>
+      )}
+    </div>
+  ) : (
     <>
       {/* Top row */}
       <div className="flex justify-between items-center text-[9px] font-mono leading-none">

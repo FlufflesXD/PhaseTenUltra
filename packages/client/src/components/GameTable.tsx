@@ -49,6 +49,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [skipTargetModalOpen, setSkipTargetModalOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [deckBackError, setDeckBackError] = useState(false);
   const [localHand, setLocalHand] = useState<Card[]>(hand);
 
   useEffect(() => {
@@ -255,16 +256,37 @@ export const GameTable: React.FC<GameTableProps> = ({
             <button
               onClick={() => handleDraw('deck')}
               disabled={!isMyTurn || gameState.turnStage !== 'draw'}
-              className={`w-20 h-28 sm:w-24 sm:h-34 border rounded flex flex-col items-center justify-center text-xs p-2 transition-colors ${
+              className={`relative w-20 h-28 sm:w-24 sm:h-34 border rounded flex flex-col items-center justify-center text-xs p-2 transition-colors overflow-hidden ${
                 isMyTurn && gameState.turnStage === 'draw'
                   ? 'border-white bg-neutral-900 hover:bg-neutral-800 cursor-pointer font-bold'
                   : 'border-neutral-800 bg-black text-neutral-600 cursor-default'
               }`}
             >
-              <div>DECK</div>
-              <div className="text-[10px] mt-1">({gameState.drawPileCount})</div>
-              {isMyTurn && gameState.turnStage === 'draw' && (
-                <div className="text-[9px] mt-2 underline">DRAW</div>
+              {!deckBackError ? (
+                <>
+                  <img
+                    src="/cards/back.png"
+                    alt="Deck"
+                    onError={() => setDeckBackError(true)}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  />
+                  <div className="absolute top-1 right-1 bg-black/80 text-white text-[10px] px-1 py-0.5 rounded font-bold">
+                    {gameState.drawPileCount}
+                  </div>
+                  {isMyTurn && gameState.turnStage === 'draw' && (
+                    <div className="absolute bottom-1 bg-white text-black text-[9px] px-1.5 py-0.5 rounded font-bold">
+                      DRAW
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div>DECK</div>
+                  <div className="text-[10px] mt-1">({gameState.drawPileCount})</div>
+                  {isMyTurn && gameState.turnStage === 'draw' && (
+                    <div className="text-[9px] mt-2 underline">DRAW</div>
+                  )}
+                </>
               )}
             </button>
             <span className="text-[10px] text-neutral-500 mt-1">Draw Pile</span>
