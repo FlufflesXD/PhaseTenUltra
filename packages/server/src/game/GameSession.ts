@@ -13,7 +13,6 @@ import {
   validatePhase
 } from '@phase-ten/shared';
 import { createDeck, shuffleDeck } from '@phase-ten/shared';
-import { dataStore } from '../db/storage.js';
 
 export interface GamePlayerInternal extends PlayerPrivate {
   secretToken: string;
@@ -429,20 +428,6 @@ export class GameSession {
         message: `${gameWinner.name} has completed all 10 phases and won the game!`,
         playerId: gameWinner.id,
         timestamp: Date.now()
-      });
-
-      dataStore.recordMatch({
-        id: `match_${Date.now()}`,
-        roomCode: this.roomCode,
-        completedAt: Date.now(),
-        winnerName: gameWinner.name,
-        roundsPlayed: this.roundNumber,
-        players: this.getActivePlayers().map(p => ({
-          name: p.name,
-          finalPhase: Math.min(10, p.currentPhase),
-          score: p.score,
-          isBot: false
-        }))
       });
     }
 

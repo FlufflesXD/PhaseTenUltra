@@ -6,7 +6,6 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { roomManager, Room, RoomUser } from './room/RoomManager.js';
-import { dataStore } from './db/storage.js';
 import { GameNotification, ChatMessage } from '@phase-ten/shared';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,13 +24,6 @@ await app.register(fastifyCors, {
 // REST Endpoints
 app.get('/api/health', async () => {
   return { status: 'ok', timestamp: Date.now() };
-});
-
-app.get('/api/stats', async () => {
-  return {
-    recentMatches: dataStore.getRecentMatches(),
-    leaderboard: dataStore.getLeaderboard()
-  };
 });
 
 // Serve frontend static files if client build exists

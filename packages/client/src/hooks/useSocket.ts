@@ -14,6 +14,7 @@ export function useSocket() {
   const [gameState, setGameState] = useState<PublicGameState | null>(null);
   const [hand, setHand] = useState<Card[]>([]);
   const [notifications, setNotifications] = useState<GameNotification[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [secretToken] = useState<string>(() => {
@@ -54,6 +55,16 @@ export function useSocket() {
 
     socket.on('room_state', (state: RoomState) => {
       setRoomState(state);
+      if (state.chatMessages) {
+        setChatMessages(state.chatMessages);
+      }
+    });
+
+    socket.on('chat_message', (msg: ChatMessage) => {
+      setChatMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
     });
 
     socket.on('game_state', (state: PublicGameState) => {
@@ -155,6 +166,7 @@ export function useSocket() {
     gameState,
     hand,
     notifications,
+    chatMessages,
     error,
     createRoom,
     joinRoom,

@@ -16,6 +16,7 @@ export function App() {
     gameState,
     hand,
     notifications,
+    chatMessages,
     error,
     createRoom,
     joinRoom,
@@ -80,7 +81,7 @@ export function App() {
       {/* Chat */}
       {roomState && (
         <ChatDrawer
-          chatMessages={roomState.chatMessages}
+          chatMessages={chatMessages}
           onSendMessage={sendChat}
         />
       )}
