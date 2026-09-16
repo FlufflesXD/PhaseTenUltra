@@ -21,15 +21,15 @@ export const RoundEndModal: React.FC<RoundEndModalProps> = ({
 
   const getPhaseStatusText = (p: typeof gameState.players[0]) => {
     if (p.completedAllPhases) {
-      return 'Completed All 10 Phases (Winner!)';
+      return 'Completed All 10 Stages (Winner!)';
     }
     if (p.phaseCompletedInRound) {
       if (p.currentPhase >= 10) {
-        return 'Completed Phase 10!';
+        return 'Completed Stage 10!';
       }
-      return `Advanced to Phase ${p.currentPhase}`;
+      return `Advanced to Stage ${p.currentPhase}`;
     }
-    return `Repeating Phase ${p.currentPhase}`;
+    return `Repeating Stage ${p.currentPhase}`;
   };
 
   return (
@@ -67,7 +67,7 @@ export const RoundEndModal: React.FC<RoundEndModalProps> = ({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div>Phase {Math.min(10, p.currentPhase)}</div>
+                    <div>Stage {Math.min(10, p.currentPhase)}</div>
                     <div className="text-neutral-400">{p.score} pts</div>
                   </div>
                 </div>

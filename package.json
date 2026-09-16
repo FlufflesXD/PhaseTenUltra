@@ -2,7 +2,7 @@
   "name": "phase-ten-ultra",
   "version": "1.0.0",
   "private": true,
-  "description": "Enhanced online multiplayer Phase 10 card game",
+  "description": "TenStages (Online Multiplayer 10-Stage Rummy Card Game)",
   "workspaces": [
     "packages/*"
   ],

@@ -144,7 +144,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
           </button>
-          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.2</span>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.3</span>
           <span>Round {gameState.roundNumber}</span>
         </div>
 
@@ -188,7 +188,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {opp.isSkipped && <span className="text-neutral-400">[SKIPPED]</span>}
               </div>
               <div className="text-[11px] text-neutral-400 mt-1 flex justify-between">
-                <span>P{opp.currentPhase} {opp.phaseCompletedInRound && '✓'}</span>
+                <span>S{opp.currentPhase} {opp.phaseCompletedInRound && '✓'}</span>
                 <span>{opp.cardCount} cards ({opp.score}pts)</span>
               </div>
             </div>
@@ -252,7 +252,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         {gameState.allLaidDownPhases.length > 0 && (
           <div className="w-full max-w-2xl border border-neutral-800 p-2.5 rounded bg-neutral-950 text-xs">
             <div className="text-[10px] text-neutral-500 uppercase mb-1.5 flex justify-between items-center">
-              <span>Completed Phases on Table</span>
+              <span>Completed Stages on Table</span>
               {me?.phaseCompletedInRound && (
                 <span className="text-neutral-400">Select card in hand to hit matching groups</span>
               )}
@@ -535,7 +535,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                   className="w-full p-2 rounded border border-neutral-800 hover:border-white text-left flex justify-between cursor-pointer"
                 >
                   <span>{opp.name}</span>
-                  <span className="text-neutral-500">Phase {opp.currentPhase}</span>
+                  <span className="text-neutral-500">Stage {opp.currentPhase}</span>
                 </button>
               ))}
             </div>

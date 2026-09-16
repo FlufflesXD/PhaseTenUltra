@@ -1,9 +1,9 @@
-# 🃏 Phase 10 (Online Multiplayer)
+# 🃏 TenStages (Online Multiplayer)
 
-A minimal, clean, authentic online multiplayer implementation of the classic **Phase 10** card game designed for self-hosted servers and Portainer.
+A minimal, clean, authentic online multiplayer 10-stage rummy card game designed for self-hosted servers and Portainer.
 
 - **Clean Black & White / Minimalist UI**: An unstyled, lightweight base ready for your own custom themes and styling.
-- **Pure Phase 10 Rules**: Standard 108-card deck (96 numbers, 8 Wilds, 4 Skips), official 10 phases, hitting rules, and scoring.
+- **TenStages Rules**: Standard 108-card deck (96 numbers, 8 Wilds, 4 Skips), 10 stages, built-in Half Rule, hitting rules, and scoring.
 - **Room & Code System**: Create a lobby or join with a 4-letter code.
 - **No Accounts Required**: Enter your name and play immediately.
 - **Single Port Deployment**: Serves both WebSocket server and React client directly on port **`6969`**. No Nginx container needed.
@@ -23,23 +23,18 @@ A minimal, clean, authentic online multiplayer implementation of the classic **P
 version: "3.8"
 
 services:
-  phase-ten:
-    build: .
-    image: phase-ten:latest
-    container_name: phase-ten
+  tenstages:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tenstages:v2.3
+    container_name: tenstages
     restart: unless-stopped
     ports:
       - "6969:6969"
-    volumes:
-      - phase_data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=6969
-      - DATA_DIR=/app/data
-
-volumes:
-  phase_data:
-    driver: local
 ```
 
 4. Click **Deploy the stack**.
@@ -51,16 +46,15 @@ volumes:
 
 ```bash
 # Build image
-docker build -t phase-ten:latest .
+docker build -t tenstages:v2.3 .
 
 # Run container
 docker run -d \
-  --name phase-ten \
+  --name tenstages \
   --restart unless-stopped \
   -p 6969:6969 \
-  -v phase_data:/app/data \
   -e PORT=6969 \
-  phase-ten:latest
+  tenstages:v2.3
 ```
 
 ---

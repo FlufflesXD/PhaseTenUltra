@@ -180,7 +180,7 @@ export class Room {
     if (this.hostSecretToken !== hostToken) {
       throw new Error('Only the lobby host can modify settings');
     }
-    this.settings = { ...this.settings, ...newSettings };
+    this.settings = { ...this.settings, ...newSettings, allowPartialAndExtraSets: true };
     if (this.gameSession) {
       this.gameSession.settings = this.settings;
     }

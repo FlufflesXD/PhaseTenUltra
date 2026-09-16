@@ -91,11 +91,11 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
         </div>
         {hasLaidDown ? (
           <span className="text-white font-mono font-bold bg-neutral-800 px-2 py-0.5 rounded">
-            [PHASE COMPLETED]
+            [STAGE COMPLETED]
           </span>
         ) : fullPhaseCombination ? (
           <span className="text-black bg-white font-mono font-bold px-2 py-0.5 rounded">
-            [PHASE READY]
+            [STAGE READY]
           </span>
         ) : (
           <span className="text-neutral-400 font-mono">
@@ -104,13 +104,13 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
         )}
       </div>
 
-      {/* 1. Before Phase Completed: Only show the unified full lay down table if requirements are met */}
+      {/* 1. Before Stage Completed: Only show the unified full lay down table if requirements are met */}
       {!hasLaidDown && fullPhaseCombination && (
         <div className="border border-white/40 bg-black p-3 rounded space-y-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <div className="font-bold text-white text-xs">
-                Full Phase Ready to Lay Down:
+                Full Stage Ready to Lay Down:
               </div>
               <div className="text-[10px] text-neutral-400">
                 {phaseDef.requirements.map(r => r.type === 'set' ? `Set of ${r.count}` : r.type === 'run' ? `Run of ${r.count}` : `${r.count} of Same Color`).join(' + ')}
@@ -127,7 +127,7 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
                   : 'bg-neutral-800 text-neutral-500 border-neutral-700 cursor-not-allowed'
               }`}
             >
-              {canPlayNow ? 'Lay Down Full Phase' : 'Draw Card First to Lay Phase'}
+              {canPlayNow ? 'Lay Down Full Stage' : 'Draw Card First to Lay Stage'}
             </button>
           </div>
 

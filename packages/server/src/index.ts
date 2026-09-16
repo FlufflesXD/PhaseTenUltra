@@ -271,7 +271,7 @@ io.on('connection', (socket) => {
 async function start() {
   try {
     await app.listen({ port: PORT, host: HOST });
-    console.log(`Phase 10 Server running on port ${PORT}`);
+    console.log(`TenStages Server running on port ${PORT}`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -3,7 +3,7 @@ import { PhaseDefinition } from './types.js';
 export const CLASSIC_PHASES: PhaseDefinition[] = [
   {
     phaseNumber: 1,
-    name: 'Phase 1',
+    name: 'Stage 1',
     description: '2 sets of 3',
     requirements: [
       { type: 'set', count: 3 },
@@ -12,7 +12,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 2,
-    name: 'Phase 2',
+    name: 'Stage 2',
     description: '1 set of 3 + 1 run of 4',
     requirements: [
       { type: 'set', count: 3 },
@@ -21,7 +21,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 3,
-    name: 'Phase 3',
+    name: 'Stage 3',
     description: '1 set of 4 + 1 run of 4',
     requirements: [
       { type: 'set', count: 4 },
@@ -30,7 +30,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 4,
-    name: 'Phase 4',
+    name: 'Stage 4',
     description: '1 run of 7',
     requirements: [
       { type: 'run', count: 7 }
@@ -38,7 +38,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 5,
-    name: 'Phase 5',
+    name: 'Stage 5',
     description: '1 run of 8',
     requirements: [
       { type: 'run', count: 8 }
@@ -46,7 +46,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 6,
-    name: 'Phase 6',
+    name: 'Stage 6',
     description: '1 run of 9',
     requirements: [
       { type: 'run', count: 9 }
@@ -54,7 +54,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 7,
-    name: 'Phase 7',
+    name: 'Stage 7',
     description: '2 sets of 4',
     requirements: [
       { type: 'set', count: 4 },
@@ -63,7 +63,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 8,
-    name: 'Phase 8',
+    name: 'Stage 8',
     description: '7 cards of 1 color',
     requirements: [
       { type: 'color', count: 7 }
@@ -71,7 +71,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 9,
-    name: 'Phase 9',
+    name: 'Stage 9',
     description: '1 set of 5 + 1 set of 2',
     requirements: [
       { type: 'set', count: 5 },
@@ -80,7 +80,7 @@ export const CLASSIC_PHASES: PhaseDefinition[] = [
   },
   {
     phaseNumber: 10,
-    name: 'Phase 10',
+    name: 'Stage 10',
     description: '1 set of 5 + 1 set of 3',
     requirements: [
       { type: 'set', count: 5 },

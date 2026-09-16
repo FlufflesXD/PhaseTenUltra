@@ -1,12 +1,12 @@
 version: "3.8"
 
 services:
-  phase-ten:
+  tenstages:
     build:
       context: .
       dockerfile: Dockerfile
-    image: phase-ten:v2.2
-    container_name: phase-ten
+    image: tenstages:v2.3
+    container_name: tenstages
     restart: unless-stopped
     ports:
       - "6969:6969"
