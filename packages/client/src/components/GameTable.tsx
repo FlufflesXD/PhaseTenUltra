@@ -153,45 +153,22 @@ export const GameTable: React.FC<GameTableProps> = ({
     clearSelection();
   };
 
-  const laidIndices = useMemo(() => {
-    return new Set(me?.laidDownPhases?.map(g => g.requirementIndex) ?? []);
-  }, [me?.laidDownPhases]);
-
-  // Check if current selected cards match any unlaid requirement of player's phase
-  const selectedRequirementMatches = useMemo(() => {
-    if (!currentPhaseDef || me?.phaseCompletedInRound || selectedCards.length === 0) return [];
-    const matches: { index: number; label: string }[] = [];
-
-    currentPhaseDef.requirements.forEach((req, idx) => {
-      if (laidIndices.has(idx)) return;
-      if (selectedCards.length < req.count) return;
-
-      let valid = false;
-      if (req.type === 'set' && validateSet(selectedCards, req.count).valid) {
-        valid = true;
-      } else if (req.type === 'run' && validateRun(selectedCards, req.count).valid) {
-        valid = true;
-      } else if (req.type === 'color' && validateColorGroup(selectedCards, req.count).valid) {
-        valid = true;
-      }
-
-      if (valid) {
-        const reqLabel =
-          req.type === 'set'
-            ? `Set of ${req.count}`
-            : req.type === 'run'
-            ? `Run of ${req.count}`
-            : `${req.count} of Same Color`;
-        matches.push({ index: idx, label: `Part ${idx + 1} (${reqLabel})` });
-      }
-    });
-
-    return matches;
-  }, [currentPhaseDef, me?.phaseCompletedInRound, laidIndices, selectedCards]);
-
-  // Check if selected cards can be laid as an extra set/run after phase completed
+  // Check if selected cards can be laid as an extra group/half after full phase is completed
   const selectedExtraMeldMatch = useMemo(() => {
     if (!me?.phaseCompletedInRound || selectedCards.length < 3) return null;
+    if (currentPhaseDef) {
+      for (const req of currentPhaseDef.requirements) {
+        if (req.type === 'set' && validateSet(selectedCards, req.count).valid) {
+          return `Extra Set of ${selectedCards.length}`;
+        }
+        if (req.type === 'run' && validateRun(selectedCards, req.count).valid) {
+          return `Extra Run of ${selectedCards.length}`;
+        }
+        if (req.type === 'color' && validateColorGroup(selectedCards, req.count).valid) {
+          return `Extra Color Group of ${selectedCards.length}`;
+        }
+      }
+    }
     if (validateSet(selectedCards, 3).valid) {
       return `Extra Set of ${selectedCards.length}`;
     }
@@ -199,9 +176,9 @@ export const GameTable: React.FC<GameTableProps> = ({
       return `Extra Run of ${selectedCards.length}`;
     }
     return null;
-  }, [me?.phaseCompletedInRound, selectedCards]);
+  }, [me?.phaseCompletedInRound, selectedCards, currentPhaseDef]);
 
-  // Check if selected cards satisfy the entire remaining phase
+  // Check if selected cards satisfy the entire phase
   const selectedFullPhaseValid = useMemo(() => {
     if (!currentPhaseDef || me?.phaseCompletedInRound || selectedCards.length < 6) return null;
     return findValidPhaseCombination(selectedCards, currentPhaseDef);
@@ -223,7 +200,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
           </button>
-          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.0</span>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.1</span>
           <span>Round {gameState.roundNumber}</span>
         </div>
 
@@ -568,32 +545,31 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             {/* Action Buttons: Lay Phase / Hit / Discard */}
             <div className="flex flex-wrap items-center gap-2">
-              {/* Laydown buttons from Selected Cards in hand */}
-              {isMyTurn && gameState.turnStage === 'play' && selectedRequirementMatches.map(m => (
+              {/* Full Phase Laydown from Selected Cards */}
+              {isMyTurn && gameState.turnStage === 'play' && selectedFullPhaseValid && (
                 <button
-                  key={m.index}
                   type="button"
                   onClick={() => {
-                    onLayRequirement(m.index, selectedCards.map(c => c.id));
+                    onLayDownPhase(selectedFullPhaseValid);
                     clearSelection();
                   }}
                   className="bg-white text-black font-bold px-2.5 py-1 rounded text-xs hover:bg-neutral-200 cursor-pointer transition-colors"
                 >
-                  Lay Selected ({selectedCards.length}) as {m.label}
+                  Lay Full Phase ({selectedCards.length} cards)
                 </button>
-              ))}
+              )}
 
-              {isMyTurn && gameState.turnStage === 'draw' && selectedRequirementMatches.map(m => (
+              {isMyTurn && gameState.turnStage === 'draw' && selectedFullPhaseValid && (
                 <button
-                  key={m.index}
                   type="button"
                   disabled
                   className="bg-neutral-900 text-neutral-400 border border-neutral-700 px-2.5 py-1 rounded text-xs cursor-not-allowed"
                 >
-                  Draw Card First to Lay {m.label}
+                  Draw Card First to Lay Phase
                 </button>
-              ))}
+              )}
 
+              {/* Extra Meld / Half Rule Laydown from Selected Cards (Only after full phase is completed) */}
               {isMyTurn && gameState.turnStage === 'play' && selectedExtraMeldMatch && (
                 <button
                   type="button"
@@ -607,16 +583,13 @@ export const GameTable: React.FC<GameTableProps> = ({
                 </button>
               )}
 
-              {isMyTurn && gameState.turnStage === 'play' && selectedFullPhaseValid && (
+              {isMyTurn && gameState.turnStage === 'draw' && selectedExtraMeldMatch && (
                 <button
                   type="button"
-                  onClick={() => {
-                    onLayDownPhase(selectedFullPhaseValid);
-                    clearSelection();
-                  }}
-                  className="bg-white text-black font-bold px-2.5 py-1 rounded text-xs hover:bg-neutral-200 cursor-pointer transition-colors"
+                  disabled
+                  className="bg-neutral-900 text-neutral-400 border border-neutral-700 px-2.5 py-1 rounded text-xs cursor-not-allowed"
                 >
-                  Lay Full Phase ({selectedCards.length} cards)
+                  Draw Card First to Lay Extra Group
                 </button>
               )}
 

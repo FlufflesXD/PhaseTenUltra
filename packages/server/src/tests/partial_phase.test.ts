@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { GameSession } from '../game/GameSession.js';
 
 describe('Partial Phase & Extra Groups Tests', () => {
-  test('Player can lay down either side of the plus (Part 1 then Part 2)', () => {
+  test('Player must lay full phase first; extra halves/groups can only be laid after', () => {
     let stateUpdates = 0;
     const session = new GameSession(
       'TEST',
@@ -21,19 +21,19 @@ describe('Partial Phase & Extra Groups Tests', () => {
         isSpectator: false,
         connected: true,
         score: 0,
-        currentPhase: 1, // Phase 1: 2 sets of 3 (Part 0: set of 3, Part 1: set of 3)
+        currentPhase: 1, // Phase 1: 2 sets of 3
         phaseCompletedInRound: false,
         cardCount: 10,
         cards: [
-          // Set 1 (Part 0)
+          // Set 1
           { id: 'c1', type: 'number', color: 'red', value: 7, points: 5 },
           { id: 'c2', type: 'number', color: 'blue', value: 7, points: 5 },
           { id: 'c3', type: 'number', color: 'green', value: 7, points: 5 },
-          // Set 2 (Part 1)
+          // Set 2
           { id: 'c4', type: 'number', color: 'red', value: 8, points: 5 },
           { id: 'c5', type: 'number', color: 'blue', value: 8, points: 5 },
           { id: 'c6', type: 'number', color: 'green', value: 8, points: 5 },
-          // Extra set of 3 (10s)
+          // Extra half / meld (three 10s)
           { id: 'c7', type: 'number', color: 'red', value: 10, points: 5 },
           { id: 'c8', type: 'number', color: 'blue', value: 10, points: 5 },
           { id: 'c9', type: 'number', color: 'green', value: 10, points: 5 },
@@ -70,23 +70,24 @@ describe('Partial Phase & Extra Groups Tests', () => {
     session.drawCard('p1', 'deck');
     assert.strictEqual(session.turnStage, 'play');
 
-    // 2. Lay down Part 0 (Set 1: three 7s)
-    session.layPhaseRequirement('p1', 0, ['c1', 'c2', 'c3']);
+    // 2. Attempting to lay down only half/partial requirement before full phase must throw
+    assert.throws(() => {
+      session.layPhaseRequirement('p1', 0, ['c1', 'c2', 'c3']);
+    }, /Must lay down your full phase first/);
 
-    assert.strictEqual(session.allLaidDownPhases.length, 1);
-    assert.strictEqual(session.allLaidDownPhases[0].targetValue, 7);
-    // Phase should NOT be marked completed yet (only Part 1/2 is done)
-    assert.strictEqual(session.players[0].phaseCompletedInRound, false);
+    assert.throws(() => {
+      session.layExtraGroup('p1', ['c1', 'c2', 'c3']);
+    }, /Must complete your phase/);
 
-    // 3. Lay down Part 1 (Set 2: three 8s)
-    session.layPhaseRequirement('p1', 1, ['c4', 'c5', 'c6']);
+    // 3. Lay down FULL Phase 1 (both sets of 3 together)
+    const set1 = session.players[0].cards.filter(c => ['c1', 'c2', 'c3'].includes(c.id));
+    const set2 = session.players[0].cards.filter(c => ['c4', 'c5', 'c6'].includes(c.id));
+    session.layDownPhase('p1', [set1, set2]);
 
     assert.strictEqual(session.allLaidDownPhases.length, 2);
-    assert.strictEqual(session.allLaidDownPhases[1].targetValue, 8);
-    // Now both parts are down, phase is complete!
     assert.strictEqual(session.players[0].phaseCompletedInRound, true);
 
-    // 4. Lay down an extra set of 3 (three 10s)
+    // 4. Once full phase is laid, player CAN lay down an extra half / meld (three 10s)
     session.layExtraGroup('p1', ['c7', 'c8', 'c9']);
 
     assert.strictEqual(session.allLaidDownPhases.length, 3);

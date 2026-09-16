@@ -295,101 +295,14 @@ export class GameSession {
     this.onStateChange();
   }
 
-  public layPhaseRequirement(playerId: string, reqIndex: number, cardIds: string[]): void {
+  public layPhaseRequirement(playerId: string, _reqIndex: number, cardIds: string[]): void {
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw a card first');
-    if (current.phaseCompletedInRound) throw new Error('You have already completed your phase this round');
-
-    const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === current.currentPhase);
-    if (!phaseDef) throw new Error(`Phase ${current.currentPhase} not found`);
-
-    if (reqIndex < 0 || reqIndex >= phaseDef.requirements.length) {
-      throw new Error('Invalid requirement index');
+    if (!current.phaseCompletedInRound) {
+      throw new Error('Must lay down your full phase first before laying extra groups/halves');
     }
-
-    const alreadyLaid = current.laidDownPhases.some(g => g.requirementIndex === reqIndex);
-    if (alreadyLaid) {
-      throw new Error(`Part ${reqIndex + 1} is already laid down`);
-    }
-
-    const req = phaseDef.requirements[reqIndex];
-    const cards = current.cards.filter(c => cardIds.includes(c.id));
-    if (cards.length !== cardIds.length) {
-      throw new Error('Cards not found in hand');
-    }
-
-    let targetValue: number | undefined;
-    let targetColor: CardColor | undefined;
-    let runMin: number | undefined;
-    let runMax: number | undefined;
-
-    if (req.type === 'set') {
-      const res = validateSet(cards, req.count);
-      if (!res.valid) throw new Error(res.error || 'Invalid set');
-      targetValue = res.value;
-    } else if (req.type === 'run') {
-      const res = validateRun(cards, req.count);
-      if (!res.valid) throw new Error(res.error || 'Invalid run');
-      runMin = res.min;
-      runMax = res.max;
-    } else if (req.type === 'color') {
-      const res = validateColorGroup(cards, req.count);
-      if (!res.valid) throw new Error(res.error || 'Invalid color group');
-      targetColor = res.color;
-    }
-
-    const usedCardIds = new Set(cardIds);
-    current.cards = current.cards.filter(c => !usedCardIds.has(c.id));
-    current.cardCount = current.cards.length;
-
-    const sortedCards = sortGroupCards(cards, req.type, runMin, runMax);
-    const laidGroup: LaidDownPhaseGroup = {
-      id: `group_${Date.now()}_${reqIndex}_${Math.random().toString(36).substring(2, 5)}`,
-      playerId: current.id,
-      playerName: current.name,
-      requirementIndex: reqIndex,
-      type: req.type,
-      cards: sortedCards,
-      targetValue,
-      targetColor,
-      runMin,
-      runMax
-    };
-
-    this.allLaidDownPhases.push(laidGroup);
-    current.laidDownPhases.push(laidGroup);
-
-    // Check if all requirements for current phase are now fulfilled
-    const allMet = phaseDef.requirements.every((_, idx) =>
-      current.laidDownPhases.some(g => g.requirementIndex === idx)
-    );
-
-    if (allMet) {
-      current.phaseCompletedInRound = true;
-      this.notify({
-        id: `notif_${Date.now()}`,
-        type: 'phase_complete',
-        message: `${current.name} completed all parts of ${phaseDef.name} (${phaseDef.description})!`,
-        playerId: current.id,
-        timestamp: Date.now()
-      });
-    } else {
-      this.notify({
-        id: `notif_${Date.now()}`,
-        type: 'info',
-        message: `${current.name} laid down Part ${reqIndex + 1} of ${phaseDef.name}.`,
-        playerId: current.id,
-        timestamp: Date.now()
-      });
-    }
-
-    if (current.cards.length === 0) {
-      this.endRound(current);
-      return;
-    }
-
-    this.onStateChange();
+    this.layExtraGroup(playerId, cardIds);
   }
 
   public layExtraGroup(playerId: string, cardIds: string[]): void {
@@ -403,23 +316,56 @@ export class GameSession {
       throw new Error('Cards not found in hand');
     }
 
-    let groupType: RequirementType;
+    const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === current.currentPhase);
+    let groupType: RequirementType | undefined;
     let targetValue: number | undefined;
+    let targetColor: CardColor | undefined;
     let runMin: number | undefined;
     let runMax: number | undefined;
 
-    const setRes = validateSet(cards, 3);
-    if (setRes.valid) {
-      groupType = 'set';
-      targetValue = setRes.value;
-    } else {
-      const runRes = validateRun(cards, 4);
-      if (runRes.valid) {
-        groupType = 'run';
-        runMin = runRes.min;
-        runMax = runRes.max;
+    // Check if cards match any requirement in current phase
+    if (phaseDef) {
+      for (const req of phaseDef.requirements) {
+        if (req.type === 'set') {
+          const res = validateSet(cards, req.count);
+          if (res.valid) {
+            groupType = 'set';
+            targetValue = res.value;
+            break;
+          }
+        } else if (req.type === 'run') {
+          const res = validateRun(cards, req.count);
+          if (res.valid) {
+            groupType = 'run';
+            runMin = res.min;
+            runMax = res.max;
+            break;
+          }
+        } else if (req.type === 'color') {
+          const res = validateColorGroup(cards, req.count);
+          if (res.valid) {
+            groupType = 'color';
+            targetColor = res.color;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!groupType) {
+      const setRes = validateSet(cards, 3);
+      if (setRes.valid) {
+        groupType = 'set';
+        targetValue = setRes.value;
       } else {
-        throw new Error('Extra group must be a valid set of 3+ or a run of 4+');
+        const runRes = validateRun(cards, 4);
+        if (runRes.valid) {
+          groupType = 'run';
+          runMin = runRes.min;
+          runMax = runRes.max;
+        } else {
+          throw new Error('Extra group must match a requirement of your phase, a set of 3+, or a run of 4+');
+        }
       }
     }
 
@@ -436,6 +382,7 @@ export class GameSession {
       type: groupType,
       cards: sortedCards,
       targetValue,
+      targetColor,
       runMin,
       runMax
     };

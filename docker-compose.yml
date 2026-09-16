@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: phase-ten:v2.0
+    image: phase-ten:v2.1
     container_name: phase-ten
     restart: unless-stopped
     ports:

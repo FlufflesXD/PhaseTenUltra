@@ -86,8 +86,8 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
   // Extra meld check when phase is already completed
   const extraMeld = useMemo(() => {
     if (!hasLaidDown) return null;
-    return findExtraMeldMatch(hand);
-  }, [hand, hasLaidDown]);
+    return findExtraMeldMatch(hand, phaseDef);
+  }, [hand, hasLaidDown, phaseDef]);
 
   return (
     <div className="bg-neutral-900 border border-neutral-700 p-3 rounded text-xs space-y-2">
@@ -107,7 +107,7 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
           </span>
         ) : (
           <span className="text-neutral-400 font-mono">
-            [{laidIndices.size}/{phaseDef.requirements.length} PARTS DOWN]
+            [INCOMPLETE]
           </span>
         )}
       </div>
@@ -158,22 +158,6 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
                       ))}
                     </div>
                   )}
-
-                  {/* Lay Part Button */}
-                  {!isLaid && match && allowPartialAndExtraSets && (
-                    <button
-                      type="button"
-                      onClick={() => onLayRequirement(idx, match.map(c => c.id))}
-                      disabled={!canPlayNow}
-                      className={`w-full py-1 rounded text-xs font-bold border transition-colors ${
-                        canPlayNow
-                          ? 'bg-white text-black border-white hover:bg-neutral-200 cursor-pointer'
-                          : 'bg-neutral-800 text-neutral-500 border-neutral-700 cursor-not-allowed'
-                      }`}
-                    >
-                      {canPlayNow ? `Lay Down Part ${idx + 1}` : 'Draw Card First'}
-                    </button>
-                  )}
                 </div>
               );
             })}
@@ -209,7 +193,7 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
         <div className="space-y-2 pt-1 text-xs">
           <div className="text-neutral-300">
             <span className="font-bold text-white">Goal: Go Out!</span> Empty your hand to win this round.
-            Hit matching cards onto table groups, lay extra sets, or discard.
+            Hit matching cards onto table groups, lay extra sets/runs, or discard.
           </div>
 
           {/* Extra Meld Option */}
@@ -217,7 +201,7 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
             <div className="border border-white/40 bg-black p-2 rounded flex flex-col sm:flex-row items-center justify-between gap-2">
               <div>
                 <div className="font-bold text-white flex items-center gap-1.5">
-                  <span>Extra {extraMeld.type === 'set' ? 'Set' : 'Run'} Ready:</span>
+                  <span>Extra {extraMeld.type === 'set' ? 'Set' : extraMeld.type === 'run' ? 'Run' : 'Color Group'} Ready:</span>
                   <span className="text-[10px] text-neutral-400 font-normal">({extraMeld.cards.length} cards)</span>
                 </div>
                 <div className="flex items-center gap-1 overflow-x-auto mt-1">
@@ -238,7 +222,7 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
                 }`}
               >
                 {canPlayNow
-                  ? `Lay Extra ${extraMeld.type === 'set' ? 'Set' : 'Run'} (${extraMeld.cards.length})`
+                  ? `Lay Extra ${extraMeld.type === 'set' ? 'Set' : extraMeld.type === 'run' ? 'Run' : 'Color Group'} (${extraMeld.cards.length})`
                   : 'Draw Card First'}
               </button>
             </div>
