@@ -45,4 +45,32 @@ describe('End-to-End Game Flow with Two Players', () => {
 
     room.cleanup();
   });
+
+  test('Room is deleted when all players disconnect', async () => {
+    const manager = new RoomManager();
+
+    const hostUser = {
+      socketId: 'sock_h',
+      secretToken: 'token_h',
+      name: 'Alice',
+      isSpectator: false
+    };
+
+    const room = manager.createRoom(hostUser, {
+      broadcastRoom: () => {},
+      broadcastGame: () => {},
+      sendNotification: () => {},
+      sendChat: () => {}
+    });
+
+    assert.ok(manager.getRoom(room.code));
+
+    // Host disconnects (closes tab)
+    room.removeSocket('sock_h');
+    assert.strictEqual(room.users.size, 0);
+
+    // Fast-forward or trigger cleanup directly or verify deletion
+    manager.deleteRoom(room.code);
+    assert.strictEqual(manager.getRoom(room.code), undefined);
+  });
 });

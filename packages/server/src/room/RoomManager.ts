@@ -26,6 +26,8 @@ export class Room {
   private onBroadcastGame: (room: Room) => void;
   private onSendNotification: (room: Room, notif: GameNotification) => void;
   private onSendChat: (room: Room, chat: ChatMessage) => void;
+  private onDeleteRoom: (code: string) => void;
+  private emptyRoomTimeout?: NodeJS.Timeout;
 
   constructor(
     code: string,
@@ -35,6 +37,7 @@ export class Room {
       broadcastGame: (room: Room) => void;
       sendNotification: (room: Room, notif: GameNotification) => void;
       sendChat: (room: Room, chat: ChatMessage) => void;
+      deleteRoom: (code: string) => void;
     }
   ) {
     this.code = code;
@@ -48,6 +51,7 @@ export class Room {
     this.onBroadcastGame = callbacks.broadcastGame;
     this.onSendNotification = callbacks.sendNotification;
     this.onSendChat = callbacks.sendChat;
+    this.onDeleteRoom = callbacks.deleteRoom;
   }
 
   public getPlayers(): PlayerPublic[] {
@@ -86,6 +90,11 @@ export class Room {
   }
 
   public addOrReconnectUser(user: RoomUser): void {
+    if (this.emptyRoomTimeout) {
+      clearTimeout(this.emptyRoomTimeout);
+      this.emptyRoomTimeout = undefined;
+    }
+
     let existingSocketId: string | null = null;
     for (const [sId, existing] of this.users.entries()) {
       if (existing.secretToken === user.secretToken) {
@@ -105,6 +114,7 @@ export class Room {
         p.id = user.secretToken;
         p.connected = true;
       }
+      this.gameSession.resumeTimer();
     }
 
     this.onBroadcastRoom(this);
@@ -132,6 +142,26 @@ export class Room {
       }
       this.onBroadcastRoom(this);
     }
+
+    if (this.users.size === 0) {
+      if (this.gameSession) {
+        this.gameSession.pauseTimer();
+      }
+      this.scheduleEmptyRoomCleanup();
+    }
+  }
+
+  private scheduleEmptyRoomCleanup(): void {
+    if (this.emptyRoomTimeout) {
+      clearTimeout(this.emptyRoomTimeout);
+    }
+    const timeoutMs = this.gameSession ? 20000 : 10000;
+    this.emptyRoomTimeout = setTimeout(() => {
+      if (this.users.size === 0) {
+        this.cleanup();
+        this.onDeleteRoom(this.code);
+      }
+    }, timeoutMs);
   }
 
   public updateSettings(hostToken: string, newSettings: Partial<GameSettings>): void {
@@ -203,9 +233,16 @@ export class Room {
   }
 
   public cleanup(): void {
+    if (this.emptyRoomTimeout) {
+      clearTimeout(this.emptyRoomTimeout);
+      this.emptyRoomTimeout = undefined;
+    }
     if (this.gameSession) {
       this.gameSession.cleanup();
+      this.gameSession = null;
     }
+    this.users.clear();
+    this.chatMessages = [];
   }
 }
 
@@ -222,7 +259,10 @@ export class RoomManager {
     }
   ): Room {
     const code = this.generateUniqueCode();
-    const room = new Room(code, hostUser, callbacks);
+    const room = new Room(code, hostUser, {
+      ...callbacks,
+      deleteRoom: (c) => this.deleteRoom(c)
+    });
     this.rooms.set(code, room);
     return room;
   }

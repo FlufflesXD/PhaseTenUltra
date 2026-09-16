@@ -684,9 +684,34 @@ export class GameSession {
     return p ? p.cards : [];
   }
 
+  public pauseTimer(): void {
+    if (this.turnTimerInterval) {
+      clearInterval(this.turnTimerInterval);
+      this.turnTimerInterval = undefined;
+    }
+  }
+
+  public resumeTimer(): void {
+    if (this.turnStage !== 'draw' && this.turnStage !== 'play' && this.turnStage !== 'discard') return;
+    if (this.turnTimerInterval) return;
+    if (this.settings.turnTimerSeconds > 0 && this.turnTimeRemaining > 0) {
+      this.turnTimerInterval = setInterval(() => {
+        this.turnTimeRemaining -= 1;
+        if (this.turnTimeRemaining <= 0) {
+          clearInterval(this.turnTimerInterval);
+          this.turnTimerInterval = undefined;
+          this.handleTurnTimeout();
+        } else {
+          this.onStateChange();
+        }
+      }, 1000);
+    }
+  }
+
   public cleanup(): void {
     if (this.turnTimerInterval) {
       clearInterval(this.turnTimerInterval);
+      this.turnTimerInterval = undefined;
     }
   }
 }
