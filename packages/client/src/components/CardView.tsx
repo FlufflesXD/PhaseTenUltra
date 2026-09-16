@@ -35,14 +35,8 @@ export const CardView: React.FC<CardViewProps> = ({
 
   const colorLabel = card.color !== 'none' ? card.color.toUpperCase() : '';
 
-  return (
-    <button
-      type="button"
-      onClick={isSelectable ? onClick : undefined}
-      className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none transition-all ${baseStyle} ${highlightStyle} ${
-        isSelectable ? 'cursor-pointer' : 'cursor-default'
-      }`}
-    >
+  const innerContent = (
+    <>
       {/* Top row */}
       <div className="flex justify-between items-center text-[9px] font-mono leading-none">
         <span>{card.type === 'wild' ? 'W' : card.type === 'skip' ? 'S' : card.value}</span>
@@ -72,6 +66,26 @@ export const CardView: React.FC<CardViewProps> = ({
           {badge}
         </span>
       )}
+    </>
+  );
+
+  if (!isSelectable) {
+    return (
+      <div
+        className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none pointer-events-none ${baseStyle} ${highlightStyle}`}
+      >
+        {innerContent}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none transition-all cursor-pointer ${baseStyle} ${highlightStyle}`}
+    >
+      {innerContent}
     </button>
   );
 };

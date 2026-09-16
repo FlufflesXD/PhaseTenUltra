@@ -1,5 +1,6 @@
 import {
   Card,
+  CardColor,
   CLASSIC_PHASES,
   GameNotification,
   GameSettings,
@@ -7,10 +8,14 @@ import {
   PhaseDefinition,
   PlayerPrivate,
   PublicGameState,
+  RequirementType,
   sortCardsByValue,
   TurnStage,
+  validateColorGroup,
   validateHit,
-  validatePhase
+  validatePhase,
+  validateRun,
+  validateSet
 } from '@phase-ten/shared';
 import { createDeck, shuffleDeck } from '@phase-ten/shared';
 
@@ -257,7 +262,7 @@ export class GameSession {
 
     validation.annotatedGroups.forEach((group, index) => {
       const laidDownGroup: LaidDownPhaseGroup = {
-        id: `group_${Date.now()}_${index}`,
+        id: `group_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 5)}`,
         playerId: current.id,
         playerName: current.name,
         requirementIndex: index,
@@ -288,40 +293,223 @@ export class GameSession {
     this.onStateChange();
   }
 
-  public hitCard(playerId: string, cardId: string, targetGroupId: string): void {
+  public layPhaseRequirement(playerId: string, reqIndex: number, cardIds: string[]): void {
+    const current = this.getCurrentPlayer();
+    if (current.id !== playerId) throw new Error('Not your turn');
+    if (this.turnStage !== 'play') throw new Error('Must draw a card first');
+    if (current.phaseCompletedInRound) throw new Error('You have already completed your phase this round');
+
+    const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === current.currentPhase);
+    if (!phaseDef) throw new Error(`Phase ${current.currentPhase} not found`);
+
+    if (reqIndex < 0 || reqIndex >= phaseDef.requirements.length) {
+      throw new Error('Invalid requirement index');
+    }
+
+    const alreadyLaid = current.laidDownPhases.some(g => g.requirementIndex === reqIndex);
+    if (alreadyLaid) {
+      throw new Error(`Part ${reqIndex + 1} is already laid down`);
+    }
+
+    const req = phaseDef.requirements[reqIndex];
+    const cards = current.cards.filter(c => cardIds.includes(c.id));
+    if (cards.length !== cardIds.length) {
+      throw new Error('Cards not found in hand');
+    }
+
+    let targetValue: number | undefined;
+    let targetColor: CardColor | undefined;
+    let runMin: number | undefined;
+    let runMax: number | undefined;
+
+    if (req.type === 'set') {
+      const res = validateSet(cards, req.count);
+      if (!res.valid) throw new Error(res.error || 'Invalid set');
+      targetValue = res.value;
+    } else if (req.type === 'run') {
+      const res = validateRun(cards, req.count);
+      if (!res.valid) throw new Error(res.error || 'Invalid run');
+      runMin = res.min;
+      runMax = res.max;
+    } else if (req.type === 'color') {
+      const res = validateColorGroup(cards, req.count);
+      if (!res.valid) throw new Error(res.error || 'Invalid color group');
+      targetColor = res.color;
+    }
+
+    const usedCardIds = new Set(cardIds);
+    current.cards = current.cards.filter(c => !usedCardIds.has(c.id));
+    current.cardCount = current.cards.length;
+
+    const laidGroup: LaidDownPhaseGroup = {
+      id: `group_${Date.now()}_${reqIndex}_${Math.random().toString(36).substring(2, 5)}`,
+      playerId: current.id,
+      playerName: current.name,
+      requirementIndex: reqIndex,
+      type: req.type,
+      cards,
+      targetValue,
+      targetColor,
+      runMin,
+      runMax
+    };
+
+    this.allLaidDownPhases.push(laidGroup);
+    current.laidDownPhases.push(laidGroup);
+
+    // Check if all requirements for current phase are now fulfilled
+    const allMet = phaseDef.requirements.every((_, idx) =>
+      current.laidDownPhases.some(g => g.requirementIndex === idx)
+    );
+
+    if (allMet) {
+      current.phaseCompletedInRound = true;
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'phase_complete',
+        message: `${current.name} completed all parts of ${phaseDef.name} (${phaseDef.description})!`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
+    } else {
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `${current.name} laid down Part ${reqIndex + 1} of ${phaseDef.name}.`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
+    }
+
+    if (current.cards.length === 0) {
+      this.endRound(current);
+      return;
+    }
+
+    this.onStateChange();
+  }
+
+  public layExtraGroup(playerId: string, cardIds: string[]): void {
+    const current = this.getCurrentPlayer();
+    if (current.id !== playerId) throw new Error('Not your turn');
+    if (this.turnStage !== 'play') throw new Error('Must draw a card first');
+    if (!current.phaseCompletedInRound) throw new Error('Must complete your phase before laying extra sets');
+
+    const cards = current.cards.filter(c => cardIds.includes(c.id));
+    if (cards.length !== cardIds.length) {
+      throw new Error('Cards not found in hand');
+    }
+
+    let groupType: RequirementType;
+    let targetValue: number | undefined;
+    let runMin: number | undefined;
+    let runMax: number | undefined;
+
+    const setRes = validateSet(cards, 3);
+    if (setRes.valid) {
+      groupType = 'set';
+      targetValue = setRes.value;
+    } else {
+      const runRes = validateRun(cards, 4);
+      if (runRes.valid) {
+        groupType = 'run';
+        runMin = runRes.min;
+        runMax = runRes.max;
+      } else {
+        throw new Error('Extra group must be a valid set of 3+ or a run of 4+');
+      }
+    }
+
+    const usedCardIds = new Set(cardIds);
+    current.cards = current.cards.filter(c => !usedCardIds.has(c.id));
+    current.cardCount = current.cards.length;
+
+    const laidGroup: LaidDownPhaseGroup = {
+      id: `group_${Date.now()}_extra_${Math.random().toString(36).substring(2, 6)}`,
+      playerId: current.id,
+      playerName: current.name,
+      requirementIndex: 99,
+      type: groupType,
+      cards,
+      targetValue,
+      runMin,
+      runMax
+    };
+
+    this.allLaidDownPhases.push(laidGroup);
+    current.laidDownPhases.push(laidGroup);
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `${current.name} laid down an extra ${groupType} of ${cards.length} cards.`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    if (current.cards.length === 0) {
+      this.endRound(current);
+      return;
+    }
+
+    this.onStateChange();
+  }
+
+  public hitCard(playerId: string, cardId: string | string[], targetGroupId: string): void {
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw first');
-    if (!current.phaseCompletedInRound) throw new Error('Must lay down your phase before hitting');
+    if (!current.phaseCompletedInRound) throw new Error('Must complete your phase before hitting');
 
-    const cardIndex = current.cards.findIndex(c => c.id === cardId);
-    if (cardIndex === -1) throw new Error('Card not in hand');
-    const card = current.cards[cardIndex];
+    const cardIds = Array.isArray(cardId) ? cardId : [cardId];
+    if (cardIds.length === 0) throw new Error('No cards selected to hit');
 
     const targetGroup = this.allLaidDownPhases.find(g => g.id === targetGroupId);
     if (!targetGroup) throw new Error('Target phase group not found');
 
-    const canHit = validateHit(card, targetGroup);
-    if (!canHit) throw new Error('Card cannot hit this group');
+    for (const cId of cardIds) {
+      const cardIndex = current.cards.findIndex(c => c.id === cId);
+      if (cardIndex === -1) throw new Error('Card not in hand');
+      const card = current.cards[cardIndex];
 
-    current.cards.splice(cardIndex, 1);
-    current.cardCount = current.cards.length;
-    targetGroup.cards.push(card);
+      const canHit = validateHit(card, targetGroup);
+      if (!canHit) throw new Error('Card cannot hit this group');
 
-    if (targetGroup.type === 'run') {
-      if (card.type === 'number') {
-        if (targetGroup.runMin !== undefined && card.value < targetGroup.runMin) {
-          targetGroup.runMin = card.value;
-        } else if (targetGroup.runMax !== undefined && card.value > targetGroup.runMax) {
-          targetGroup.runMax = card.value;
+      current.cards.splice(cardIndex, 1);
+      current.cardCount = current.cards.length;
+
+      if (targetGroup.type === 'run') {
+        if (card.type === 'number') {
+          if (targetGroup.runMin !== undefined && card.value < targetGroup.runMin) {
+            targetGroup.runMin = card.value;
+            targetGroup.cards.unshift(card);
+          } else {
+            targetGroup.cards.push(card);
+            if (targetGroup.runMax !== undefined && card.value > targetGroup.runMax) {
+              targetGroup.runMax = card.value;
+            }
+          }
+        } else {
+          // Wild card on run
+          if (targetGroup.runMax !== undefined && targetGroup.runMax < 12) {
+            targetGroup.runMax += 1;
+            targetGroup.cards.push(card);
+          } else if (targetGroup.runMin !== undefined && targetGroup.runMin > 1) {
+            targetGroup.runMin -= 1;
+            targetGroup.cards.unshift(card);
+          } else {
+            targetGroup.cards.push(card);
+          }
         }
+      } else {
+        targetGroup.cards.push(card);
       }
     }
 
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `${current.name} hit a card onto ${targetGroup.playerName}'s ${targetGroup.type}.`,
+      message: `${current.name} hit ${cardIds.length} card${cardIds.length > 1 ? 's' : ''} onto ${targetGroup.playerName}'s ${targetGroup.type}.`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -486,7 +674,8 @@ export class GameSession {
       allLaidDownPhases: this.allLaidDownPhases,
       winnerId: this.winnerId,
       roundWinnerId: this.roundWinnerId,
-      phaseDefinitions: this.phaseDefinitions
+      phaseDefinitions: this.phaseDefinitions,
+      settings: this.settings
     };
   }
 

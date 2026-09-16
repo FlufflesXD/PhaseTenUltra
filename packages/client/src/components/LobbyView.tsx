@@ -164,6 +164,28 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           )}
         </div>
 
+        {/* House Rule: Partial Laydown & Extra Sets */}
+        <div className="border border-neutral-800 p-2.5 rounded flex justify-between items-center text-xs">
+          <div className="pr-2">
+            <div className="font-bold text-white">Piece-by-Piece Laydown</div>
+            <div className="text-[10px] text-neutral-400">
+              Lay either side of '+' when acquired & lay extra sets (e.g. 1x3)
+            </div>
+          </div>
+          {isHost ? (
+            <input
+              type="checkbox"
+              checked={roomState.settings.allowPartialAndExtraSets ?? true}
+              onChange={e => onUpdateSettings({ allowPartialAndExtraSets: e.target.checked })}
+              className="w-4 h-4 cursor-pointer accent-white"
+            />
+          ) : (
+            <span className="text-white">
+              {(roomState.settings.allowPartialAndExtraSets ?? true) ? 'ON' : 'OFF'}
+            </span>
+          )}
+        </div>
+
         {/* Start Button */}
         <div>
           {isHost ? (

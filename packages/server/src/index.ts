@@ -177,7 +177,29 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('hit_card', (data: { roomCode: string; secretToken: string; cardId: string; targetGroupId: string }) => {
+  socket.on('lay_phase_requirement', (data: { roomCode: string; secretToken: string; reqIndex: number; cardIds: string[] }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession) {
+      try {
+        room.gameSession.layPhaseRequirement(data.secretToken, data.reqIndex, data.cardIds);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('lay_extra_meld', (data: { roomCode: string; secretToken: string; cardIds: string[] }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession) {
+      try {
+        room.gameSession.layExtraGroup(data.secretToken, data.cardIds);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('hit_card', (data: { roomCode: string; secretToken: string; cardId: string | string[]; targetGroupId: string }) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.gameSession) {
       try {

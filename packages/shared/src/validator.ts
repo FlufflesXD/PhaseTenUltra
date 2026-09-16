@@ -263,3 +263,53 @@ function getCombinations<T>(items: T[], k: number): T[][] {
   const withoutHead = getCombinations(tail, k);
   return [...withHead, ...withoutHead];
 }
+
+export function findSingleRequirementMatch(cards: Card[], req: PhaseRequirement): Card[] | null {
+  const usable = cards.filter(c => c.type === 'number' || c.type === 'wild');
+  if (usable.length < req.count) return null;
+
+  const subsets = getCombinations(usable, req.count);
+  for (const subset of subsets) {
+    if (req.type === 'set' && validateSet(subset, req.count).valid) {
+      return subset;
+    }
+    if (req.type === 'run' && validateRun(subset, req.count).valid) {
+      return subset;
+    }
+    if (req.type === 'color' && validateColorGroup(subset, req.count).valid) {
+      return subset;
+    }
+  }
+  return null;
+}
+
+export function findExtraMeldMatch(cards: Card[]): { type: 'set' | 'run'; cards: Card[] } | null {
+  const usable = cards.filter(c => c.type === 'number' || c.type === 'wild');
+  if (usable.length < 3) return null;
+
+  // Check for sets of 3+
+  const setCombos = getCombinations(usable, 3);
+  for (const combo of setCombos) {
+    const res = validateSet(combo, 3);
+    if (res.valid && res.value !== undefined) {
+      const val = res.value;
+      const allMatching = usable.filter(c => c.type === 'wild' || (c.type === 'number' && c.value === val));
+      if (allMatching.length >= 3) {
+        return { type: 'set', cards: allMatching };
+      }
+      return { type: 'set', cards: combo };
+    }
+  }
+
+  // Check for runs of 4+
+  if (usable.length >= 4) {
+    const runCombos = getCombinations(usable, 4);
+    for (const combo of runCombos) {
+      if (validateRun(combo, 4).valid) {
+        return { type: 'run', cards: combo };
+      }
+    }
+  }
+
+  return null;
+}

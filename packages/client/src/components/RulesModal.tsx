@@ -17,9 +17,17 @@ export const RulesModal: React.FC<RulesModalProps> = ({ onClose }) => {
         <div className="space-y-3 text-neutral-300">
           <div>
             <div className="font-bold text-white mb-1">Turn Flow:</div>
-            <div>1. Draw 1 card from Draw Pile or Discard Pile.</div>
-            <div>2. Lay down phase (if complete) and/or hit on laid-down phases.</div>
-            <div>3. Discard 1 card to end turn.</div>
+            <div>1. <span className="text-white">Draw:</span> Take 1 card from the Draw Pile or Discard Pile.</div>
+            <div>2. <span className="text-white">Play:</span> Lay down phase requirements (either side of the '+' when acquired), lay extra sets, and/or hit matching cards onto table groups.</div>
+            <div>3. <span className="text-white">Discard:</span> Discard 1 card to end your turn.</div>
+          </div>
+
+          <div>
+            <div className="font-bold text-white mb-1">Making Phases & Hitting:</div>
+            <div>• <span className="text-white">Piece-by-Piece Laydown:</span> For multi-part phases (separated by '+'), you can lay down either side when acquired! When all parts are down, your phase is completed.</div>
+            <div>• <span className="text-white">Extra Sets/Runs:</span> Once your phase is made, if you acquire an extra set of 3+ (or run of 4+), you can lay it down as an extra group to empty your hand.</div>
+            <div>• <span className="text-white">Hitting:</span> After completing your phase, you can hit matching cards directly onto any player's laid-down sets or runs on the table (individually or all matching cards at once).</div>
+            <div>• <span className="text-white">Going Out:</span> The round ends as soon as a player gets rid of all cards in their hand. That player scores 0 penalty points, and players who finished their phase advance to the next phase!</div>
           </div>
 
           <div>
@@ -35,7 +43,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ onClose }) => {
           </div>
 
           <div>
-            <div className="font-bold text-white mb-1">Scoring (Cards left in hand at round end):</div>
+            <div className="font-bold text-white mb-1">Scoring (Penalty points for cards remaining in hand):</div>
             <div>• Cards 1-9: 5 pts each</div>
             <div>• Cards 10-12: 10 pts each</div>
             <div>• Skip: 15 pts</div>

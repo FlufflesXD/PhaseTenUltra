@@ -40,7 +40,8 @@ export class Room {
     this.code = code;
     this.hostSecretToken = hostUser.secretToken;
     this.settings = {
-      turnTimerSeconds: 45
+      turnTimerSeconds: 45,
+      allowPartialAndExtraSets: true
     };
     this.users.set(hostUser.socketId, hostUser);
     this.onBroadcastRoom = callbacks.broadcastRoom;

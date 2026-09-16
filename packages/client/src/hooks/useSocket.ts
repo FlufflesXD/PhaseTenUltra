@@ -114,48 +114,68 @@ export function useSocket() {
   }, [playerName, secretToken]);
 
   const updateSettings = useCallback((settings: any) => {
-    if (!socketRef.current || !roomState) return;
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
     socketRef.current.emit('update_settings', {
-      roomCode: roomState.code,
+      roomCode: code,
       secretToken,
       settings
     });
-  }, [roomState, secretToken]);
+  }, [gameState, roomState, secretToken]);
 
   const startGame = useCallback(() => {
-    if (!socketRef.current || !roomState) return;
-    socketRef.current.emit('start_game', { roomCode: roomState.code, secretToken });
-  }, [roomState, secretToken]);
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('start_game', { roomCode: code, secretToken });
+  }, [gameState, roomState, secretToken]);
 
   const drawCard = useCallback((source: 'deck' | 'discard') => {
-    if (!socketRef.current || !roomState) return;
-    socketRef.current.emit('draw_card', { roomCode: roomState.code, secretToken, source });
-  }, [roomState, secretToken]);
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('draw_card', { roomCode: code, secretToken, source });
+  }, [gameState, roomState, secretToken]);
 
   const layDownPhase = useCallback((cardGroups: Card[][]) => {
-    if (!socketRef.current || !roomState) return;
-    socketRef.current.emit('lay_down_phase', { roomCode: roomState.code, secretToken, cardGroups });
-  }, [roomState, secretToken]);
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('lay_down_phase', { roomCode: code, secretToken, cardGroups });
+  }, [gameState, roomState, secretToken]);
 
-  const hitCard = useCallback((cardId: string, targetGroupId: string) => {
-    if (!socketRef.current || !roomState) return;
-    socketRef.current.emit('hit_card', { roomCode: roomState.code, secretToken, cardId, targetGroupId });
-  }, [roomState, secretToken]);
+  const layPhaseRequirement = useCallback((reqIndex: number, cardIds: string[]) => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('lay_phase_requirement', { roomCode: code, secretToken, reqIndex, cardIds });
+  }, [gameState, roomState, secretToken]);
+
+  const layExtraMeld = useCallback((cardIds: string[]) => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('lay_extra_meld', { roomCode: code, secretToken, cardIds });
+  }, [gameState, roomState, secretToken]);
+
+  const hitCard = useCallback((cardId: string | string[], targetGroupId: string) => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('hit_card', { roomCode: code, secretToken, cardId, targetGroupId });
+  }, [gameState, roomState, secretToken]);
 
   const discardCard = useCallback((cardId: string, skipTargetPlayerId?: string) => {
-    if (!socketRef.current || !roomState) return;
-    socketRef.current.emit('discard_card', { roomCode: roomState.code, secretToken, cardId, skipTargetPlayerId });
-  }, [roomState, secretToken]);
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('discard_card', { roomCode: code, secretToken, cardId, skipTargetPlayerId });
+  }, [gameState, roomState, secretToken]);
 
   const nextRound = useCallback(() => {
-    if (!socketRef.current || !roomState) return;
-    socketRef.current.emit('next_round', { roomCode: roomState.code, secretToken });
-  }, [roomState, secretToken]);
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('next_round', { roomCode: code, secretToken });
+  }, [gameState, roomState, secretToken]);
 
   const sendChat = useCallback((text: string) => {
-    if (!socketRef.current || !roomState) return;
-    socketRef.current.emit('send_chat', { roomCode: roomState.code, secretToken, text });
-  }, [roomState, secretToken]);
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('send_chat', { roomCode: code, secretToken, text });
+  }, [gameState, roomState, secretToken]);
 
   return {
     connected,
@@ -174,6 +194,8 @@ export function useSocket() {
     startGame,
     drawCard,
     layDownPhase,
+    layPhaseRequirement,
+    layExtraMeld,
     hitCard,
     discardCard,
     nextRound,

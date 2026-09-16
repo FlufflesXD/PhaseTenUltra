@@ -24,6 +24,8 @@ export function App() {
     startGame,
     drawCard,
     layDownPhase,
+    layPhaseRequirement,
+    layExtraMeld,
     hitCard,
     discardCard,
     nextRound,
@@ -60,6 +62,8 @@ export function App() {
           notifications={notifications}
           onDrawCard={drawCard}
           onLayDownPhase={layDownPhase}
+          onLayRequirement={layPhaseRequirement}
+          onLayExtraMeld={layExtraMeld}
           onHitCard={hitCard}
           onDiscardCard={discardCard}
           onOpenRules={() => setRulesOpen(true)}

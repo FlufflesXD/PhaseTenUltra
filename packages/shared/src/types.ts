@@ -60,6 +60,7 @@ export type TurnStage = 'draw' | 'play' | 'discard';
 
 export interface GameSettings {
   turnTimerSeconds: number; // 0 = unlimited, 30, 45, 60
+  allowPartialAndExtraSets?: boolean; // House rule: allow laying either side of '+' and extra sets
 }
 
 export interface ChatMessage {
@@ -85,6 +86,7 @@ export interface PublicGameState {
   winnerId?: string;
   roundWinnerId?: string;
   phaseDefinitions: PhaseDefinition[];
+  settings?: GameSettings;
 }
 
 export interface RoomState {
