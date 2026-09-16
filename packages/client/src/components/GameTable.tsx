@@ -44,7 +44,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   onDiscardCard,
   onOpenRules
 }) => {
-  const [selectedCardIds, setSelectedCardIds] = useState<Set<string>>(new Set());
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [skipTargetModalOpen, setSkipTargetModalOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [localHand, setLocalHand] = useState<Card[]>(hand);
@@ -56,13 +56,9 @@ export const GameTable: React.FC<GameTableProps> = ({
       const added = hand.filter(c => !prev.some(p => p.id === c.id));
       return [...retained, ...added];
     });
-    setSelectedCardIds(prev => {
-      const currentHandIds = new Set(hand.map(c => c.id));
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (currentHandIds.has(id)) next.add(id);
-      }
-      return next;
+    setSelectedCardId(prev => {
+      if (!prev) return null;
+      return hand.some(c => c.id === prev) ? prev : null;
     });
   }, [hand]);
 
@@ -71,11 +67,10 @@ export const GameTable: React.FC<GameTableProps> = ({
   const opponents = gameState.players.filter(p => p.id !== secretToken);
   const currentPhaseDef = gameState.phaseDefinitions.find(p => p.phaseNumber === me?.currentPhase);
 
-  const selectedCards = useMemo(() => {
-    return localHand.filter(c => selectedCardIds.has(c.id));
-  }, [localHand, selectedCardIds]);
-
-  const selectedCard = selectedCards.length === 1 ? selectedCards[0] : null;
+  const selectedCard = useMemo(() => {
+    if (!selectedCardId) return null;
+    return localHand.find(c => c.id === selectedCardId) ?? null;
+  }, [localHand, selectedCardId]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(gameState.roomCode);
@@ -84,19 +79,12 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleCardClick = (card: Card) => {
-    setSelectedCardIds(prev => {
-      const next = new Set(prev);
-      if (next.has(card.id)) {
-        next.delete(card.id);
-      } else {
-        next.add(card.id);
-      }
-      return next;
-    });
+    // Single-select: clicking the active card unselects it, clicking another card selects it instead
+    setSelectedCardId(prev => (prev === card.id ? null : card.id));
   };
 
   const clearSelection = () => {
-    setSelectedCardIds(new Set());
+    setSelectedCardId(null);
   };
 
   const handleDraw = (source: 'deck' | 'discard') => {
@@ -133,56 +121,12 @@ export const GameTable: React.FC<GameTableProps> = ({
       return;
     }
 
-    if (selectedCards.length > 1 && selectedCards.every(c => validateHit(c, group, targetEnd))) {
-      onHitCard(selectedCards.map(c => c.id), group.id, targetEnd);
-      clearSelection();
-      return;
-    }
-
     const matchingCard = localHand.find(c => validateHit(c, group));
     if (matchingCard) {
-      setSelectedCardIds(new Set([matchingCard.id]));
+      setSelectedCardId(matchingCard.id);
     }
   };
 
-  const handleHitAllMatching = (group: LaidDownPhaseGroup) => {
-    if (!isMyTurn || gameState.turnStage !== 'play' || !me?.phaseCompletedInRound) return;
-    const matching = localHand.filter(c => validateHit(c, group));
-    if (matching.length === 0) return;
-    onHitCard(matching.map(c => c.id), group.id);
-    clearSelection();
-  };
-
-  // Check if selected cards can be laid as an extra group/half after full phase is completed
-  const selectedExtraMeldMatch = useMemo(() => {
-    if (!me?.phaseCompletedInRound || selectedCards.length < 3) return null;
-    if (currentPhaseDef) {
-      for (const req of currentPhaseDef.requirements) {
-        if (req.type === 'set' && validateSet(selectedCards, req.count).valid) {
-          return `Extra Set of ${selectedCards.length}`;
-        }
-        if (req.type === 'run' && validateRun(selectedCards, req.count).valid) {
-          return `Extra Run of ${selectedCards.length}`;
-        }
-        if (req.type === 'color' && validateColorGroup(selectedCards, req.count).valid) {
-          return `Extra Color Group of ${selectedCards.length}`;
-        }
-      }
-    }
-    if (validateSet(selectedCards, 3).valid) {
-      return `Extra Set of ${selectedCards.length}`;
-    }
-    if (validateRun(selectedCards, 4).valid) {
-      return `Extra Run of ${selectedCards.length}`;
-    }
-    return null;
-  }, [me?.phaseCompletedInRound, selectedCards, currentPhaseDef]);
-
-  // Check if selected cards satisfy the entire phase
-  const selectedFullPhaseValid = useMemo(() => {
-    if (!currentPhaseDef || me?.phaseCompletedInRound || selectedCards.length < 6) return null;
-    return findValidPhaseCombination(selectedCards, currentPhaseDef);
-  }, [currentPhaseDef, me?.phaseCompletedInRound, selectedCards]);
 
   const matchingHitGroups = useMemo(() => {
     if (!selectedCard || !me?.phaseCompletedInRound || !isMyTurn || gameState.turnStage !== 'play') return [];
@@ -200,7 +144,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
           </button>
-          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.1</span>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.2</span>
           <span>Round {gameState.roundNumber}</span>
         </div>
 
@@ -328,13 +272,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                   selectedCard &&
                   validateHit(selectedCard, group);
 
-                const canHitMultiple =
-                  me?.phaseCompletedInRound &&
-                  isMyTurn &&
-                  gameState.turnStage === 'play' &&
-                  selectedCards.length > 1 &&
-                  selectedCards.every(c => validateHit(c, group));
-
                 const allMatchingInHand =
                   me?.phaseCompletedInRound && isMyTurn && gameState.turnStage === 'play'
                     ? localHand.filter(c => validateHit(c, group))
@@ -352,7 +289,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     key={group.id}
                     onClick={() => handleTableGroupClick(group)}
                     className={`border p-2 rounded flex flex-col gap-1.5 transition-colors ${
-                      canHitSingle || canHitMultiple
+                      canHitSingle
                         ? 'border-white bg-neutral-900 shadow-md ring-1 ring-white'
                         : allMatchingInHand.length > 0
                         ? 'border-neutral-700 bg-neutral-950 cursor-pointer hover:border-neutral-500'
@@ -462,28 +399,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                       </div>
                     )}
 
-                    {canHitMultiple && (
-                      <div className="space-y-1 pt-0.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onHitCard(selectedCards.map(c => c.id), group.id);
-                            clearSelection();
-                          }}
-                          className="w-full bg-white text-black font-bold text-xs py-1 px-2 rounded hover:bg-neutral-200 cursor-pointer transition-colors"
-                        >
-                          HIT ALL {selectedCards.length} SELECTED CARDS
-                        </button>
-                      </div>
-                    )}
-
-                    {!selectedCard && selectedCards.length === 0 && allMatchingInHand.length > 0 && (
+                    {!selectedCard && allMatchingInHand.length > 0 && (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedCardIds(new Set([allMatchingInHand[0].id]));
+                          setSelectedCardId(allMatchingInHand[0].id);
                         }}
                         className="w-full text-neutral-400 hover:text-white text-[10px] py-0.5 border border-dashed border-neutral-700 rounded text-center cursor-pointer"
                       >
@@ -504,12 +425,10 @@ export const GameTable: React.FC<GameTableProps> = ({
           hand={localHand}
           phaseDef={currentPhaseDef}
           hasLaidDown={me?.phaseCompletedInRound || false}
-          laidDownPhases={me?.laidDownPhases}
           isMyTurn={isMyTurn}
           turnStage={gameState.turnStage}
           allowPartialAndExtraSets={gameState.settings?.allowPartialAndExtraSets ?? true}
           onLayDown={onLayDownPhase}
-          onLayRequirement={onLayRequirement}
           onLayExtraMeld={onLayExtraMeld}
         />
 
@@ -532,67 +451,19 @@ export const GameTable: React.FC<GameTableProps> = ({
               >
                 Sort: Color
               </button>
-              {selectedCards.length > 0 && (
+              {selectedCard && (
                 <button
                   type="button"
                   onClick={clearSelection}
                   className="text-neutral-400 hover:text-white text-[11px] underline ml-1 cursor-pointer"
                 >
-                  Clear ({selectedCards.length})
+                  Deselect
                 </button>
               )}
             </div>
 
-            {/* Action Buttons: Lay Phase / Hit / Discard */}
+            {/* Action Buttons: Hit / Discard */}
             <div className="flex flex-wrap items-center gap-2">
-              {/* Full Phase Laydown from Selected Cards */}
-              {isMyTurn && gameState.turnStage === 'play' && selectedFullPhaseValid && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onLayDownPhase(selectedFullPhaseValid);
-                    clearSelection();
-                  }}
-                  className="bg-white text-black font-bold px-2.5 py-1 rounded text-xs hover:bg-neutral-200 cursor-pointer transition-colors"
-                >
-                  Lay Full Phase ({selectedCards.length} cards)
-                </button>
-              )}
-
-              {isMyTurn && gameState.turnStage === 'draw' && selectedFullPhaseValid && (
-                <button
-                  type="button"
-                  disabled
-                  className="bg-neutral-900 text-neutral-400 border border-neutral-700 px-2.5 py-1 rounded text-xs cursor-not-allowed"
-                >
-                  Draw Card First to Lay Phase
-                </button>
-              )}
-
-              {/* Extra Meld / Half Rule Laydown from Selected Cards (Only after full phase is completed) */}
-              {isMyTurn && gameState.turnStage === 'play' && selectedExtraMeldMatch && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onLayExtraMeld(selectedCards.map(c => c.id));
-                    clearSelection();
-                  }}
-                  className="bg-white text-black font-bold px-2.5 py-1 rounded text-xs hover:bg-neutral-200 cursor-pointer transition-colors"
-                >
-                  Lay Selected ({selectedCards.length}) as {selectedExtraMeldMatch}
-                </button>
-              )}
-
-              {isMyTurn && gameState.turnStage === 'draw' && selectedExtraMeldMatch && (
-                <button
-                  type="button"
-                  disabled
-                  className="bg-neutral-900 text-neutral-400 border border-neutral-700 px-2.5 py-1 rounded text-xs cursor-not-allowed"
-                >
-                  Draw Card First to Lay Extra Group
-                </button>
-              )}
-
               {/* Toolbar Hit button for Single Card */}
               {selectedCard && matchingHitGroups.map(grp => {
                 const grpLabel =
@@ -641,7 +512,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <CardView
                 key={c.id}
                 card={c}
-                isSelected={selectedCardIds.has(c.id)}
+                isSelected={selectedCardId === c.id}
                 isSelectable={true}
                 size="md"
                 onClick={() => handleCardClick(c)}
