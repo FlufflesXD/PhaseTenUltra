@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  phaseten-ultra:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: phaseten-ultra:latest
+    container_name: phaseten-ultra
+    restart: unless-stopped
+    ports:
+      - "6969:6969"
+    volumes:
+      - phaseten_data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=6969
+      - DATA_DIR=/app/data
+
+volumes:
+  phaseten_data:
+    driver: local

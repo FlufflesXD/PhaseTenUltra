@@ -1,0 +1,242 @@
+import fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
+import fastifyCors from '@fastify/cors';
+import { Server as SocketIOServer } from 'socket.io';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { roomManager, Room, RoomUser } from './room/RoomManager.js';
+import { dataStore } from './db/storage.js';
+import { GameNotification, ChatMessage } from '@phase-ten/shared';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const PORT = parseInt(process.env.PORT || '6969', 10);
+const HOST = '0.0.0.0';
+
+const app = fastify({ logger: true });
+
+await app.register(fastifyCors, {
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE']
+});
+
+// REST Endpoints
+app.get('/api/health', async () => {
+  return { status: 'ok', timestamp: Date.now() };
+});
+
+app.get('/api/stats', async () => {
+  return {
+    recentMatches: dataStore.getRecentMatches(),
+    leaderboard: dataStore.getLeaderboard()
+  };
+});
+
+// Serve frontend static files if client build exists
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  await app.register(fastifyStatic, {
+    root: clientDistPath,
+    prefix: '/'
+  });
+
+  app.setNotFoundHandler((req, reply) => {
+    if (req.raw.url && req.raw.url.startsWith('/api')) {
+      reply.status(404).send({ error: 'Endpoint not found' });
+    } else {
+      reply.sendFile('index.html');
+    }
+  });
+}
+
+// Attach Socket.io
+const io = new SocketIOServer(app.server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+function broadcastRoom(room: Room): void {
+  io.to(room.code).emit('room_state', room.getRoomState());
+}
+
+function broadcastGame(room: Room): void {
+  if (!room.gameSession) return;
+  const publicState = room.gameSession.getPublicState();
+  io.to(room.code).emit('game_state', publicState);
+
+  // Send private hands
+  for (const [socketId, user] of room.users.entries()) {
+    const hand = room.gameSession.getPlayerHand(user.secretToken);
+    io.to(socketId).emit('player_hand', hand);
+  }
+}
+
+function sendNotification(room: Room, notif: GameNotification): void {
+  io.to(room.code).emit('game_notification', notif);
+}
+
+function sendChat(room: Room, chat: ChatMessage): void {
+  io.to(room.code).emit('chat_message', chat);
+}
+
+io.on('connection', (socket) => {
+  socket.on('create_room', (data: { name: string; secretToken: string }, callback) => {
+    try {
+      const user: RoomUser = {
+        socketId: socket.id,
+        secretToken: data.secretToken || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: data.name?.trim() || 'Host',
+        isSpectator: false
+      };
+
+      const room = roomManager.createRoom(user, {
+        broadcastRoom,
+        broadcastGame,
+        sendNotification,
+        sendChat
+      });
+
+      socket.join(room.code);
+      broadcastRoom(room);
+
+      if (typeof callback === 'function') {
+        callback({ success: true, roomCode: room.code, secretToken: user.secretToken });
+      }
+    } catch (err: any) {
+      if (typeof callback === 'function') {
+        callback({ success: false, error: err.message });
+      }
+    }
+  });
+
+  socket.on('join_room', (data: { roomCode: string; name: string; secretToken: string; isSpectator?: boolean }, callback) => {
+    try {
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room) {
+        if (typeof callback === 'function') callback({ success: false, error: 'Room not found' });
+        return;
+      }
+
+      const user: RoomUser = {
+        socketId: socket.id,
+        secretToken: data.secretToken || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: data.name?.trim() || 'Player',
+        isSpectator: !!data.isSpectator
+      };
+
+      room.addOrReconnectUser(user);
+      socket.join(room.code);
+
+      if (typeof callback === 'function') {
+        callback({ success: true, roomCode: room.code, secretToken: user.secretToken });
+      }
+    } catch (err: any) {
+      if (typeof callback === 'function') {
+        callback({ success: false, error: err.message });
+      }
+    }
+  });
+
+  socket.on('update_settings', (data: { roomCode: string; secretToken: string; settings: any }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room) {
+      try {
+        room.updateSettings(data.secretToken, data.settings);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('start_game', (data: { roomCode: string; secretToken: string }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room) {
+      try {
+        room.startGame(data.secretToken);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('draw_card', (data: { roomCode: string; secretToken: string; source: 'deck' | 'discard' }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession) {
+      try {
+        room.gameSession.drawCard(data.secretToken, data.source);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('lay_down_phase', (data: { roomCode: string; secretToken: string; cardGroups: any[][] }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession) {
+      try {
+        room.gameSession.layDownPhase(data.secretToken, data.cardGroups);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('hit_card', (data: { roomCode: string; secretToken: string; cardId: string; targetGroupId: string }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession) {
+      try {
+        room.gameSession.hitCard(data.secretToken, data.cardId, data.targetGroupId);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('discard_card', (data: { roomCode: string; secretToken: string; cardId: string; skipTargetPlayerId?: string }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession) {
+      try {
+        room.gameSession.discardCard(data.secretToken, data.cardId, data.skipTargetPlayerId);
+      } catch (err: any) {
+        socket.emit('error_message', err.message);
+      }
+    }
+  });
+
+  socket.on('next_round', (data: { roomCode: string; secretToken: string }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room && room.gameSession && room.hostSecretToken === data.secretToken) {
+      room.gameSession.nextRound();
+    }
+  });
+
+  socket.on('send_chat', (data: { roomCode: string; secretToken: string; text: string }) => {
+    const room = roomManager.getRoom(data.roomCode);
+    if (room) {
+      room.addChatMessage(data.secretToken, data.text);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    const room = roomManager.findRoomBySocketId(socket.id);
+    if (room) {
+      room.removeSocket(socket.id);
+    }
+  });
+});
+
+async function start() {
+  try {
+    await app.listen({ port: PORT, host: HOST });
+    console.log(`Phase 10 Server running on port ${PORT}`);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}
+
+start();

@@ -1,0 +1,27 @@
+{
+  "name": "phase-ten-ultra",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enhanced online multiplayer Phase 10 card game",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "dev:server": "npm run dev --workspace=packages/server",
+    "dev:client": "npm run dev --workspace=packages/client",
+    "build": "npm run build --workspace=packages/shared && npm run build --workspace=packages/client && npm run build --workspace=packages/server",
+    "start": "npm run start --workspace=packages/server",
+    "test": "npm run test --workspace=packages/shared && npm run test --workspace=packages/server"
+  },
+  "keywords": [
+    "phase10",
+    "multiplayer",
+    "card-game",
+    "socketio",
+    "react",
+    "tailwind"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,170 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
+import {
+  Card,
+  ChatMessage,
+  GameNotification,
+  PublicGameState,
+  RoomState
+} from '@phase-ten/shared';
+
+export function useSocket() {
+  const [connected, setConnected] = useState(false);
+  const [roomState, setRoomState] = useState<RoomState | null>(null);
+  const [gameState, setGameState] = useState<PublicGameState | null>(null);
+  const [hand, setHand] = useState<Card[]>([]);
+  const [notifications, setNotifications] = useState<GameNotification[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const [secretToken] = useState<string>(() => {
+    let t = localStorage.getItem('phaseten_secret_token');
+    if (!t) {
+      t = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      localStorage.setItem('phaseten_secret_token', t);
+    }
+    return t;
+  });
+
+  const [playerName, setPlayerNameState] = useState<string>(() => {
+    return localStorage.getItem('phaseten_player_name') || 'Player';
+  });
+
+  const socketRef = useRef<Socket | null>(null);
+
+  const setPlayerName = (name: string) => {
+    setPlayerNameState(name);
+    localStorage.setItem('phaseten_player_name', name);
+  };
+
+  useEffect(() => {
+    const socket = io(window.location.origin, {
+      transports: ['websocket', 'polling']
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setConnected(true);
+      setError(null);
+    });
+
+    socket.on('disconnect', () => {
+      setConnected(false);
+    });
+
+    socket.on('room_state', (state: RoomState) => {
+      setRoomState(state);
+    });
+
+    socket.on('game_state', (state: PublicGameState) => {
+      setGameState(state);
+    });
+
+    socket.on('player_hand', (cards: Card[]) => {
+      setHand(cards);
+    });
+
+    socket.on('game_notification', (notif: GameNotification) => {
+      setNotifications(prev => [notif, ...prev.slice(0, 4)]);
+    });
+
+    socket.on('error_message', (msg: string) => {
+      setError(msg);
+      setTimeout(() => setError(null), 4000);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const createRoom = useCallback((callback?: (res: any) => void) => {
+    if (!socketRef.current) return;
+    socketRef.current.emit(
+      'create_room',
+      { name: playerName, secretToken },
+      (res: any) => {
+        if (!res.success && res.error) setError(res.error);
+        if (callback) callback(res);
+      }
+    );
+  }, [playerName, secretToken]);
+
+  const joinRoom = useCallback((roomCode: string, isSpectator = false, callback?: (res: any) => void) => {
+    if (!socketRef.current) return;
+    socketRef.current.emit(
+      'join_room',
+      { roomCode: roomCode.toUpperCase(), name: playerName, secretToken, isSpectator },
+      (res: any) => {
+        if (!res.success && res.error) setError(res.error);
+        if (callback) callback(res);
+      }
+    );
+  }, [playerName, secretToken]);
+
+  const updateSettings = useCallback((settings: any) => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('update_settings', {
+      roomCode: roomState.code,
+      secretToken,
+      settings
+    });
+  }, [roomState, secretToken]);
+
+  const startGame = useCallback(() => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('start_game', { roomCode: roomState.code, secretToken });
+  }, [roomState, secretToken]);
+
+  const drawCard = useCallback((source: 'deck' | 'discard') => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('draw_card', { roomCode: roomState.code, secretToken, source });
+  }, [roomState, secretToken]);
+
+  const layDownPhase = useCallback((cardGroups: Card[][]) => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('lay_down_phase', { roomCode: roomState.code, secretToken, cardGroups });
+  }, [roomState, secretToken]);
+
+  const hitCard = useCallback((cardId: string, targetGroupId: string) => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('hit_card', { roomCode: roomState.code, secretToken, cardId, targetGroupId });
+  }, [roomState, secretToken]);
+
+  const discardCard = useCallback((cardId: string, skipTargetPlayerId?: string) => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('discard_card', { roomCode: roomState.code, secretToken, cardId, skipTargetPlayerId });
+  }, [roomState, secretToken]);
+
+  const nextRound = useCallback(() => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('next_round', { roomCode: roomState.code, secretToken });
+  }, [roomState, secretToken]);
+
+  const sendChat = useCallback((text: string) => {
+    if (!socketRef.current || !roomState) return;
+    socketRef.current.emit('send_chat', { roomCode: roomState.code, secretToken, text });
+  }, [roomState, secretToken]);
+
+  return {
+    connected,
+    secretToken,
+    playerName,
+    setPlayerName,
+    roomState,
+    gameState,
+    hand,
+    notifications,
+    error,
+    createRoom,
+    joinRoom,
+    updateSettings,
+    startGame,
+    drawCard,
+    layDownPhase,
+    hitCard,
+    discardCard,
+    nextRound,
+    sendChat
+  };
+}
