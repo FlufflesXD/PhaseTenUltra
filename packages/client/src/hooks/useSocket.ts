@@ -16,6 +16,21 @@ export function useSocket() {
   const [notifications, setNotifications] = useState<GameNotification[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showError = useCallback((msg: string | null) => {
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    setError(msg);
+    if (msg) {
+      errorTimeoutRef.current = setTimeout(() => {
+        setError(null);
+        errorTimeoutRef.current = null;
+      }, 4000);
+    }
+  }, []);
 
   const [secretToken] = useState<string>(() => {
     let t = localStorage.getItem('phaseten_secret_token');
@@ -46,7 +61,7 @@ export function useSocket() {
 
     socket.on('connect', () => {
       setConnected(true);
-      setError(null);
+      showError(null);
     });
 
     socket.on('disconnect', () => {
@@ -80,14 +95,13 @@ export function useSocket() {
     });
 
     socket.on('error_message', (msg: string) => {
-      setError(msg);
-      setTimeout(() => setError(null), 4000);
+      showError(msg);
     });
 
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [showError]);
 
   const createRoom = useCallback((callback?: (res: any) => void) => {
     if (!socketRef.current) return;
@@ -95,11 +109,11 @@ export function useSocket() {
       'create_room',
       { name: playerName, secretToken },
       (res: any) => {
-        if (!res.success && res.error) setError(res.error);
+        if (!res.success && res.error) showError(res.error);
         if (callback) callback(res);
       }
     );
-  }, [playerName, secretToken]);
+  }, [playerName, secretToken, showError]);
 
   const joinRoom = useCallback((roomCode: string, isSpectator = false, claimPlayerId?: string, callback?: (res: any) => void) => {
     if (!socketRef.current) return;
@@ -107,11 +121,11 @@ export function useSocket() {
       'join_room',
       { roomCode: roomCode.toUpperCase(), name: playerName, secretToken, isSpectator, claimPlayerId },
       (res: any) => {
-        if (!res.success && res.error) setError(res.error);
+        if (!res.success && res.error) showError(res.error);
         if (callback) callback(res);
       }
     );
-  }, [playerName, secretToken]);
+  }, [playerName, secretToken, showError]);
 
   const updateSettings = useCallback((settings: any) => {
     const code = gameState?.roomCode || roomState?.code;
@@ -220,6 +234,8 @@ export function useSocket() {
     notifications,
     chatMessages,
     error,
+    clearError: () => showError(null),
+    showError,
     createRoom,
     joinRoom,
     claimSeat,

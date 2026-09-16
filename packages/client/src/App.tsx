@@ -18,6 +18,7 @@ export function App() {
     notifications,
     chatMessages,
     error,
+    clearError,
     createRoom,
     joinRoom,
     claimSeat,
@@ -45,8 +46,13 @@ export function App() {
     <div className="min-h-screen bg-black text-white font-mono relative">
       {/* Error Toast */}
       {error && (
-        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 bg-white text-black border border-black px-3 py-1 text-xs font-bold shadow">
-          [ERROR] {error}
+        <div
+          onClick={() => clearError()}
+          className="fixed top-2 left-1/2 -translate-x-1/2 z-50 bg-white text-black border border-black px-3 py-1.5 text-xs font-bold shadow-lg flex items-center gap-2 cursor-pointer hover:bg-neutral-200 transition-colors"
+          title="Click to dismiss"
+        >
+          <span>[ERROR] {error}</span>
+          <span className="text-neutral-500 hover:text-black font-normal ml-1">✕</span>
         </div>
       )}
 

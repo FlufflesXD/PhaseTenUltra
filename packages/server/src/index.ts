@@ -121,10 +121,15 @@ io.on('connection', (socket) => {
         isSpectator: !!data.isSpectator
       };
 
-      const result = room.addOrReconnectUser(user, data.claimPlayerId);
       socket.join(room.code);
+      const result = room.addOrReconnectUser(user, data.claimPlayerId);
+
+      socket.emit('room_state', room.getRoomState());
 
       if (room.gameSession) {
+        const publicState = room.gameSession.getPublicState();
+        publicState.waitlist = room.getWaitlist();
+        socket.emit('game_state', publicState);
         const hand = room.gameSession.getPlayerHand(user.secretToken);
         socket.emit('player_hand', hand);
       }

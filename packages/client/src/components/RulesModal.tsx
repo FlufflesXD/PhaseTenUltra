@@ -17,7 +17,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ onClose }) => {
         <div className="space-y-3 text-neutral-300">
           <div>
             <div className="font-bold text-white mb-1">Turn Flow:</div>
-            <div>1. <span className="text-white">Draw:</span> Take 1 card from the Draw Pile or Discard Pile.</div>
+            <div>1. <span className="text-white">Draw:</span> Take 1 card from the Draw Pile or Discard Pile (Wilds and Skips cannot be drawn from the Discard Pile).</div>
             <div>2. <span className="text-white">Play:</span> Lay down your full Stage requirement, lay extra halves/groups, and/or hit matching cards onto table groups.</div>
             <div>3. <span className="text-white">Discard:</span> Discard 1 card to end your turn.</div>
           </div>
@@ -25,7 +25,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ onClose }) => {
           <div>
             <div className="font-bold text-white mb-1">Making Stages & Hitting:</div>
             <div>• <span className="text-white">Full Stage Laydown:</span> You must lay down your complete Stage requirements first all at once!</div>
-            <div>• <span className="text-white">The Half Rule:</span> Once your Stage is made, if you acquire an extra set or run matching either requirement of your Stage (or any set of 3+ / run of 4+), you can lay it down as an extra group to help empty your hand.</div>
+            <div>• <span className="text-white">The Half Rule:</span> Once your Stage is made, if you acquire an extra set or run matching either requirement of your current Stage, you can lay it down as an extra group to help empty your hand.</div>
             <div>• <span className="text-white">Hitting:</span> After completing your Stage, you can hit matching cards directly onto any player's laid-down sets or runs on the table.</div>
             <div>• <span className="text-white">Going Out:</span> The round ends as soon as a player gets rid of all cards in their hand. That player scores 0 penalty points, and players who finished their Stage advance to the next Stage!</div>
           </div>

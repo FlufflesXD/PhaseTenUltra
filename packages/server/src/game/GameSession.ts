@@ -217,6 +217,10 @@ export class GameSession {
     let drawnCard: Card;
     if (source === 'discard') {
       if (this.discardPile.length === 0) throw new Error('Discard pile is empty');
+      const top = this.discardPile[this.discardPile.length - 1];
+      if (top.type === 'wild' || top.type === 'skip') {
+        throw new Error('Cannot draw a Wild or Skip card from the discard pile');
+      }
       drawnCard = this.discardPile.pop()!;
     } else {
       drawnCard = this.drawPile.pop()!;
@@ -360,20 +364,7 @@ export class GameSession {
     }
 
     if (!groupType) {
-      const setRes = validateSet(cards, 3);
-      if (setRes.valid) {
-        groupType = 'set';
-        targetValue = setRes.value;
-      } else {
-        const runRes = validateRun(cards, 4);
-        if (runRes.valid) {
-          groupType = 'run';
-          runMin = runRes.min;
-          runMax = runRes.max;
-        } else {
-          throw new Error('Extra group must match a requirement of your phase, a set of 3+, or a run of 4+');
-        }
-      }
+      throw new Error('Extra group must match one of the requirements of your current Stage');
     }
 
     const usedCardIds = new Set(cardIds);

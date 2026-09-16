@@ -48,7 +48,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold uppercase tracking-wider">TenStages Online</h1>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.6</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.7</span>
             </div>
             <button
               onClick={onOpenRules}
@@ -85,6 +85,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 type="text"
                 value={joinCode}
                 onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && joinCode.length >= 3) {
+                    onJoinRoom(joinCode);
+                  }
+                }}
                 placeholder="4-LETTER CODE"
                 maxLength={4}
                 className="flex-1 bg-black border border-neutral-700 rounded px-2.5 py-1.5 text-xs text-center uppercase tracking-widest text-white focus:outline-none focus:border-white"

@@ -66,18 +66,6 @@ export const PhaseHelperDrawer: React.FC<PhaseHelperProps> = ({
       }
     }
 
-    // If neither phase requirement matched, check generic set of 3+ or run of 4+
-    if (results.length === 0) {
-      const generic = findExtraMeldMatch(pool, phaseDef);
-      if (generic) {
-        results.push({
-          label: `Extra ${generic.type === 'set' ? 'Set' : generic.type === 'run' ? 'Run' : 'Color Group'}`,
-          type: generic.type,
-          cards: generic.cards
-        });
-      }
-    }
-
     return results;
   }, [hand, hasLaidDown, allowPartialAndExtraSets, phaseDef]);
 

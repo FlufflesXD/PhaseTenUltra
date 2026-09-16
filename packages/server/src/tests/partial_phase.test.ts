@@ -102,4 +102,104 @@ describe('Partial Phase & Extra Groups Tests', () => {
     assert.strictEqual(session.players[0].cards.length, 0);
     assert.strictEqual(session.status, 'round_end');
   });
+
+  test('Cannot draw Wild or Skip from discard pile', () => {
+    const session = new GameSession(
+      'TEST',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 10,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'draw';
+    session.drawPile = [{ id: 'd1', type: 'number', color: 'red', value: 5, points: 5 }];
+
+    // Test with Wild on discard pile
+    session.discardPile = [{ id: 'w1', type: 'wild', color: 'none', value: 0, points: 25 }];
+    assert.throws(() => {
+      session.drawCard('p1', 'discard');
+    }, /Cannot draw a Wild or Skip card/);
+
+    // Test with Skip on discard pile
+    session.discardPile = [{ id: 's1', type: 'skip', color: 'none', value: 0, points: 15 }];
+    assert.throws(() => {
+      session.drawCard('p1', 'discard');
+    }, /Cannot draw a Wild or Skip card/);
+
+    // Test with normal number card on discard pile
+    session.discardPile = [{ id: 'n1', type: 'number', color: 'red', value: 2, points: 5 }];
+    session.drawCard('p1', 'discard');
+    assert.strictEqual(session.players[0].cards.length, 1);
+    assert.strictEqual(session.players[0].cards[0].id, 'n1');
+  });
+
+  test('Extra meld in Phase 7 (two sets of 4) must strictly match Phase 7 requirements, not a generic run', () => {
+    const session = new GameSession(
+      'TEST',
+      { turnTimerSeconds: 0, allowPartialAndExtraSets: true },
+      () => {},
+      () => {}
+    );
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 7, // Phase 7: 2 sets of 4
+        phaseCompletedInRound: true, // already laid down Phase 7
+        cardCount: 8,
+        cards: [
+          // A run of 4 (1, 2, 3, 4) - valid run, but Phase 7 only allows sets of 4!
+          { id: 'r1', type: 'number', color: 'red', value: 1, points: 5 },
+          { id: 'r2', type: 'number', color: 'blue', value: 2, points: 5 },
+          { id: 'r3', type: 'number', color: 'green', value: 3, points: 5 },
+          { id: 'r4', type: 'number', color: 'yellow', value: 4, points: 5 },
+          // A set of 4 (four 9s) - matches Phase 7 requirement
+          { id: 's1', type: 'number', color: 'red', value: 9, points: 5 },
+          { id: 's2', type: 'number', color: 'blue', value: 9, points: 5 },
+          { id: 's3', type: 'number', color: 'green', value: 9, points: 5 },
+          { id: 's4', type: 'number', color: 'yellow', value: 9, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Attempting to lay the run of 4 should fail
+    assert.throws(() => {
+      session.layExtraGroup('p1', ['r1', 'r2', 'r3', 'r4']);
+    }, /Extra group must match one of the requirements of your current Stage/);
+
+    // Laying the set of 4 should succeed
+    session.layExtraGroup('p1', ['s1', 's2', 's3', 's4']);
+    assert.strictEqual(session.allLaidDownPhases.length, 1);
+    assert.strictEqual(session.allLaidDownPhases[0].type, 'set');
+    assert.strictEqual(session.allLaidDownPhases[0].cards.length, 4);
+  });
 });
+

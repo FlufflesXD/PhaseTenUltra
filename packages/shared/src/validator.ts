@@ -357,7 +357,7 @@ export function findExtraMeldMatch(
   phaseDef?: PhaseDefinition
 ): { type: RequirementType; cards: Card[] } | null {
   const usable = cards.filter(c => c.type === 'number' || c.type === 'wild');
-  if (usable.length < 3) return null;
+  if (usable.length < 2) return null;
 
   // Check if cards match any requirement in player's current phase (the "half rule")
   if (phaseDef) {
@@ -365,30 +365,6 @@ export function findExtraMeldMatch(
       const match = findSingleRequirementMatch(usable, req);
       if (match) {
         return { type: req.type, cards: match };
-      }
-    }
-  }
-
-  // Fallback check for sets of 3+
-  const setCombos = getCombinations(usable, 3);
-  for (const combo of setCombos) {
-    const res = validateSet(combo, 3);
-    if (res.valid && res.value !== undefined) {
-      const val = res.value;
-      const allMatching = usable.filter(c => c.type === 'wild' || (c.type === 'number' && c.value === val));
-      if (allMatching.length >= 3) {
-        return { type: 'set', cards: allMatching };
-      }
-      return { type: 'set', cards: combo };
-    }
-  }
-
-  // Fallback check for runs of 4+
-  if (usable.length >= 4) {
-    const runCombos = getCombinations(usable, 4);
-    for (const combo of runCombos) {
-      if (validateRun(combo, 4).valid) {
-        return { type: 'run', cards: combo };
       }
     }
   }

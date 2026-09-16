@@ -94,7 +94,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const handleDraw = (source: 'deck' | 'discard') => {
     if (!isMyTurn || gameState.turnStage !== 'draw') return;
-    if (source === 'discard' && gameState.topDiscard?.type === 'skip') return;
+    if (source === 'discard' && (gameState.topDiscard?.type === 'skip' || gameState.topDiscard?.type === 'wild')) return;
     onDrawCard(source);
   };
 
@@ -149,7 +149,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
           </button>
-          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.6</span>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.7</span>
           <span>Round {gameState.roundNumber}</span>
           {gameState.waitlist && gameState.waitlist.length > 0 && (
             <span className="text-[10px] text-neutral-400 border border-neutral-800 px-1.5 py-0.5 rounded">
@@ -298,13 +298,15 @@ export const GameTable: React.FC<GameTableProps> = ({
               <div
                 onClick={() => {
                   if (isMyTurn && gameState.turnStage === 'draw') {
-                    handleDraw('discard');
+                    if (gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') {
+                      handleDraw('discard');
+                    }
                   } else if (isMyTurn && selectedCard && gameState.turnStage !== 'draw') {
                     handleDiscardSelected();
                   }
                 }}
                 className={
-                  isMyTurn && (gameState.turnStage === 'draw' || selectedCard)
+                  isMyTurn && ((gameState.turnStage === 'draw' && gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') || selectedCard)
                     ? 'cursor-pointer'
                     : ''
                 }
