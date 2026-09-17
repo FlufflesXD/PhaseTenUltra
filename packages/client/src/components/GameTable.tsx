@@ -72,6 +72,12 @@ export const GameTable: React.FC<GameTableProps> = ({
   const discardRef = useRef<HTMLDivElement | null>(null);
   const opponentsBarRef = useRef<HTMLElement | null>(null);
   const handRef = useRef<HTMLElement | null>(null);
+  const lastHandledActionIdRef = useRef<string | null>(null);
+  const selectedCardIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    selectedCardIdRef.current = selectedCardId;
+  }, [selectedCardId]);
 
   const getCenterCoords = (el: Element | null) => {
     if (!el) return null;
@@ -84,7 +90,8 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   useEffect(() => {
-    if (!latestAction) return;
+    if (!latestAction || lastHandledActionIdRef.current === latestAction.id) return;
+    lastHandledActionIdRef.current = latestAction.id;
 
     const isMe = latestAction.playerId === secretToken;
     let startCoords: { x: number; y: number } | null = null;
@@ -132,8 +139,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         if (latestAction.card?.id) {
           cardEl = document.querySelector(`[data-card-id="${latestAction.card.id}"]`);
         }
-        if (!cardEl && selectedCardId) {
-          cardEl = document.querySelector(`[data-card-id="${selectedCardId}"]`);
+        if (!cardEl && selectedCardIdRef.current) {
+          cardEl = document.querySelector(`[data-card-id="${selectedCardIdRef.current}"]`);
         }
         startCoords = getCenterCoords(cardEl) || getCenterCoords(handRef.current);
         startScale = 0.85;
@@ -183,7 +190,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       }, 430);
       return () => clearTimeout(timer);
     }
-  }, [latestAction, secretToken, selectedCardId]);
+  }, [latestAction, secretToken]);
 
   useEffect(() => {
     setLocalHand(prev => {
