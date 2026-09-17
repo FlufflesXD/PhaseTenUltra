@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Card,
   GameNotification,
@@ -29,7 +29,7 @@ interface GameTableProps {
   onLayRequirement: (reqIndex: number, cardIds: string[]) => void;
   onLayExtraMeld: (cardIds: string[]) => void;
   onHitCard: (cardId: string | string[], targetGroupId: string, targetEnd?: 'low' | 'high') => void;
-  onDiscardCard: (cardId: string, skipTargetId?: string) => void;
+  onDiscardCard: (cardId: string, targetPlayerId?: string) => void;
   onClaimSeat?: (targetPlayerId: string) => void;
   onOpenRules: () => void;
 }
@@ -56,52 +56,134 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [localHand, setLocalHand] = useState<Card[]>(hand);
   const [activeFlyingCard, setActiveFlyingCard] = useState<{
     id: string;
-    type: 'draw_to_self' | 'draw_to_opp' | 'discard_from_self' | 'discard_from_opp' | 'hit';
     card?: Card;
+    startX: number;
+    startY: number;
+    targetX: number;
+    targetY: number;
+    startScale: number;
+    targetScale: number;
+    startRot: number;
+    targetRot: number;
   } | null>(null);
   const [discardKey, setDiscardKey] = useState(0);
+
+  const deckRef = useRef<HTMLButtonElement | null>(null);
+  const discardRef = useRef<HTMLDivElement | null>(null);
+  const opponentsBarRef = useRef<HTMLElement | null>(null);
+  const handRef = useRef<HTMLElement | null>(null);
+
+  const getCenterCoords = (el: Element | null) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return null;
+    return {
+      x: r.left + r.width / 2,
+      y: r.top + r.height / 2
+    };
+  };
 
   useEffect(() => {
     if (!latestAction) return;
 
     const isMe = latestAction.playerId === secretToken;
+    let startCoords: { x: number; y: number } | null = null;
+    let targetCoords: { x: number; y: number } | null = null;
+    let startScale = 1;
+    let targetScale = 1;
+    let startRot = 0;
+    let targetRot = 0;
 
     if (latestAction.type === 'draw') {
-      setActiveFlyingCard({
-        id: latestAction.id,
-        type: isMe ? 'draw_to_self' : 'draw_to_opp',
-        card: latestAction.card
-      });
-      const timer = setTimeout(() => setActiveFlyingCard(null), 480);
-      return () => clearTimeout(timer);
-    }
+      // Source is deck or discard pile
+      if (latestAction.source === 'discard') {
+        startCoords = getCenterCoords(discardRef.current);
+      } else {
+        startCoords = getCenterCoords(deckRef.current);
+      }
 
-    if (
+      if (isMe) {
+        targetCoords = getCenterCoords(handRef.current);
+        startScale = 1;
+        targetScale = 0.85;
+        startRot = 0;
+        targetRot = -4;
+      } else {
+        const oppEl = document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`);
+        targetCoords = getCenterCoords(oppEl) || getCenterCoords(opponentsBarRef.current);
+        startScale = 1;
+        targetScale = 0.65;
+        startRot = 0;
+        targetRot = 4;
+      }
+    } else if (
       latestAction.type === 'discard' ||
       latestAction.type === 'skip' ||
       latestAction.type === 'reverse' ||
       latestAction.type === 'draw_two'
     ) {
       setDiscardKey(prev => prev + 1);
-      setActiveFlyingCard({
-        id: latestAction.id,
-        type: isMe ? 'discard_from_self' : 'discard_from_opp',
-        card: latestAction.card
-      });
-      const timer = setTimeout(() => setActiveFlyingCard(null), 480);
-      return () => clearTimeout(timer);
+
+      // Target is always the center of the discard pile
+      targetCoords = getCenterCoords(discardRef.current);
+
+      if (isMe) {
+        let cardEl: Element | null = null;
+        if (latestAction.card?.id) {
+          cardEl = document.querySelector(`[data-card-id="${latestAction.card.id}"]`);
+        }
+        if (!cardEl && selectedCardId) {
+          cardEl = document.querySelector(`[data-card-id="${selectedCardId}"]`);
+        }
+        startCoords = getCenterCoords(cardEl) || getCenterCoords(handRef.current);
+        startScale = 0.85;
+        targetScale = 1;
+        startRot = -3;
+        targetRot = 0;
+      } else {
+        const oppEl = document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`);
+        startCoords = getCenterCoords(oppEl) || getCenterCoords(opponentsBarRef.current);
+        startScale = 0.65;
+        targetScale = 1;
+        startRot = 4;
+        targetRot = 0;
+      }
+    } else if (latestAction.type === 'hit') {
+      const groupEl = latestAction.targetGroupId
+        ? document.querySelector(`[data-group-id="${latestAction.targetGroupId}"]`)
+        : null;
+      targetCoords = getCenterCoords(groupEl) || getCenterCoords(discardRef.current);
+
+      if (isMe) {
+        startCoords = getCenterCoords(handRef.current);
+      } else {
+        const oppEl = document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`);
+        startCoords = getCenterCoords(oppEl) || getCenterCoords(opponentsBarRef.current);
+      }
+      startScale = 0.85;
+      targetScale = 0.75;
     }
 
-    if (latestAction.type === 'hit') {
+    if (startCoords && targetCoords) {
       setActiveFlyingCard({
-        id: latestAction.id,
-        type: 'hit',
-        card: latestAction.card
+        id: `${latestAction.id}_${Date.now()}`,
+        card: latestAction.card,
+        startX: startCoords.x,
+        startY: startCoords.y,
+        targetX: targetCoords.x,
+        targetY: targetCoords.y,
+        startScale,
+        targetScale,
+        startRot,
+        targetRot
       });
-      const timer = setTimeout(() => setActiveFlyingCard(null), 480);
+
+      const timer = setTimeout(() => {
+        setActiveFlyingCard(null);
+      }, 430);
       return () => clearTimeout(timer);
     }
-  }, [latestAction, secretToken]);
+  }, [latestAction, secretToken, selectedCardId]);
 
   useEffect(() => {
     setLocalHand(prev => {
@@ -232,26 +314,28 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       </header>
 
-      {/* Visual Flying Card Animation Layer */}
+      {/* Visual Flying Card Animation Layer (Exact Element Coordinates) */}
       {activeFlyingCard && (
         <div
           key={activeFlyingCard.id}
-          className={`fixed z-50 pointer-events-none drop-shadow-2xl ${
-            activeFlyingCard.type === 'draw_to_self'
-              ? 'animate-fly-draw-self'
-              : activeFlyingCard.type === 'draw_to_opp'
-              ? 'animate-fly-draw-opp'
-              : activeFlyingCard.type === 'discard_from_self'
-              ? 'animate-fly-discard-self'
-              : activeFlyingCard.type === 'discard_from_opp'
-              ? 'animate-fly-discard-opp'
-              : 'animate-fly-hit'
-          }`}
+          style={
+            {
+              '--start-x': `${activeFlyingCard.startX}px`,
+              '--start-y': `${activeFlyingCard.startY}px`,
+              '--target-x': `${activeFlyingCard.targetX}px`,
+              '--target-y': `${activeFlyingCard.targetY}px`,
+              '--start-scale': activeFlyingCard.startScale,
+              '--target-scale': activeFlyingCard.targetScale,
+              '--start-rot': `${activeFlyingCard.startRot}deg`,
+              '--target-rot': `${activeFlyingCard.targetRot}deg`
+            } as React.CSSProperties
+          }
+          className="fixed top-0 left-0 z-50 pointer-events-none drop-shadow-2xl animate-fly-card-exact"
         >
           {activeFlyingCard.card ? (
-            <CardView card={activeFlyingCard.card} size="md" isSelectable={false} />
+            <CardView card={activeFlyingCard.card} size="lg" isSelectable={false} />
           ) : (
-            <div className="w-16 h-24 sm:w-20 sm:h-28 rounded border border-neutral-700 overflow-hidden bg-neutral-900 shadow-2xl">
+            <div className="w-20 h-28 sm:w-24 sm:h-34 rounded border border-neutral-700 overflow-hidden bg-neutral-900 shadow-2xl">
               <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
             </div>
           )}
@@ -285,12 +369,13 @@ export const GameTable: React.FC<GameTableProps> = ({
       )}
 
       {/* 2. Opponents Bar */}
-      <section className="py-2 flex items-center justify-center gap-2 overflow-x-auto">
+      <section ref={opponentsBarRef} className="py-2 flex items-center justify-center gap-2 overflow-x-auto">
         {opponents.map(opp => {
           const isOppTurn = gameState.currentTurnPlayerId === opp.id;
           return (
             <div
               key={opp.id}
+              data-opponent-id={opp.id}
               className={`border p-2 rounded text-xs min-w-[130px] ${
                 isOppTurn ? 'border-white bg-neutral-900 font-bold' : 'border-neutral-800 bg-neutral-950'
               }`}
@@ -330,6 +415,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Draw Pile */}
           <div className="flex flex-col items-center">
             <button
+              ref={deckRef}
               onClick={() => handleDraw('deck')}
               disabled={!isMyTurn || gameState.turnStage !== 'draw'}
               className={`relative w-20 h-28 sm:w-24 sm:h-34 border rounded flex flex-col items-center justify-center text-xs p-2 transition-colors overflow-hidden ${
@@ -370,31 +456,33 @@ export const GameTable: React.FC<GameTableProps> = ({
 
           {/* Discard Pile */}
           <div className="flex flex-col items-center">
-            {gameState.topDiscard ? (
-              <div
-                key={`${gameState.topDiscard.id}_${discardKey}`}
-                onClick={() => {
-                  if (isMyTurn && gameState.turnStage === 'draw') {
-                    if (gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') {
-                      handleDraw('discard');
+            <div ref={discardRef} className="relative">
+              {gameState.topDiscard ? (
+                <div
+                  key={`${gameState.topDiscard.id}_${discardKey}`}
+                  onClick={() => {
+                    if (isMyTurn && gameState.turnStage === 'draw') {
+                      if (gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') {
+                        handleDraw('discard');
+                      }
+                    } else if (isMyTurn && selectedCard && gameState.turnStage !== 'draw') {
+                      handleDiscardSelected();
                     }
-                  } else if (isMyTurn && selectedCard && gameState.turnStage !== 'draw') {
-                    handleDiscardSelected();
-                  }
-                }}
-                className={`animate-card-land ${
-                  isMyTurn && ((gameState.turnStage === 'draw' && gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') || selectedCard)
-                    ? 'cursor-pointer'
-                    : ''
-                }`}
-              >
-                <CardView card={gameState.topDiscard} size="lg" isSelectable={false} />
-              </div>
-            ) : (
-              <div className="w-20 h-28 sm:w-24 sm:h-34 border border-dashed border-neutral-800 rounded flex items-center justify-center text-xs text-neutral-600">
-                Empty
-              </div>
-            )}
+                  }}
+                  className={`animate-card-land ${
+                    isMyTurn && ((gameState.turnStage === 'draw' && gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') || selectedCard)
+                      ? 'cursor-pointer'
+                      : ''
+                  }`}
+                >
+                  <CardView card={gameState.topDiscard} size="lg" isSelectable={false} />
+                </div>
+              ) : (
+                <div className="w-20 h-28 sm:w-24 sm:h-34 border border-dashed border-neutral-800 rounded flex items-center justify-center text-xs text-neutral-600">
+                  Empty
+                </div>
+              )}
+            </div>
             <span className="text-[10px] text-neutral-500 mt-1">Discard Pile</span>
           </div>
         </div>
@@ -438,6 +526,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 return (
                   <div
                     key={group.id}
+                    data-group-id={group.id}
                     onClick={() => handleTableGroupClick(group)}
                     className={`border p-2 rounded flex flex-col gap-1.5 transition-all animate-card-deal ${
                       canHitSingle
@@ -571,7 +660,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       </section>
 
       {/* 4. Player Hand & Actions */}
-      <footer className="space-y-2">
+      <footer ref={handRef} className="space-y-2">
         <PhaseHelperDrawer
           hand={localHand}
           phaseDef={currentPhaseDef}
@@ -636,14 +725,15 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Cards Tray */}
           <div className="flex items-center gap-1.5 overflow-x-auto py-1">
             {localHand.map(c => (
-              <CardView
-                key={c.id}
-                card={c}
-                isSelected={selectedCardId === c.id}
-                isSelectable={true}
-                size="md"
-                onClick={() => handleCardClick(c)}
-              />
+              <div key={c.id} data-card-id={c.id} className="shrink-0">
+                <CardView
+                  card={c}
+                  isSelected={selectedCardId === c.id}
+                  isSelectable={true}
+                  size="md"
+                  onClick={() => handleCardClick(c)}
+                />
+              </div>
             ))}
           </div>
         </div>
