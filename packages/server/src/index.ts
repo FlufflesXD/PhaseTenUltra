@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { roomManager, Room, RoomUser } from './room/RoomManager.js';
-import { GameNotification, ChatMessage } from '@phase-ten/shared';
+import { GameNotification, ChatMessage, GameActionEvent } from '@phase-ten/shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +76,10 @@ function sendChat(room: Room, chat: ChatMessage): void {
   io.to(room.code).emit('chat_message', chat);
 }
 
+function broadcastAction(room: Room, action: GameActionEvent): void {
+  io.to(room.code).emit('game_action', action);
+}
+
 io.on('connection', (socket) => {
   socket.on('create_room', (data: { name: string; secretToken: string }, callback) => {
     try {
@@ -90,7 +94,8 @@ io.on('connection', (socket) => {
         broadcastRoom,
         broadcastGame,
         sendNotification,
-        sendChat
+        sendChat,
+        broadcastAction
       });
 
       socket.join(room.code);

@@ -3,7 +3,8 @@ import {
   GameNotification,
   GameSettings,
   PlayerPublic,
-  RoomState
+  RoomState,
+  GameActionEvent
 } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
 
@@ -26,6 +27,7 @@ export class Room {
   private onBroadcastGame: (room: Room) => void;
   private onSendNotification: (room: Room, notif: GameNotification) => void;
   private onSendChat: (room: Room, chat: ChatMessage) => void;
+  private onBroadcastAction?: (room: Room, action: GameActionEvent) => void;
   private onDeleteRoom: (code: string) => void;
   private emptyRoomTimeout?: NodeJS.Timeout;
 
@@ -38,6 +40,7 @@ export class Room {
       sendNotification: (room: Room, notif: GameNotification) => void;
       sendChat: (room: Room, chat: ChatMessage) => void;
       deleteRoom: (code: string) => void;
+      broadcastAction?: (room: Room, action: GameActionEvent) => void;
     }
   ) {
     this.code = code;
@@ -51,6 +54,7 @@ export class Room {
     this.onBroadcastGame = callbacks.broadcastGame;
     this.onSendNotification = callbacks.sendNotification;
     this.onSendChat = callbacks.sendChat;
+    this.onBroadcastAction = callbacks.broadcastAction;
     this.onDeleteRoom = callbacks.deleteRoom;
   }
 
@@ -244,6 +248,9 @@ export class Room {
       },
       (notif) => {
         this.onSendNotification(this, notif);
+      },
+      (action) => {
+        this.onBroadcastAction?.(this, action);
       }
     );
 
@@ -324,6 +331,7 @@ export class RoomManager {
       broadcastGame: (room: Room) => void;
       sendNotification: (room: Room, notif: GameNotification) => void;
       sendChat: (room: Room, chat: ChatMessage) => void;
+      broadcastAction?: (room: Room, action: GameActionEvent) => void;
     }
   ): Room {
     const code = this.generateUniqueCode();

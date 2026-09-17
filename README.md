@@ -27,7 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tenstages:v2.9
+    image: tenstages:v3.0
     container_name: tenstages
     restart: unless-stopped
     ports:
@@ -46,7 +46,7 @@ services:
 
 ```bash
 # Build image
-docker build -t tenstages:v2.9 .
+docker build -t tenstages:v3.0 .
 
 # Run container
 docker run -d \
@@ -54,7 +54,7 @@ docker run -d \
   --restart unless-stopped \
   -p 6969:6969 \
   -e PORT=6969 \
-  tenstages:v2.9
+  tenstages:v3.0
 ```
 
 ---

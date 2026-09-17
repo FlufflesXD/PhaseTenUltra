@@ -1,13 +1,13 @@
 export type CardColor = 'red' | 'blue' | 'green' | 'yellow' | 'none';
 
-export type CardType = 'number' | 'wild' | 'skip';
+export type CardType = 'number' | 'wild' | 'skip' | 'reverse' | 'draw_two';
 
 export interface Card {
   id: string;
   type: CardType;
   color: CardColor;
   value: number; // 1-12 for number, 0 for special
-  points: number; // 1-9: 5pts, 10-12: 10pts, Skip: 15pts, Wild: 25pts
+  points: number; // 1-9: 5pts, 10-12: 10pts, Skip: 15pts, Wild: 25pts, Reverse: 20pts, Draw Two: 20pts
 }
 
 export type RequirementType = 'set' | 'run' | 'color';
@@ -60,9 +60,13 @@ export interface PlayerPrivate extends PlayerPublic {
 
 export type TurnStage = 'draw' | 'play' | 'discard';
 
+export type GameMode = 'classic' | 'masters' | 'speed' | 'chaos';
+
 export interface GameSettings {
   turnTimerSeconds: number; // 0 = unlimited, 30, 45, 60
   allowPartialAndExtraSets?: boolean; // House rule: allow laying either side of '+' and extra sets
+  gameMode?: GameMode; // 'classic' (10 stages), 'speed' (5 stages), 'masters' (flexible), 'chaos' (action cards)
+  customActionCards?: boolean;
 }
 
 export interface ChatMessage {
@@ -78,11 +82,26 @@ export interface WaitlistPlayer {
   name: string;
 }
 
+export interface GameActionEvent {
+  id: string;
+  type: 'draw' | 'discard' | 'lay_phase' | 'lay_extra' | 'hit' | 'skip' | 'reverse' | 'draw_two';
+  playerId: string;
+  playerName: string;
+  source?: 'deck' | 'discard';
+  targetGroupId?: string;
+  targetPlayerId?: string;
+  card?: Card;
+  cards?: Card[];
+  message?: string;
+  timestamp: number;
+}
+
 export interface PublicGameState {
   roomCode: string;
   status: 'lobby' | 'in_game' | 'round_end' | 'game_over';
   roundNumber: number;
   currentTurnPlayerId: string;
+  playDirection: 1 | -1; // 1 = clockwise, -1 = counter-clockwise
   turnStage: TurnStage;
   turnTimeRemaining: number;
   drawPileCount: number;

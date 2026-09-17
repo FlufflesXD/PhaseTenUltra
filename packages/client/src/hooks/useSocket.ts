@@ -5,7 +5,8 @@ import {
   ChatMessage,
   GameNotification,
   PublicGameState,
-  RoomState
+  RoomState,
+  GameActionEvent
 } from '@phase-ten/shared';
 
 export function useSocket() {
@@ -15,6 +16,7 @@ export function useSocket() {
   const [hand, setHand] = useState<Card[]>([]);
   const [notifications, setNotifications] = useState<GameNotification[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [latestAction, setLatestAction] = useState<GameActionEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,6 +94,10 @@ export function useSocket() {
 
     socket.on('game_notification', (notif: GameNotification) => {
       setNotifications(prev => [notif, ...prev.slice(0, 4)]);
+    });
+
+    socket.on('game_action', (action: GameActionEvent) => {
+      setLatestAction(action);
     });
 
     socket.on('error_message', (msg: string) => {
@@ -233,6 +239,7 @@ export function useSocket() {
     hand,
     notifications,
     chatMessages,
+    latestAction,
     error,
     clearError: () => showError(null),
     showError,

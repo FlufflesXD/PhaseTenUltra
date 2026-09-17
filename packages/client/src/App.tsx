@@ -17,6 +17,7 @@ export function App() {
     hand,
     notifications,
     chatMessages,
+    latestAction,
     error,
     clearError,
     createRoom,
@@ -70,6 +71,7 @@ export function App() {
           hand={hand}
           secretToken={secretToken}
           notifications={notifications}
+          latestAction={latestAction}
           onDrawCard={drawCard}
           onLayDownPhase={layDownPhase}
           onLayRequirement={layPhaseRequirement}

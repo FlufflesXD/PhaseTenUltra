@@ -18,7 +18,8 @@ import {
   validateHit,
   validatePhase,
   validateRun,
-  validateSet
+  validateSet,
+  GameActionEvent
 } from '@phase-ten/shared';
 import { createDeck, shuffleDeck } from '@phase-ten/shared';
 
@@ -32,6 +33,7 @@ export class GameSession {
   public phaseDefinitions: PhaseDefinition[] = CLASSIC_PHASES;
   public players: GamePlayerInternal[] = [];
   public currentTurnIndex: number = 0;
+  public playDirection: 1 | -1 = 1;
   public turnStage: TurnStage = 'draw';
   public drawPile: Card[] = [];
   public discardPile: Card[] = [];
@@ -46,22 +48,44 @@ export class GameSession {
 
   private onStateChange: () => void;
   private onNotification: (notif: GameNotification) => void;
+  private onActionEvent?: (action: GameActionEvent) => void;
 
   constructor(
     roomCode: string,
     settings: GameSettings,
     onStateChange: () => void,
-    onNotification: (notif: GameNotification) => void
+    onNotification: (notif: GameNotification) => void,
+    onActionEvent?: (action: GameActionEvent) => void
   ) {
     this.roomCode = roomCode;
     this.settings = settings;
     this.onStateChange = onStateChange;
     this.onNotification = onNotification;
+    this.onActionEvent = onActionEvent;
+  }
+
+  public emitAction(action: Omit<GameActionEvent, 'id' | 'timestamp'>): void {
+    const event: GameActionEvent = {
+      ...action,
+      id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: Date.now()
+    };
+    if (this.onActionEvent) {
+      this.onActionEvent(event);
+    }
   }
 
   public startGame(): void {
     if (this.players.length < 2) {
       throw new Error('At least 2 players are required to start the game');
+    }
+
+    this.playDirection = 1;
+    const mode = this.settings.gameMode || 'classic';
+    if (mode === 'speed') {
+      this.phaseDefinitions = CLASSIC_PHASES.slice(0, 5);
+    } else {
+      this.phaseDefinitions = CLASSIC_PHASES;
     }
 
     this.status = 'in_game';
@@ -238,6 +262,14 @@ export class GameSession {
       timestamp: Date.now()
     });
 
+    this.emitAction({
+      type: 'draw',
+      playerId: current.id,
+      playerName: current.name,
+      source,
+      card: drawnCard
+    });
+
     this.onStateChange();
     return drawnCard;
   }
@@ -249,26 +281,15 @@ export class GameSession {
     if (current.phaseCompletedInRound) throw new Error('You have already laid down your phase this round');
 
     const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === current.currentPhase);
-    if (!phaseDef) throw new Error(`Phase ${current.currentPhase} not found`);
+    if (!phaseDef) throw new Error('Invalid phase definition');
 
     const validation = validatePhase(cardGroups, phaseDef);
     if (!validation.isValid || !validation.annotatedGroups) {
-      throw new Error(validation.error || 'Invalid phase');
+      throw new Error(validation.error || 'Invalid phase layout');
     }
 
-    const usedCardIds = new Set<string>();
-    for (const group of cardGroups) {
-      for (const c of group) {
-        usedCardIds.add(c.id);
-      }
-    }
-
-    const hasAllCards = Array.from(usedCardIds).every(id => current.cards.some(c => c.id === id));
-    if (!hasAllCards) {
-      throw new Error('Cards not found in hand');
-    }
-
-    current.cards = current.cards.filter(c => !usedCardIds.has(c.id));
+    const laidCardIds = new Set(cardGroups.flatMap(g => g.map(c => c.id)));
+    current.cards = current.cards.filter(c => !laidCardIds.has(c.id));
     current.cardCount = current.cards.length;
     current.phaseCompletedInRound = true;
 
@@ -298,6 +319,13 @@ export class GameSession {
       timestamp: Date.now()
     });
 
+    this.emitAction({
+      type: 'lay_phase',
+      playerId: current.id,
+      playerName: current.name,
+      message: `${current.name} laid down Stage ${current.currentPhase}!`
+    });
+
     if (current.cards.length === 0) {
       this.endRound(current);
       return;
@@ -306,59 +334,64 @@ export class GameSession {
     this.onStateChange();
   }
 
-  public layPhaseRequirement(playerId: string, _reqIndex: number, cardIds: string[]): void {
+  public layPhaseRequirement(playerId: string, reqIndex: number, cardIds: string[]): void {
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw a card first');
-    if (!current.phaseCompletedInRound) {
-      throw new Error('Must lay down your full phase first before laying extra groups/halves');
+    if (!this.settings.allowPartialAndExtraSets) {
+      throw new Error('House rules are not enabled');
     }
-    this.layExtraGroup(playerId, cardIds);
+    throw new Error('Must lay down your full phase first before laying extra groups');
   }
 
   public layExtraGroup(playerId: string, cardIds: string[]): void {
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw a card first');
-    if (!current.phaseCompletedInRound) throw new Error('Must complete your phase before laying extra sets');
-
-    const cards = current.cards.filter(c => cardIds.includes(c.id));
-    if (cards.length !== cardIds.length) {
-      throw new Error('Cards not found in hand');
+    if (!this.settings.allowPartialAndExtraSets) {
+      throw new Error('House rules are not enabled');
+    }
+    if (!current.phaseCompletedInRound) {
+      throw new Error('Must complete your phase before laying extra groups');
     }
 
+    const cards = cardIds.map(id => {
+      const c = current.cards.find(card => card.id === id);
+      if (!c) throw new Error(`Card ${id} not in hand`);
+      return c;
+    });
+
     const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === current.currentPhase);
-    let groupType: RequirementType | undefined;
+    if (!phaseDef) throw new Error('Invalid phase definition');
+
+    let groupType: RequirementType | null = null;
     let targetValue: number | undefined;
     let targetColor: CardColor | undefined;
     let runMin: number | undefined;
     let runMax: number | undefined;
 
-    // Check if cards match any requirement in current phase
-    if (phaseDef) {
-      for (const req of phaseDef.requirements) {
-        if (req.type === 'set') {
-          const res = validateSet(cards, req.count);
-          if (res.valid) {
-            groupType = 'set';
-            targetValue = res.value;
-            break;
-          }
-        } else if (req.type === 'run') {
-          const res = validateRun(cards, req.count);
-          if (res.valid) {
-            groupType = 'run';
-            runMin = res.min;
-            runMax = res.max;
-            break;
-          }
-        } else if (req.type === 'color') {
-          const res = validateColorGroup(cards, req.count);
-          if (res.valid) {
-            groupType = 'color';
-            targetColor = res.color;
-            break;
-          }
+    for (const req of phaseDef.requirements) {
+      if (req.type === 'set' && cards.length >= req.count) {
+        const res = validateSet(cards, req.count);
+        if (res.valid) {
+          groupType = 'set';
+          targetValue = res.value;
+          break;
+        }
+      } else if (req.type === 'run' && cards.length >= req.count) {
+        const res = validateRun(cards, req.count);
+        if (res.valid) {
+          groupType = 'run';
+          runMin = res.min;
+          runMax = res.max;
+          break;
+        }
+      } else if (req.type === 'color' && cards.length >= req.count) {
+        const res = validateColorGroup(cards, req.count);
+        if (res.valid) {
+          groupType = 'color';
+          targetColor = res.color;
+          break;
         }
       }
     }
@@ -396,6 +429,14 @@ export class GameSession {
       timestamp: Date.now()
     });
 
+    this.emitAction({
+      type: 'lay_extra',
+      playerId: current.id,
+      playerName: current.name,
+      cards,
+      message: `${current.name} laid down an extra ${groupType}!`
+    });
+
     if (current.cards.length === 0) {
       this.endRound(current);
       return;
@@ -412,42 +453,47 @@ export class GameSession {
   ): void {
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
-    if (this.turnStage !== 'play') throw new Error('Must draw first');
-    if (!current.phaseCompletedInRound) throw new Error('Must complete your phase before hitting');
+    if (this.turnStage !== 'play') throw new Error('Must draw a card first');
+    if (!current.phaseCompletedInRound) {
+      throw new Error('Must lay down your phase before hitting on other groups');
+    }
 
     const cardIds = Array.isArray(cardId) ? cardId : [cardId];
     if (cardIds.length === 0) throw new Error('No cards selected to hit');
 
+    const cardsToHit: Card[] = [];
+    for (const cid of cardIds) {
+      const c = current.cards.find(card => card.id === cid);
+      if (!c) throw new Error(`Card ${cid} not in hand`);
+      cardsToHit.push(c);
+    }
+
     const targetGroup = this.allLaidDownPhases.find(g => g.id === targetGroupId);
-    if (!targetGroup) throw new Error('Target phase group not found');
+    if (!targetGroup) throw new Error('Target group not found');
 
-    for (const cId of cardIds) {
-      const cardIndex = current.cards.findIndex(c => c.id === cId);
-      if (cardIndex === -1) throw new Error('Card not in hand');
-      const card = current.cards[cardIndex];
+    for (const c of cardsToHit) {
+      const hitRes = validateHit(c, targetGroup, targetEnd);
+      if (!hitRes) {
+        throw new Error(`Card ${c.color} ${c.value || c.type} cannot hit on this group`);
+      }
 
-      const canHit = validateHit(card, targetGroup, targetEnd);
-      if (!canHit) throw new Error('Card cannot hit this group');
-
-      current.cards.splice(cardIndex, 1);
+      const cIdx = current.cards.findIndex(card => card.id === c.id);
+      current.cards.splice(cIdx, 1);
       current.cardCount = current.cards.length;
 
-      targetGroup.cards.push(card);
+      targetGroup.cards.push(c);
 
       if (targetGroup.type === 'run') {
         const min = targetGroup.runMin ?? 1;
         const max = targetGroup.runMax ?? 12;
 
-        if (card.type === 'number') {
-          if (card.value < min) {
-            targetGroup.runMin = card.value;
-          } else if (card.value > max) {
-            targetGroup.runMax = card.value;
+        if (c.type === 'number') {
+          if (c.value < min) {
+            targetGroup.runMin = c.value;
+          } else if (c.value > max) {
+            targetGroup.runMax = c.value;
           }
         } else {
-          // Wild card on run
-          // If high end is already 12 or targetEnd is 'low', extend low end!
-          // If low end is already 1 or targetEnd is 'high', extend high end!
           if (targetEnd === 'low' || (max >= 12 && min > 1)) {
             targetGroup.runMin = min - 1;
           } else if (targetEnd === 'high' || (min <= 1 && max < 12)) {
@@ -460,7 +506,6 @@ export class GameSession {
         }
       }
 
-      // Always maintain strictly ordered cards in the group!
       targetGroup.cards = sortGroupCards(
         targetGroup.cards,
         targetGroup.type,
@@ -477,6 +522,15 @@ export class GameSession {
       timestamp: Date.now()
     });
 
+    this.emitAction({
+      type: 'hit',
+      playerId: current.id,
+      playerName: current.name,
+      targetGroupId,
+      cards: cardsToHit,
+      message: `${current.name} hit on ${targetGroup.playerName}'s ${targetGroup.type}!`
+    });
+
     if (current.cards.length === 0) {
       this.endRound(current);
       return;
@@ -485,7 +539,7 @@ export class GameSession {
     this.onStateChange();
   }
 
-  public discardCard(playerId: string, cardId: string, skipTargetPlayerId?: string): void {
+  public discardCard(playerId: string, cardId: string, _skipTargetPlayerId?: string): void {
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play' && this.turnStage !== 'discard') {
@@ -500,19 +554,88 @@ export class GameSession {
     this.discardPile.push(card);
 
     if (card.type === 'skip') {
+      // UNO rule: Always skip the nearest player in direction order (no choosing)
       const active = this.getActivePlayers();
-      let target = active.find(p => p.id === skipTargetPlayerId && p.id !== current.id);
-      if (!target) {
-        const nextIndex = (this.currentTurnIndex + 1) % active.length;
-        target = active[nextIndex];
-      }
+      const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
+      const target = active[nextIndex];
       target.isSkipped = true;
+
       this.notify({
         id: `notif_${Date.now()}`,
         type: 'skip',
-        message: `${current.name} skipped ${target.name}.`,
+        message: `${current.name} played Skip! ${target.name} is skipped.`,
         playerId: target.id,
         timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'skip',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        message: `${current.name} skipped ${target.name}!`
+      });
+    } else if (card.type === 'reverse') {
+      const active = this.getActivePlayers();
+      if (active.length === 2) {
+        // In 2-player games, reverse acts as a skip
+        const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
+        const target = active[nextIndex];
+        target.isSkipped = true;
+        this.notify({
+          id: `notif_${Date.now()}`,
+          type: 'skip',
+          message: `${current.name} played Reverse! In 2-player, ${target.name} is skipped.`,
+          playerId: target.id,
+          timestamp: Date.now()
+        });
+      } else {
+        this.playDirection = this.playDirection === 1 ? -1 : 1;
+        this.notify({
+          id: `notif_${Date.now()}`,
+          type: 'info',
+          message: `${current.name} reversed turn order (${this.playDirection === 1 ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}).`,
+          playerId: current.id,
+          timestamp: Date.now()
+        });
+      }
+      this.emitAction({
+        type: 'reverse',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} reversed play direction!`
+      });
+    } else if (card.type === 'draw_two') {
+      const active = this.getActivePlayers();
+      const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
+      const target = active[nextIndex];
+      for (let i = 0; i < 2; i++) {
+        this.ensureDrawPileHasCards();
+        if (this.drawPile.length > 0) {
+          target.cards.push(this.drawPile.pop()!);
+        }
+      }
+      target.cardCount = target.cards.length;
+      target.cards = sortCardsByValue(target.cards);
+      target.isSkipped = true;
+
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `${current.name} played Draw Two! ${target.name} draws 2 cards and is skipped.`,
+        playerId: target.id,
+        timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'draw_two',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        message: `${current.name} played Draw Two on ${target.name}!`
       });
     } else {
       this.notify({
@@ -521,6 +644,13 @@ export class GameSession {
         message: `${current.name} discarded a card.`,
         playerId: current.id,
         timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'discard',
+        playerId: current.id,
+        playerName: current.name,
+        card
       });
     }
 
@@ -534,7 +664,8 @@ export class GameSession {
 
   private advanceTurn(): void {
     const active = this.getActivePlayers();
-    this.currentTurnIndex = (this.currentTurnIndex + 1) % active.length;
+    if (active.length === 0) return;
+    this.currentTurnIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
     this.startTurn();
   }
 
@@ -547,6 +678,7 @@ export class GameSession {
     this.status = 'round_end';
     this.roundWinnerId = roundWinner.id;
 
+    const maxPhase = this.phaseDefinitions.length;
     for (const player of this.getActivePlayers()) {
       if (player.id !== roundWinner.id) {
         const handPoints = player.cards.reduce((sum, c) => sum + c.points, 0);
@@ -554,9 +686,9 @@ export class GameSession {
       }
 
       if (player.phaseCompletedInRound) {
-        if (player.currentPhase >= 10) {
+        if (player.currentPhase >= maxPhase) {
           player.completedAllPhases = true;
-          player.currentPhase = 10;
+          player.currentPhase = maxPhase;
         } else {
           player.currentPhase += 1;
         }
@@ -581,7 +713,7 @@ export class GameSession {
       this.notify({
         id: `notif_${Date.now()}`,
         type: 'game_over',
-        message: `${gameWinner.name} has completed all 10 phases and won the game!`,
+        message: `${gameWinner.name} has completed all ${maxPhase} stages and won the game!`,
         playerId: gameWinner.id,
         timestamp: Date.now()
       });
@@ -650,6 +782,7 @@ export class GameSession {
       status: this.status,
       roundNumber: this.roundNumber,
       currentTurnPlayerId: current ? current.id : '',
+      playDirection: this.playDirection,
       turnStage: this.turnStage,
       turnTimeRemaining: this.turnTimeRemaining,
       drawPileCount: this.drawPile.length,
@@ -771,15 +904,8 @@ export class GameSession {
         ? nonSkipCards.sort((a, b) => b.points - a.points)[0]
         : bot.cards[0];
 
-      let skipTargetId: string | undefined = undefined;
-      if (cardToDiscard.type === 'skip') {
-        const opponents = this.getActivePlayers().filter(p => p.id !== bot.id);
-        const target = opponents.find(p => !p.isBot && !p.isSkipped) || opponents.find(p => !p.isSkipped) || opponents[0];
-        skipTargetId = target?.id;
-      }
-
       try {
-        this.discardCard(bot.id, cardToDiscard.id, skipTargetId);
+        this.discardCard(bot.id, cardToDiscard.id);
       } catch (e) {
         if (bot.cards.length > 0) {
           try {

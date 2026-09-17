@@ -4,6 +4,7 @@ import {
   GameNotification,
   LaidDownPhaseGroup,
   PublicGameState,
+  GameActionEvent,
   findValidPhaseCombination,
   sortCardsByColor,
   sortCardsByValue,
@@ -22,6 +23,7 @@ interface GameTableProps {
   hand: Card[];
   secretToken: string;
   notifications: GameNotification[];
+  latestAction?: GameActionEvent | null;
   onDrawCard: (source: 'deck' | 'discard') => void;
   onLayDownPhase: (groups: Card[][]) => void;
   onLayRequirement: (reqIndex: number, cardIds: string[]) => void;
@@ -37,6 +39,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   hand,
   secretToken,
   notifications,
+  latestAction,
   onDrawCard,
   onLayDownPhase,
   onLayRequirement,
@@ -47,10 +50,20 @@ export const GameTable: React.FC<GameTableProps> = ({
   onOpenRules
 }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [skipTargetModalOpen, setSkipTargetModalOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [deckBackError, setDeckBackError] = useState(false);
   const [localHand, setLocalHand] = useState<Card[]>(hand);
+  const [activeActionCue, setActiveActionCue] = useState<GameActionEvent | null>(null);
+
+  useEffect(() => {
+    if (latestAction) {
+      setActiveActionCue(latestAction);
+      const timer = setTimeout(() => {
+        setActiveActionCue(null);
+      }, 2800);
+      return () => clearTimeout(timer);
+    }
+  }, [latestAction]);
 
   useEffect(() => {
     setLocalHand(prev => {
@@ -101,20 +114,8 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleDiscardSelected = () => {
     if (!selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
 
-    if (selectedCard.type === 'skip') {
-      setSkipTargetModalOpen(true);
-      return;
-    }
-
     onDiscardCard(selectedCard.id);
     clearSelection();
-  };
-
-  const handleConfirmSkip = (targetId: string) => {
-    if (!selectedCard) return;
-    onDiscardCard(selectedCard.id, targetId);
-    clearSelection();
-    setSkipTargetModalOpen(false);
   };
 
   const handleTableGroupClick = (group: LaidDownPhaseGroup, targetEnd?: 'low' | 'high') => {
@@ -132,12 +133,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     }
   };
 
-
-  const matchingHitGroups = useMemo(() => {
-    if (!selectedCard || !me?.phaseCompletedInRound || !isMyTurn || gameState.turnStage !== 'play') return [];
-    return gameState.allLaidDownPhases.filter(g => validateHit(selectedCard, g));
-  }, [selectedCard, me?.phaseCompletedInRound, isMyTurn, gameState.turnStage, gameState.allLaidDownPhases]);
-
   return (
     <div className="min-h-screen bg-black text-white font-mono flex flex-col justify-between p-3 select-none">
       {/* 1. Header */}
@@ -149,8 +144,16 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
           </button>
-          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.9</span>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v3.0</span>
           <span>Round {gameState.roundNumber}</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-neutral-300">
+            {gameState.playDirection === -1 ? '↺ CCW' : '↻ CW'}
+          </span>
+          {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-800 bg-amber-950 text-amber-300 uppercase">
+              {gameState.settings.gameMode}
+            </span>
+          )}
           {gameState.waitlist && gameState.waitlist.length > 0 && (
             <span className="text-[10px] text-neutral-400 border border-neutral-800 px-1.5 py-0.5 rounded">
               Waitlist: {gameState.waitlist.map(w => w.name).join(', ')}
@@ -181,6 +184,22 @@ export const GameTable: React.FC<GameTableProps> = ({
           </button>
         </div>
       </header>
+
+      {/* Real-Time Action Animation Cue Banner */}
+      {activeActionCue && (
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 transform animate-bounce">
+          <div className="bg-neutral-950/95 border border-amber-500/70 text-amber-200 px-4 py-1.5 rounded-full shadow-lg shadow-amber-950/50 backdrop-blur text-xs font-bold tracking-wide flex items-center gap-2">
+            <span className="text-sm">
+              {activeActionCue.type === 'skip' ? '🚫' :
+               activeActionCue.type === 'reverse' ? '⇄' :
+               activeActionCue.type === 'draw_two' ? '➕2' :
+               activeActionCue.type === 'lay_phase' ? '✨' :
+               activeActionCue.type === 'hit' ? '🎯' : '⚡'}
+            </span>
+            <span>{activeActionCue.message}</span>
+          </div>
+        </div>
+      )}
 
       {/* Waitlist Banner for Spectators */}
       {isSpectator && (
@@ -538,30 +557,6 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             {/* Action Buttons: Hit / Discard */}
             <div className="flex flex-wrap items-center gap-2">
-              {/* Toolbar Hit button for Single Card */}
-              {selectedCard && matchingHitGroups.map(grp => {
-                const grpLabel =
-                  grp.type === 'set'
-                    ? `Set of ${grp.targetValue}s`
-                    : grp.type === 'run'
-                    ? `Run (${grp.runMin}-${grp.runMax})`
-                    : grp.type;
-
-                return (
-                  <button
-                    key={grp.id}
-                    type="button"
-                    onClick={() => {
-                      onHitCard(selectedCard.id, grp.id);
-                      clearSelection();
-                    }}
-                    className="bg-white text-black font-bold px-2.5 py-1 rounded text-xs hover:bg-neutral-200 cursor-pointer transition-colors"
-                  >
-                    Hit on {grp.playerName}'s {grpLabel}
-                  </button>
-                );
-              })}
-
               {/* Discard Button (active only when 1 card selected) */}
               {isMyTurn && gameState.turnStage !== 'draw' && (
                 <button
@@ -595,33 +590,6 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
       </footer>
-
-      {/* Skip Target Modal */}
-      {skipTargetModalOpen && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-950 border border-neutral-700 w-full max-w-xs rounded p-4 space-y-3 text-xs">
-            <div className="font-bold uppercase">Choose player to skip:</div>
-            <div className="space-y-1.5">
-              {opponents.map(opp => (
-                <button
-                  key={opp.id}
-                  onClick={() => handleConfirmSkip(opp.id)}
-                  className="w-full p-2 rounded border border-neutral-800 hover:border-white text-left flex justify-between cursor-pointer"
-                >
-                  <span>{opp.name}</span>
-                  <span className="text-neutral-500">Stage {opp.currentPhase}</span>
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setSkipTargetModalOpen(false)}
-              className="w-full py-1 text-neutral-400 hover:text-white border border-neutral-800 rounded cursor-pointer"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

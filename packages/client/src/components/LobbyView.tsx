@@ -48,7 +48,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold uppercase tracking-wider">TenStages Online</h1>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.9</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v3.0</span>
             </div>
             <button
               onClick={onOpenRules}
@@ -199,6 +199,35 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           ) : (
             <span className="text-white">
               {roomState.settings.turnTimerSeconds ? `${roomState.settings.turnTimerSeconds}s` : 'Unlimited'}
+            </span>
+          )}
+        </div>
+
+        {/* Game Mode Setting */}
+        <div className="border border-neutral-800 p-2.5 rounded flex justify-between items-center text-xs">
+          <div className="flex flex-col">
+            <span className="text-neutral-400">Game Mode:</span>
+            <span className="text-[10px] text-neutral-500">
+              {roomState.settings.gameMode === 'speed' ? '5 Stages (Fast Pace)' :
+               roomState.settings.gameMode === 'masters' ? 'Masters Variant' :
+               roomState.settings.gameMode === 'chaos' ? 'Action Cards & Chaos' :
+               '10 Standard Stages'}
+            </span>
+          </div>
+          {isHost ? (
+            <select
+              value={roomState.settings.gameMode || 'classic'}
+              onChange={e => onUpdateSettings({ gameMode: e.target.value as any })}
+              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white focus:outline-none capitalize cursor-pointer"
+            >
+              <option value="classic">Classic (10 Stages)</option>
+              <option value="speed">Speed (5 Stages)</option>
+              <option value="masters">Masters</option>
+              <option value="chaos">Chaos</option>
+            </select>
+          ) : (
+            <span className="text-white uppercase font-bold text-[11px]">
+              {roomState.settings.gameMode || 'classic'}
             </span>
           )}
         </div>

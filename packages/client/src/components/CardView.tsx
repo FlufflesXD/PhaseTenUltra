@@ -40,6 +40,8 @@ export const CardView: React.FC<CardViewProps> = ({
   const imageSrc = React.useMemo(() => {
     if (card.type === 'wild') return '/cards/wild.png';
     if (card.type === 'skip') return '/cards/skip.png';
+    if (card.type === 'reverse') return '/cards/reverse.png';
+    if (card.type === 'draw_two') return '/cards/draw_two.png';
     if (card.type === 'number') return `/cards/${card.color}_${card.value}.png`;
     return null;
   }, [card.type, card.color, card.value]);
@@ -47,6 +49,17 @@ export const CardView: React.FC<CardViewProps> = ({
   React.useEffect(() => {
     setImageError(false);
   }, [card.id, card.type, card.color, card.value]);
+
+  const symbol =
+    card.type === 'wild'
+      ? 'W'
+      : card.type === 'skip'
+      ? 'S'
+      : card.type === 'reverse'
+      ? '⇄'
+      : card.type === 'draw_two'
+      ? '+2'
+      : card.value;
 
   const innerContent = imageSrc && !imageError ? (
     <>
@@ -68,7 +81,7 @@ export const CardView: React.FC<CardViewProps> = ({
     <>
       {/* Top row */}
       <div className="flex justify-between items-center text-[9px] font-mono leading-none">
-        <span>{card.type === 'wild' ? 'W' : card.type === 'skip' ? 'S' : card.value}</span>
+        <span>{symbol}</span>
         <span>{colorLabel.slice(0, 3)}</span>
       </div>
 
@@ -76,6 +89,8 @@ export const CardView: React.FC<CardViewProps> = ({
       <div className="my-auto text-center font-mono font-bold">
         {card.type === 'wild' && <div className="text-xs sm:text-sm tracking-wider">WILD</div>}
         {card.type === 'skip' && <div className="text-xs sm:text-sm tracking-wider">SKIP</div>}
+        {card.type === 'reverse' && <div className="text-xs sm:text-sm tracking-wider">REVERSE</div>}
+        {card.type === 'draw_two' && <div className="text-xs sm:text-sm tracking-wider">+2 DRAW</div>}
         {card.type === 'number' && (
           <div>
             <div className="text-lg sm:text-2xl leading-none">{card.value}</div>
@@ -86,7 +101,7 @@ export const CardView: React.FC<CardViewProps> = ({
 
       {/* Bottom row */}
       <div className="flex justify-between items-center text-[9px] font-mono leading-none rotate-180">
-        <span>{card.type === 'wild' ? 'W' : card.type === 'skip' ? 'S' : card.value}</span>
+        <span>{symbol}</span>
         <span>{colorLabel.slice(0, 3)}</span>
       </div>
 
