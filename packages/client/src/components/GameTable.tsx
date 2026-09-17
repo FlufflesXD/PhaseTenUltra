@@ -161,20 +161,38 @@ export const GameTable: React.FC<GameTableProps> = ({
         : null;
       targetCoords = getCenterCoords(groupEl) || getCenterCoords(discardRef.current);
 
+      const hitCard = latestAction.card || latestAction.cards?.[0];
       if (isMe) {
-        startCoords = getCenterCoords(handRef.current);
+        let cardEl: Element | null = null;
+        if (hitCard?.id) {
+          cardEl = document.querySelector(`[data-card-id="${hitCard.id}"]`);
+        }
+        startCoords = getCenterCoords(cardEl) || getCenterCoords(handRef.current);
+        startScale = 0.85;
+        targetScale = 0.75;
+        startRot = -3;
+        targetRot = 0;
       } else {
         const oppEl = document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`);
         startCoords = getCenterCoords(oppEl) || getCenterCoords(opponentsBarRef.current);
+        startScale = 0.65;
+        targetScale = 0.75;
+        startRot = 4;
+        targetRot = 0;
       }
-      startScale = 0.85;
-      targetScale = 0.75;
     }
 
     if (startCoords && targetCoords) {
+      // Main deck draw must always be face down (hidden card).
+      // Discard draw, hitting, and discarding are face up (visible card).
+      const flyingCard =
+        latestAction.type === 'draw' && latestAction.source !== 'discard'
+          ? undefined
+          : latestAction.card || latestAction.cards?.[0];
+
       setActiveFlyingCard({
         id: `${latestAction.id}_${Date.now()}`,
-        card: latestAction.card,
+        card: flyingCard,
         startX: startCoords.x,
         startY: startCoords.y,
         targetX: targetCoords.x,

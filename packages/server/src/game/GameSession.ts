@@ -270,7 +270,7 @@ export class GameSession {
       playerId: current.id,
       playerName: current.name,
       source,
-      card: drawnCard
+      card: source === 'discard' ? drawnCard : undefined
     });
 
     this.onStateChange();
@@ -530,6 +530,7 @@ export class GameSession {
       playerId: current.id,
       playerName: current.name,
       targetGroupId,
+      card: cardsToHit[0],
       cards: cardsToHit,
       message: `${current.name} hit on ${targetGroup.playerName}'s ${targetGroup.type}!`
     });

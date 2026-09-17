@@ -245,4 +245,72 @@ describe('Hit Card Tests', () => {
     assert.strictEqual(session.players[0].completedAllPhases, false);
     assert.strictEqual(session.players[0].cards.length, 10);
   });
+
+  test('Action events: draw from deck hides card, hit exposes card', () => {
+    const emittedActions: any[] = [];
+    const session = new GameSession(
+      'TESTACT',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {},
+      (action) => { emittedActions.push(action); }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: true,
+        cardCount: 2,
+        cards: [
+          { id: 'hit1', type: 'number', color: 'red', value: 7, points: 5 },
+          { id: 'disc1', type: 'number', color: 'blue', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.allLaidDownPhases = [
+      {
+        id: 'group1',
+        playerId: 'p1',
+        playerName: 'Player 1',
+        type: 'set',
+        requirementIndex: 0,
+        targetValue: 7,
+        cards: [
+          { id: 'c1', type: 'number', color: 'red', value: 7, points: 5 },
+          { id: 'c2', type: 'number', color: 'blue', value: 7, points: 5 },
+          { id: 'c3', type: 'number', color: 'green', value: 7, points: 5 }
+        ]
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'draw';
+    session.drawPile = [{ id: 'drawSecret', type: 'number', color: 'yellow', value: 12, points: 5 }];
+    session.discardPile = [{ id: 'discPublic', type: 'number', color: 'green', value: 4, points: 5 }];
+
+    // 1. Draw from deck
+    session.drawCard('p1', 'deck');
+    const drawAction = emittedActions.find(a => a.type === 'draw');
+    assert.ok(drawAction);
+    assert.strictEqual(drawAction.source, 'deck');
+    assert.strictEqual(drawAction.card, undefined, 'Card drawn from deck must be secret/undefined');
+
+    // 2. Hit card
+    session.hitCard('p1', 'hit1', 'group1');
+    const hitAction = emittedActions.find(a => a.type === 'hit');
+    assert.ok(hitAction);
+    assert.strictEqual(hitAction.card?.id, 'hit1', 'Hit card must be explicitly exposed in action');
+    assert.strictEqual(hitAction.cards?.[0]?.id, 'hit1');
+  });
 });
