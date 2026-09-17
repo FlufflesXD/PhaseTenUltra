@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { GameSession } from '../game/GameSession.js';
+import { RoomManager } from '../room/RoomManager.js';
 
 describe('UNO-Style Directional Skips & Game Modes Tests', () => {
   test('2-Player UNO Skip: Playing a Skip card skips the opponent, letting player go again', () => {
@@ -263,4 +264,72 @@ describe('UNO-Style Directional Skips & Game Modes Tests', () => {
     assert.strictEqual(pub.phaseDefinitions.length, 5);
     assert.strictEqual(pub.playDirection, 1);
   });
+
+  test('4-Player Limit: GameSession rejects starting with more than 4 players', () => {
+    const session = new GameSession(
+      'ROOM5',
+      { turnTimerSeconds: 15 },
+      () => {},
+      () => {}
+    );
+
+    const makePlayer = (id: string, name: string) => ({
+      id,
+      secretToken: id,
+      name,
+      isHost: id === 'p1',
+      isSpectator: false,
+      connected: true,
+      score: 0,
+      currentPhase: 1,
+      phaseCompletedInRound: false,
+      cardCount: 0,
+      cards: [],
+      laidDownPhases: [],
+      isSkipped: false
+    });
+
+    session.players = [
+      makePlayer('p1', 'Player 1'),
+      makePlayer('p2', 'Player 2'),
+      makePlayer('p3', 'Player 3'),
+      makePlayer('p4', 'Player 4'),
+      makePlayer('p5', 'Player 5')
+    ];
+
+    assert.throws(() => {
+      session.startGame();
+    }, /Maximum of 4 players/i);
+  });
+
+  test('4-Player Limit: RoomManager caps active lobby players at 4, placing 5th on waitlist', () => {
+    const rm = new RoomManager();
+
+    const room = rm.createRoom(
+      { socketId: 's1', secretToken: 'tok_host', name: 'Host', isSpectator: false },
+      {
+        broadcastRoom: () => {},
+        broadcastGame: () => {},
+        sendNotification: () => {},
+        sendChat: () => {}
+      }
+    );
+    // Add 3 more players (total 4 active players)
+    room.addOrReconnectUser({ socketId: 's2', secretToken: 'tok_p2', name: 'Player 2', isSpectator: false });
+    room.addOrReconnectUser({ socketId: 's3', secretToken: 'tok_p3', name: 'Player 3', isSpectator: false });
+    room.addOrReconnectUser({ socketId: 's4', secretToken: 'tok_p4', name: 'Player 4', isSpectator: false });
+
+    assert.strictEqual(room.getPlayers().length, 4);
+    assert.strictEqual(room.getWaitlist().length, 0);
+
+    // 5th player attempts to join as active player
+    room.addOrReconnectUser({ socketId: 's5', secretToken: 'tok_p5', name: 'Player 5', isSpectator: false });
+
+    // Active players should remain 4, and 5th player should be placed on waitlist
+    assert.strictEqual(room.getPlayers().length, 4);
+    const waitlist = room.getWaitlist();
+    assert.strictEqual(waitlist.length, 1);
+    assert.strictEqual(waitlist[0].id, 'tok_p5');
+  });
 });
+

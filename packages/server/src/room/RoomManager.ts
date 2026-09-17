@@ -65,11 +65,12 @@ export class Room {
 
     const list: PlayerPublic[] = [];
     for (const u of this.users.values()) {
+      if (u.isSpectator) continue;
       list.push({
         id: u.secretToken,
         name: u.name,
         isHost: u.secretToken === this.hostSecretToken,
-        isSpectator: u.isSpectator,
+        isSpectator: false,
         connected: true,
         score: 0,
         currentPhase: 1,
@@ -113,9 +114,11 @@ export class Room {
     }
 
     let existingSocketId: string | null = null;
+    let wasSpectator: boolean | undefined = undefined;
     for (const [sId, existing] of this.users.entries()) {
       if (existing.secretToken === user.secretToken) {
         existingSocketId = sId;
+        wasSpectator = existing.isSpectator;
         break;
       }
     }
@@ -123,6 +126,19 @@ export class Room {
     if (existingSocketId) {
       this.users.delete(existingSocketId);
     }
+
+    if (wasSpectator !== undefined) {
+      user.isSpectator = wasSpectator;
+    } else if (!this.gameSession && !user.isSpectator) {
+      // In lobby: cap active (non-spectator) players to 4
+      const activeCount = Array.from(this.users.values()).filter(
+        u => !u.isSpectator && u.secretToken !== user.secretToken
+      ).length;
+      if (activeCount >= 4) {
+        user.isSpectator = true;
+      }
+    }
+
     this.users.set(user.socketId, user);
 
     let reconnected = false;
@@ -238,6 +254,9 @@ export class Room {
     const activeUsers = Array.from(this.users.values()).filter(u => !u.isSpectator);
     if (activeUsers.length < 2) {
       throw new Error('At least 2 players are required to start the game');
+    }
+    if (activeUsers.length > 4) {
+      throw new Error('A maximum of 4 players are allowed per game');
     }
 
     this.gameSession = new GameSession(

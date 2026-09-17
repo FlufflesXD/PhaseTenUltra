@@ -121,11 +121,12 @@ export function useSocket() {
     );
   }, [playerName, secretToken, showError]);
 
-  const joinRoom = useCallback((roomCode: string, isSpectator = false, claimPlayerId?: string, callback?: (res: any) => void) => {
+  const joinRoom = useCallback((roomCode: string, isSpectator = false, claimPlayerId?: string, overrideName?: string, callback?: (res: any) => void) => {
     if (!socketRef.current) return;
+    const finalName = overrideName?.trim() || playerName;
     socketRef.current.emit(
       'join_room',
-      { roomCode: roomCode.toUpperCase(), name: playerName, secretToken, isSpectator, claimPlayerId },
+      { roomCode: roomCode.toUpperCase(), name: finalName, secretToken, isSpectator, claimPlayerId },
       (res: any) => {
         if (!res.success && res.error) showError(res.error);
         if (callback) callback(res);

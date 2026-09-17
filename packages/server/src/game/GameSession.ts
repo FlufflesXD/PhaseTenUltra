@@ -79,6 +79,9 @@ export class GameSession {
     if (this.players.length < 2) {
       throw new Error('At least 2 players are required to start the game');
     }
+    if (this.players.length > 4) {
+      throw new Error('A maximum of 4 players are allowed per game');
+    }
 
     this.playDirection = 1;
     const mode = this.settings.gameMode || 'classic';

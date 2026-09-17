@@ -88,7 +88,7 @@ export function App() {
           playerName={playerName}
           setPlayerName={setPlayerName}
           onCreateRoom={() => createRoom()}
-          onJoinRoom={(code, isSpec, claimId) => joinRoom(code, isSpec, claimId)}
+          onJoinRoom={(code, isSpec, claimId, overrideName) => joinRoom(code, isSpec, claimId, overrideName)}
           onClaimSeat={claimSeat}
           onUpdateSettings={updateSettings}
           onStartGame={startGame}

@@ -51,6 +51,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [deckBackError, setDeckBackError] = useState(false);
   const [localHand, setLocalHand] = useState<Card[]>(hand);
   const [activeActionCue, setActiveActionCue] = useState<GameActionEvent | null>(null);
@@ -96,6 +97,13 @@ export const GameTable: React.FC<GameTableProps> = ({
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
+  const copyInviteLink = () => {
+    const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${gameState.roomCode}`;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   const handleCardClick = (card: Card) => {
     // Single-select: clicking the active card unselects it, clicking another card selects it instead
     setSelectedCardId(prev => (prev === card.id ? null : card.id));
@@ -139,12 +147,14 @@ export const GameTable: React.FC<GameTableProps> = ({
       <header className="border-b border-neutral-800 pb-2 flex items-center justify-between text-xs">
         <div className="flex items-center gap-3">
           <button
-            onClick={copyRoomCode}
-            className="border border-neutral-700 px-2 py-1 rounded hover:bg-neutral-900 cursor-pointer"
+            onClick={copyInviteLink}
+            title="Click to copy invite link"
+            className="border border-neutral-700 px-2 py-1 rounded hover:bg-neutral-900 cursor-pointer flex items-center gap-1.5"
           >
-            {copiedCode ? 'Copied' : `Room: ${gameState.roomCode}`}
+            <span>🔗</span>
+            <span>{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
           </button>
-          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v3.0</span>
+          <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v3.1</span>
           <span>Round {gameState.roundNumber}</span>
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-neutral-300">
             {gameState.playDirection === -1 ? '↺ CCW' : '↻ CW'}
