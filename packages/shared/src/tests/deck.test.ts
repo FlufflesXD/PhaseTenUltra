@@ -16,9 +16,36 @@ describe('Deck Creation and Manipulation Tests', () => {
     assert.strictEqual(numbers.length, 96);
   });
 
-  test('createDeck returns 108 shuffled cards', () => {
+  test('createDeck returns 108 shuffled cards with exact distribution', () => {
     const deck = createDeck();
     assert.strictEqual(deck.length, 108);
+
+    // 8 wilds and 4 skips
+    assert.strictEqual(deck.filter(c => c.type === 'wild').length, 8);
+    assert.strictEqual(deck.filter(c => c.type === 'skip').length, 4);
+
+    // 96 numbers total (24 per color, 8 of each number 1-12)
+    const numbers = deck.filter(c => c.type === 'number');
+    assert.strictEqual(numbers.length, 96);
+
+    for (const color of ['red', 'blue', 'green', 'yellow'] as const) {
+      const colorCards = numbers.filter(c => c.color === color);
+      assert.strictEqual(colorCards.length, 24, `Each color must have 24 numbered cards`);
+    }
+
+    for (let val = 1; val <= 12; val++) {
+      const valCards = numbers.filter(c => c.value === val);
+      assert.strictEqual(valCards.length, 8, `Each number ${val} must appear exactly 8 times across the deck`);
+    }
+
+    // Verify shuffling changes card order compared to standard ordered deck
+    const standard = createStandardDeck();
+    let diffCount = 0;
+    for (let i = 0; i < standard.length; i++) {
+      if (standard[i].id !== deck[i].id) diffCount++;
+    }
+    // A truly shuffled deck of 108 cards will differ in almost every position (> 90 positions)
+    assert.ok(diffCount > 90, `Shuffled deck must differ from standard ordered deck`);
   });
 
   test('sortCardsByValue sorts correctly', () => {

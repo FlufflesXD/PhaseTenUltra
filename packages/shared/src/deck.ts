@@ -50,11 +50,30 @@ export function createDeck(): Card[] {
   return shuffleDeck(createStandardDeck());
 }
 
+function secureRandomInt(maxExclusive: number): number {
+  if (maxExclusive <= 1) return 0;
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    const arr = new Uint32Array(1);
+    const maxUint32 = 0xffffffff;
+    const limit = maxUint32 - (maxUint32 % maxExclusive);
+    let rand: number;
+    do {
+      globalThis.crypto.getRandomValues(arr);
+      rand = arr[0];
+    } while (rand >= limit);
+    return rand % maxExclusive;
+  }
+  return Math.floor(Math.random() * maxExclusive);
+}
+
 export function shuffleDeck<T>(deck: T[]): T[] {
   const shuffled = [...deck];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  // 3-pass Fisher-Yates with cryptographically secure random values
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = secureRandomInt(i + 1);
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
   }
   return shuffled;
 }

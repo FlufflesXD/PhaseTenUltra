@@ -113,6 +113,10 @@ export const CardView: React.FC<CardViewProps> = ({
     </>
   );
 
+  const motionStyle = isSelected
+    ? '-translate-y-3.5 shadow-xl shadow-white/20'
+    : 'hover:-translate-y-1.5 hover:shadow-md';
+
   if (!isSelectable) {
     return (
       <div
@@ -127,7 +131,7 @@ export const CardView: React.FC<CardViewProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none transition-all cursor-pointer ${baseStyle} ${highlightStyle}`}
+      className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none transition-all duration-150 transform cursor-pointer ${baseStyle} ${highlightStyle} ${motionStyle}`}
     >
       {innerContent}
     </button>

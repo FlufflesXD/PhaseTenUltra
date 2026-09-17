@@ -54,17 +54,54 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [deckBackError, setDeckBackError] = useState(false);
   const [localHand, setLocalHand] = useState<Card[]>(hand);
-  const [activeActionCue, setActiveActionCue] = useState<GameActionEvent | null>(null);
+  const [activeFlyingCard, setActiveFlyingCard] = useState<{
+    id: string;
+    type: 'draw_to_self' | 'draw_to_opp' | 'discard_from_self' | 'discard_from_opp' | 'hit';
+    card?: Card;
+  } | null>(null);
+  const [discardKey, setDiscardKey] = useState(0);
 
   useEffect(() => {
-    if (latestAction) {
-      setActiveActionCue(latestAction);
-      const timer = setTimeout(() => {
-        setActiveActionCue(null);
-      }, 2800);
+    if (!latestAction) return;
+
+    const isMe = latestAction.playerId === secretToken;
+
+    if (latestAction.type === 'draw') {
+      setActiveFlyingCard({
+        id: latestAction.id,
+        type: isMe ? 'draw_to_self' : 'draw_to_opp',
+        card: latestAction.card
+      });
+      const timer = setTimeout(() => setActiveFlyingCard(null), 480);
       return () => clearTimeout(timer);
     }
-  }, [latestAction]);
+
+    if (
+      latestAction.type === 'discard' ||
+      latestAction.type === 'skip' ||
+      latestAction.type === 'reverse' ||
+      latestAction.type === 'draw_two'
+    ) {
+      setDiscardKey(prev => prev + 1);
+      setActiveFlyingCard({
+        id: latestAction.id,
+        type: isMe ? 'discard_from_self' : 'discard_from_opp',
+        card: latestAction.card
+      });
+      const timer = setTimeout(() => setActiveFlyingCard(null), 480);
+      return () => clearTimeout(timer);
+    }
+
+    if (latestAction.type === 'hit') {
+      setActiveFlyingCard({
+        id: latestAction.id,
+        type: 'hit',
+        card: latestAction.card
+      });
+      const timer = setTimeout(() => setActiveFlyingCard(null), 480);
+      return () => clearTimeout(timer);
+    }
+  }, [latestAction, secretToken]);
 
   useEffect(() => {
     setLocalHand(prev => {
@@ -195,19 +232,29 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       </header>
 
-      {/* Real-Time Action Animation Cue Banner */}
-      {activeActionCue && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 transform animate-bounce">
-          <div className="bg-neutral-950/95 border border-amber-500/70 text-amber-200 px-4 py-1.5 rounded-full shadow-lg shadow-amber-950/50 backdrop-blur text-xs font-bold tracking-wide flex items-center gap-2">
-            <span className="text-sm">
-              {activeActionCue.type === 'skip' ? '🚫' :
-               activeActionCue.type === 'reverse' ? '⇄' :
-               activeActionCue.type === 'draw_two' ? '➕2' :
-               activeActionCue.type === 'lay_phase' ? '✨' :
-               activeActionCue.type === 'hit' ? '🎯' : '⚡'}
-            </span>
-            <span>{activeActionCue.message}</span>
-          </div>
+      {/* Visual Flying Card Animation Layer */}
+      {activeFlyingCard && (
+        <div
+          key={activeFlyingCard.id}
+          className={`fixed z-50 pointer-events-none drop-shadow-2xl ${
+            activeFlyingCard.type === 'draw_to_self'
+              ? 'animate-fly-draw-self'
+              : activeFlyingCard.type === 'draw_to_opp'
+              ? 'animate-fly-draw-opp'
+              : activeFlyingCard.type === 'discard_from_self'
+              ? 'animate-fly-discard-self'
+              : activeFlyingCard.type === 'discard_from_opp'
+              ? 'animate-fly-discard-opp'
+              : 'animate-fly-hit'
+          }`}
+        >
+          {activeFlyingCard.card ? (
+            <CardView card={activeFlyingCard.card} size="md" isSelectable={false} />
+          ) : (
+            <div className="w-16 h-24 sm:w-20 sm:h-28 rounded border border-neutral-700 overflow-hidden bg-neutral-900 shadow-2xl">
+              <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+            </div>
+          )}
         </div>
       )}
 
@@ -325,6 +372,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div className="flex flex-col items-center">
             {gameState.topDiscard ? (
               <div
+                key={`${gameState.topDiscard.id}_${discardKey}`}
                 onClick={() => {
                   if (isMyTurn && gameState.turnStage === 'draw') {
                     if (gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') {
@@ -334,11 +382,11 @@ export const GameTable: React.FC<GameTableProps> = ({
                     handleDiscardSelected();
                   }
                 }}
-                className={
+                className={`animate-card-land ${
                   isMyTurn && ((gameState.turnStage === 'draw' && gameState.topDiscard?.type !== 'skip' && gameState.topDiscard?.type !== 'wild') || selectedCard)
                     ? 'cursor-pointer'
                     : ''
-                }
+                }`}
               >
                 <CardView card={gameState.topDiscard} size="lg" isSelectable={false} />
               </div>
@@ -391,7 +439,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                   <div
                     key={group.id}
                     onClick={() => handleTableGroupClick(group)}
-                    className={`border p-2 rounded flex flex-col gap-1.5 transition-colors ${
+                    className={`border p-2 rounded flex flex-col gap-1.5 transition-all animate-card-deal ${
                       canHitSingle
                         ? 'border-white bg-neutral-900 shadow-md ring-1 ring-white'
                         : allMatchingInHand.length > 0
