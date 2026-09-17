@@ -16,7 +16,7 @@ export function preloadCardImages(): void {
   }
 
   // Action and special cards
-  urls.push('/cards/wild.png', '/cards/skip.png');
+  urls.push('/cards/wild.png', '/cards/skip.png', '/cards/back.png');
 
   // Trigger browser background load
   for (const url of urls) {

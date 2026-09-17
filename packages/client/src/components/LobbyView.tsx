@@ -48,7 +48,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold uppercase tracking-wider">TenStages Online</h1>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.7</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v2.8</span>
             </div>
             <button
               onClick={onOpenRules}
