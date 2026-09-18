@@ -94,4 +94,37 @@ describe('Bot Takeover, Reconnection, and Waitlist Tests', () => {
     assert.strictEqual(waitlist[0].name, 'Charlie');
     room.cleanup();
   });
+
+  test('host disconnects mid-match: host migrates to remaining human player', () => {
+    const rm = new RoomManager();
+    const room = rm.createRoom(
+      { socketId: 'sock1', secretToken: 'token1', name: 'Alice', isSpectator: false },
+      {
+        broadcastRoom: () => {},
+        broadcastGame: () => {},
+        sendNotification: () => {},
+        sendChat: () => {}
+      }
+    );
+
+    room.addOrReconnectUser({ socketId: 'sock2', secretToken: 'token2', name: 'Bob', isSpectator: false });
+    room.settings.turnTimerSeconds = 0;
+    room.startGame('token1');
+
+    assert.strictEqual(room.hostSecretToken, 'token1');
+
+    // Host Alice leaves
+    room.removeSocket('sock1');
+
+    // Host token should have migrated to Bob
+    assert.strictEqual(room.hostSecretToken, 'token2');
+    const bobPlayer = room.gameSession?.players.find(p => p.id === 'token2');
+    assert.strictEqual(bobPlayer?.isHost, true);
+
+    const alicePlayer = room.gameSession?.players.find(p => p.name === 'Alice');
+    assert.strictEqual(alicePlayer?.isHost, false);
+    assert.strictEqual(alicePlayer?.isBot, true);
+
+    room.cleanup();
+  });
 });

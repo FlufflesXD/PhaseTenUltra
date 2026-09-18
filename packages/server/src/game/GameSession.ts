@@ -724,9 +724,29 @@ export class GameSession {
     }
 
     this.onStateChange();
+
+    // If the game is round_end and there is no human host (or host is a bot), auto advance to next round
+    if (this.status === 'round_end') {
+      const hasHumanHost = this.players.some(p => p.isHost && !p.isBot && p.connected);
+      if (!hasHumanHost) {
+        if (this.roundEndAutoTimeout) {
+          clearTimeout(this.roundEndAutoTimeout);
+        }
+        this.roundEndAutoTimeout = setTimeout(() => {
+          if (this.status === 'round_end') {
+            this.nextRound();
+          }
+        }, 3500);
+        this.roundEndAutoTimeout.unref?.();
+      }
+    }
   }
 
   public restartGame(): void {
+    if (this.roundEndAutoTimeout) {
+      clearTimeout(this.roundEndAutoTimeout);
+      this.roundEndAutoTimeout = undefined;
+    }
     if (this.turnTimerInterval) {
       clearInterval(this.turnTimerInterval);
       this.turnTimerInterval = undefined;
@@ -752,6 +772,10 @@ export class GameSession {
   }
 
   public nextRound(): void {
+    if (this.roundEndAutoTimeout) {
+      clearTimeout(this.roundEndAutoTimeout);
+      this.roundEndAutoTimeout = undefined;
+    }
     if (this.status === 'game_over') {
       this.restartGame();
       return;
@@ -821,6 +845,14 @@ export class GameSession {
   }
 
   private botActionTimeout?: NodeJS.Timeout;
+  private roundEndAutoTimeout?: NodeJS.Timeout;
+
+  public setHost(newHostSecretToken: string): void {
+    for (const player of this.players) {
+      player.isHost = (player.secretToken === newHostSecretToken || player.id === newHostSecretToken);
+    }
+    this.onStateChange();
+  }
 
   public scheduleBotTurn(bot: GamePlayerInternal): void {
     if (this.botActionTimeout) {
@@ -927,6 +959,14 @@ export class GameSession {
     player.connected = false;
     player.isBot = true;
 
+    if (player.isHost) {
+      player.isHost = false;
+      const nextHuman = this.players.find(p => !p.isBot && p.connected);
+      if (nextHuman) {
+        nextHuman.isHost = true;
+      }
+    }
+
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
@@ -956,6 +996,10 @@ export class GameSession {
     }
     player.connected = true;
     player.isBot = false;
+
+    if (!this.players.some(p => p.isHost && p.connected && !p.isBot)) {
+      player.isHost = true;
+    }
 
     if (this.botActionTimeout) {
       clearTimeout(this.botActionTimeout);
@@ -1001,6 +1045,10 @@ export class GameSession {
   }
 
   public cleanup(): void {
+    if (this.roundEndAutoTimeout) {
+      clearTimeout(this.roundEndAutoTimeout);
+      this.roundEndAutoTimeout = undefined;
+    }
     if (this.turnTimerInterval) {
       clearInterval(this.turnTimerInterval);
       this.turnTimerInterval = undefined;

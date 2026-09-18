@@ -8,7 +8,7 @@ interface RulesModalProps {
 export const RulesModal: React.FC<RulesModalProps> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-      <div className="bg-neutral-950 border border-neutral-700 w-full max-w-lg rounded p-5 font-mono text-xs text-white space-y-4 max-h-[85vh] overflow-y-auto">
+      <div className="bg-neutral-950 border border-neutral-700 w-full max-w-lg rounded-xl p-5 font-sans text-xs text-white space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
         <div className="flex justify-between items-center border-b border-neutral-800 pb-2">
           <span className="font-bold text-sm uppercase">TenStages Rules</span>
           <button onClick={onClose} className="text-neutral-400 hover:text-white">✕</button>

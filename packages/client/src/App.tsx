@@ -44,7 +44,7 @@ export function App() {
   const isHost = roomState?.hostId === secretToken;
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono relative">
+    <div className="min-h-screen bg-black text-white font-sans relative">
       {/* Error Toast */}
       {error && (
         <div

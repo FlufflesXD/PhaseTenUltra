@@ -193,13 +193,21 @@ export class Room {
 
     if (this.gameSession) {
       this.gameSession.replaceWithBot(user.secretToken);
-      this.onBroadcastGame(this);
-    } else {
-      if (user.secretToken === this.hostSecretToken && this.users.size > 0) {
-        const nextHost = Array.from(this.users.values())[0];
+    }
+
+    if (user.secretToken === this.hostSecretToken && this.users.size > 0) {
+      const nextHost = Array.from(this.users.values()).find(u => !u.isSpectator) || Array.from(this.users.values())[0];
+      if (nextHost) {
         this.hostSecretToken = nextHost.secretToken;
+        if (this.gameSession) {
+          this.gameSession.setHost(nextHost.secretToken);
+        }
       }
-      this.onBroadcastRoom(this);
+    }
+
+    this.onBroadcastRoom(this);
+    if (this.gameSession) {
+      this.onBroadcastGame(this);
     }
 
     if (this.users.size === 0) {

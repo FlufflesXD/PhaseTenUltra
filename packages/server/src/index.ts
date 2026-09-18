@@ -239,15 +239,27 @@ io.on('connection', (socket) => {
 
   socket.on('next_round', (data: { roomCode: string; secretToken: string }) => {
     const room = roomManager.getRoom(data.roomCode);
-    if (room && room.gameSession && room.hostSecretToken === data.secretToken) {
-      room.gameSession.nextRound();
+    if (room && room.gameSession) {
+      const isHost = room.hostSecretToken === data.secretToken;
+      const hostPlayer = room.gameSession.getPublicState().players.find(p => p.isHost);
+      const isHostBotOrMissing = !hostPlayer || hostPlayer.isBot || !hostPlayer.connected;
+      const isSenderConnectedPlayer = room.gameSession.getPublicState().players.some(p => p.id === data.secretToken && p.connected);
+      if (isHost || (isHostBotOrMissing && isSenderConnectedPlayer)) {
+        room.gameSession.nextRound();
+      }
     }
   });
 
   socket.on('start_new_match', (data: { roomCode: string; secretToken: string }) => {
     const room = roomManager.getRoom(data.roomCode);
-    if (room && room.gameSession && room.hostSecretToken === data.secretToken) {
-      room.gameSession.restartGame();
+    if (room && room.gameSession) {
+      const isHost = room.hostSecretToken === data.secretToken;
+      const hostPlayer = room.gameSession.getPublicState().players.find(p => p.isHost);
+      const isHostBotOrMissing = !hostPlayer || hostPlayer.isBot || !hostPlayer.connected;
+      const isSenderConnectedPlayer = room.gameSession.getPublicState().players.some(p => p.id === data.secretToken && p.connected);
+      if (isHost || (isHostBotOrMissing && isSenderConnectedPlayer)) {
+        room.gameSession.restartGame();
+      }
     }
   });
 

@@ -25,12 +25,12 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="bg-neutral-900 hover:bg-neutral-800 text-white border border-neutral-700 px-3 py-1.5 rounded text-xs font-mono font-bold"
+          className="bg-neutral-900 hover:bg-neutral-800 text-white border border-neutral-700 px-3.5 py-1.5 rounded-lg text-xs font-sans font-bold shadow-lg"
         >
           Chat ({chatMessages.length})
         </button>
       ) : (
-        <div className="w-72 sm:w-80 bg-neutral-950 border border-neutral-700 rounded shadow-lg flex flex-col text-xs font-mono">
+        <div className="w-72 sm:w-80 bg-neutral-950 border border-neutral-700 rounded-xl shadow-2xl flex flex-col text-xs font-sans">
           <div className="p-2 border-b border-neutral-800 flex justify-between items-center bg-neutral-900">
             <span className="font-bold text-white">Chat</span>
             <button

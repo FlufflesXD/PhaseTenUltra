@@ -23,9 +23,9 @@ export const CardView: React.FC<CardViewProps> = ({
   const [imageError, setImageError] = React.useState(false);
 
   const sizeClasses = {
-    sm: 'w-12 h-16 text-[10px]',
-    md: 'w-16 h-24 sm:w-20 sm:h-28 text-xs',
-    lg: 'w-20 h-28 sm:w-24 sm:h-34 text-sm'
+    sm: 'w-14 h-20 text-xs',
+    md: 'w-20 h-28 sm:w-24 sm:h-34 text-sm',
+    lg: 'w-24 h-34 sm:w-28 sm:h-40 md:w-32 md:h-44 text-base'
   }[size];
 
   // Inverted styling when selected
@@ -80,27 +80,27 @@ export const CardView: React.FC<CardViewProps> = ({
   ) : (
     <>
       {/* Top row */}
-      <div className="flex justify-between items-center text-[9px] font-mono leading-none">
+      <div className="flex justify-between items-center text-[10px] font-bold leading-none">
         <span>{symbol}</span>
         <span>{colorLabel.slice(0, 3)}</span>
       </div>
 
       {/* Center content */}
-      <div className="my-auto text-center font-mono font-bold">
-        {card.type === 'wild' && <div className="text-xs sm:text-sm tracking-wider">WILD</div>}
-        {card.type === 'skip' && <div className="text-xs sm:text-sm tracking-wider">SKIP</div>}
-        {card.type === 'reverse' && <div className="text-xs sm:text-sm tracking-wider">REVERSE</div>}
-        {card.type === 'draw_two' && <div className="text-xs sm:text-sm tracking-wider">+2 DRAW</div>}
+      <div className="my-auto text-center font-bold">
+        {card.type === 'wild' && <div className="text-sm sm:text-base tracking-wider">WILD</div>}
+        {card.type === 'skip' && <div className="text-sm sm:text-base tracking-wider">SKIP</div>}
+        {card.type === 'reverse' && <div className="text-sm sm:text-base tracking-wider">REVERSE</div>}
+        {card.type === 'draw_two' && <div className="text-sm sm:text-base tracking-wider">+2 DRAW</div>}
         {card.type === 'number' && (
           <div>
-            <div className="text-lg sm:text-2xl leading-none">{card.value}</div>
-            <div className="text-[9px] tracking-wider opacity-75 mt-0.5">{colorLabel}</div>
+            <div className="text-xl sm:text-3xl leading-none">{card.value}</div>
+            <div className="text-[10px] tracking-wider opacity-75 mt-0.5">{colorLabel}</div>
           </div>
         )}
       </div>
 
       {/* Bottom row */}
-      <div className="flex justify-between items-center text-[9px] font-mono leading-none rotate-180">
+      <div className="flex justify-between items-center text-[10px] font-bold leading-none rotate-180">
         <span>{symbol}</span>
         <span>{colorLabel.slice(0, 3)}</span>
       </div>

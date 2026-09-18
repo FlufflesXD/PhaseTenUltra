@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tenstages:v4.0
+    image: tenstages:v4.1
     container_name: tenstages
     restart: unless-stopped
     ports:

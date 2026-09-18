@@ -59,14 +59,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   if (!roomState) {
     if (inviteCode) {
       return (
-        <div className="min-h-screen bg-black text-white font-mono flex flex-col items-center justify-center p-4">
+        <div className="min-h-screen bg-black text-white font-sans flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-sm border border-amber-500/70 bg-neutral-950 p-5 rounded space-y-4 shadow-xl shadow-amber-950/30">
             <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <span className="text-amber-400">🔗</span>
                 <h1 className="text-sm font-bold uppercase tracking-wider text-amber-200">Room Invitation</h1>
               </div>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v4.0</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v4.1</span>
             </div>
 
             <div className="text-center py-2.5 bg-neutral-900/60 border border-neutral-800 rounded">
@@ -128,12 +128,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
     }
 
     return (
-      <div className="min-h-screen bg-black text-white font-mono flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-black text-white font-sans flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm border border-neutral-700 bg-neutral-950 p-5 rounded space-y-4">
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold uppercase tracking-wider">TenStages Online</h1>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v4.0</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v4.1</span>
             </div>
             <button
               onClick={onOpenRules}
@@ -199,7 +199,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
   // Screen 2: Inside Room Lobby
   return (
-    <div className="min-h-screen bg-black text-white font-mono flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-black text-white font-sans flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md border border-neutral-700 bg-neutral-950 p-5 rounded space-y-4">
         {/* Room Header */}
         <div className="border-b border-neutral-800 pb-3 flex justify-between items-center">
