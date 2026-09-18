@@ -420,29 +420,57 @@ export const GameTable: React.FC<GameTableProps> = ({
       return (
         <div
           key={player.id}
-          className="absolute top-10 sm:top-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-20 pointer-events-auto select-none max-w-[95vw]"
+          className="absolute top-2 sm:top-3 md:top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-20 pointer-events-auto select-none max-w-[95vw]"
         >
-          {/* Player Banner */}
-          <div className="flex items-center gap-2">
+          {/* Top Row: Fanned cards and Player Banner side by side */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* 3D Horizontal Fanned Cards with Floor Reflection */}
             <div
-              className={`flex flex-col rounded-lg overflow-hidden border transition-all ${
+              data-opponent-id={player.id}
+              className="card-reflect flex items-center justify-center pointer-events-none"
+              style={{
+                transform: 'perspective(900px) rotateX(28deg)',
+                transformStyle: 'preserve-3d'
+              }}
+            >
+              {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
+                const rot = (i - (visibleCardsCount - 1) / 2) * 2;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      transform: `rotateZ(${rot}deg)`,
+                      marginLeft: i === 0 ? 0 : '-32px',
+                      zIndex: i + 1
+                    }}
+                    className="w-9 h-13 sm:w-11 sm:h-16 max-h-[8vh] aspect-[5/7] rounded-md border border-neutral-700/80 overflow-hidden bg-neutral-900 shadow-xl shrink-0"
+                  >
+                    <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Player Banner */}
+            <div
+              className={`flex flex-col rounded-lg overflow-hidden border transition-all shrink-0 ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                   : 'border-white/20'
               }`}
             >
               <div
-                className={`px-3 py-1 font-bold text-xs flex items-center gap-2 shadow ${
+                className={`px-2.5 sm:px-3 py-0.5 sm:py-1 font-bold text-[11px] sm:text-xs flex items-center gap-1.5 shadow ${
                   isPlayerTurn
                     ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-extrabold'
                     : 'bg-gradient-to-r from-purple-700 to-indigo-600 text-white'
                 }`}
               >
                 <span>{player.name}</span>
-                {player.isBot && <span className="text-[10px] opacity-80">[BOT]</span>}
-                {player.isSkipped && <span className="text-[10px] text-red-300 font-bold">[SKIPPED]</span>}
+                {player.isBot && <span className="text-[9px] opacity-80">[BOT]</span>}
+                {player.isSkipped && <span className="text-[9px] text-red-300 font-bold">[SKIPPED]</span>}
               </div>
-              <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-3">
+              <div className="bg-black/80 px-2 py-0.5 text-[9px] sm:text-[10px] text-neutral-300 flex items-center justify-between gap-2">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
                   <span className="text-amber-400 font-bold">({gameState.turnTimeRemaining}s)</span>
@@ -451,46 +479,19 @@ export const GameTable: React.FC<GameTableProps> = ({
             </div>
 
             {/* Card count pill */}
-            <div className="flex items-center gap-1.5 bg-white/95 text-black px-2.5 py-1 rounded-lg font-bold text-xs shadow-lg border border-neutral-300">
-              <span className="text-sm">🂠</span>
+            <div className="flex items-center gap-1 bg-white/95 text-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg font-bold text-xs shadow-lg border border-neutral-300 shrink-0">
+              <span className="text-xs sm:text-sm">🂠</span>
               <span>{cardCount}</span>
             </div>
 
             {isSpectator && player.isBot && onClaimSeat && (
               <button
                 onClick={() => onClaimSeat(player.id)}
-                className="bg-white text-black text-[10px] font-bold px-2 py-1 rounded hover:bg-neutral-200 cursor-pointer shadow"
+                className="bg-white text-black text-[10px] font-bold px-2 py-1 rounded hover:bg-neutral-200 cursor-pointer shadow shrink-0"
               >
                 Take Seat
               </button>
             )}
-          </div>
-
-          {/* 3D Horizontal Fanned Cards with Floor Reflection */}
-          <div
-            data-opponent-id={player.id}
-            className="card-reflect mt-1 flex items-center justify-center pointer-events-none"
-            style={{
-              transform: 'perspective(900px) rotateX(32deg)',
-              transformStyle: 'preserve-3d'
-            }}
-          >
-            {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
-              const rot = (i - (visibleCardsCount - 1) / 2) * 2.2;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    transform: `rotateZ(${rot}deg)`,
-                    marginLeft: i === 0 ? 0 : '-36px',
-                    zIndex: i + 1
-                  }}
-                  className="w-12 h-18 sm:w-16 sm:h-24 rounded-md border border-neutral-700/80 overflow-hidden bg-neutral-900 shadow-xl shrink-0"
-                >
-                  <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
-                </div>
-              );
-            })}
           </div>
 
           {/* Top Player Laid Down Melds in Front of their deck */}
@@ -735,7 +736,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span>🔗</span>
             <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
           </button>
-          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.2</span>
+          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.3</span>
           <span className="text-neutral-300 font-bold">Round {gameState.roundNumber}</span>
           {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
@@ -840,11 +841,11 @@ export const GameTable: React.FC<GameTableProps> = ({
       {renderOpponentStation(rightPlayer, 'right')}
 
       {/* 6. Center Table Arena (Deck, Discard, Direction Arrows) */}
-      <div className="absolute inset-x-0 top-[37%] sm:top-[39%] md:top-[41%] -translate-y-1/2 flex items-center justify-center pointer-events-none z-10">
-        <div className="relative w-full max-w-2xl h-[340px] sm:h-[420px] flex items-center justify-center">
-          {/* Central Circular Direction Arrow Indicator (Enlarged orbital ring that circles cleanly outside the cards) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+        <div className="relative w-full max-w-2xl h-[min(420px,48vh)] flex items-center justify-center">
+          {/* Central Circular Direction Arrow Indicator (Enlarged orbital ring centered in video background) */}
           <div
-            className={`absolute w-[330px] h-[330px] sm:w-[450px] sm:h-[450px] md:w-[520px] md:h-[520px] max-w-[94vw] max-h-[94vw] rounded-full pointer-events-none flex items-center justify-center transition-all ${
+            className={`absolute w-[min(520px,46vh,88vw)] h-[min(520px,46vh,88vw)] rounded-full pointer-events-none flex items-center justify-center transition-all ${
               gameState.playDirection === 1 ? 'animate-spin-cw' : 'animate-spin-ccw'
             }`}
           >
@@ -894,14 +895,14 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
 
           {/* Draw & Discard Piles in the Arena Ring */}
-          <div className="flex items-center gap-6 sm:gap-10 md:gap-14 pointer-events-auto z-20">
+          <div className="flex items-center gap-4 sm:gap-8 md:gap-12 pointer-events-auto z-20">
             {/* Draw Pile (Upper-Left of Center) */}
             <div className="flex flex-col items-center">
               <button
                 ref={deckRef}
                 onClick={() => handleDraw('deck')}
                 disabled={!isMyTurn || gameState.turnStage !== 'draw'}
-                className={`relative w-20 h-28 sm:w-24 sm:h-32 rounded-xl flex flex-col items-center justify-center transition-transform deck-3d-stack overflow-hidden ${
+                className={`relative w-18 h-26 sm:w-22 sm:h-30 md:w-24 md:h-32 max-h-[16vh] aspect-[5/7] rounded-xl flex flex-col items-center justify-center transition-transform deck-3d-stack overflow-hidden ${
                   isMyTurn && gameState.turnStage === 'draw'
                     ? 'border-2 border-yellow-300 ring-4 ring-yellow-400/50 hover:scale-105 cursor-pointer animate-pulse'
                     : 'border border-neutral-700 cursor-default opacity-90'
@@ -938,7 +939,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <div className="flex flex-col items-center">
               <div
                 ref={discardRef}
-                className="relative w-20 h-28 sm:w-24 sm:h-32 discard-3d-shadow rounded-xl"
+                className="relative w-18 h-26 sm:w-22 sm:h-30 md:w-24 md:h-32 max-h-[16vh] aspect-[5/7] discard-3d-shadow rounded-xl"
               >
                 {/* Peek previous card underneath */}
                 {gameState.discardHistory && gameState.discardHistory.length > 1 && (
@@ -1119,13 +1120,13 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
 
         {/* Client Hand: Curved Arc in Perspective */}
-        <div className="w-full max-w-5xl px-2 sm:px-4 flex items-end justify-center overflow-x-auto sm:overflow-visible pb-1 pt-3">
+        <div className="w-full max-w-5xl px-2 sm:px-4 flex items-end justify-center overflow-x-auto sm:overflow-visible pb-1 pt-1 sm:pt-2">
           <div className="flex items-end justify-center">
             {localHand.map((c, i) => {
               const count = localHand.length;
               const offset = i - (count - 1) / 2;
               const rot = Math.max(-14, Math.min(14, offset * (count > 12 ? 1.6 : 2.2)));
-              const translateY = Math.abs(offset) * (count > 12 ? 1.4 : 2.0);
+              const translateY = Math.abs(offset) * (count > 12 ? 1.2 : 1.8);
               const isSelected = selectedCardId === c.id;
 
               return (
@@ -1133,12 +1134,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                   key={c.id}
                   data-card-id={c.id}
                   style={{
-                    transform: `rotate(${rot}deg) translateY(${isSelected ? -34 : translateY}px)`,
+                    transform: `rotate(${rot}deg) translateY(${isSelected ? -26 : translateY}px)`,
                     zIndex: isSelected ? 40 : i + 1,
-                    marginLeft: i === 0 ? 0 : count > 12 ? '-42px' : count > 8 ? '-36px' : '-28px'
+                    marginLeft: i === 0 ? 0 : count > 12 ? '-40px' : count > 8 ? '-34px' : '-26px'
                   }}
-                  className={`relative transition-all duration-200 cursor-pointer shrink-0 hover:-translate-y-8 hover:z-35 ${
-                    isSelected ? 'scale-110 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]' : ''
+                  className={`relative transition-all duration-200 cursor-pointer shrink-0 hover:-translate-y-6 hover:z-35 ${
+                    isSelected ? 'scale-105 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]' : ''
                   }`}
                   onClick={() => handleCardClick(c)}
                 >
