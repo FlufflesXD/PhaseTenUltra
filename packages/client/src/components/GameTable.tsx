@@ -737,7 +737,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span>🔗</span>
             <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
           </button>
-          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.4</span>
+          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.5</span>
           <span className="text-neutral-300 font-bold text-xs">Round {gameState.roundNumber}</span>
           {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
