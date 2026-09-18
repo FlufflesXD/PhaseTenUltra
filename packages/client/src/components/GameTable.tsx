@@ -637,7 +637,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span>🔗</span>
             <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
           </button>
-          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded">v3.5</span>
+          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded">v4.0</span>
           <span className="text-neutral-300 font-bold">Round {gameState.roundNumber}</span>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-white/20 bg-neutral-900/80 text-cyan-300">
             {gameState.playDirection === -1 ? '↺ CCW' : '↻ CW'}
