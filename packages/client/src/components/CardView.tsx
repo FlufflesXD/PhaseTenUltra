@@ -42,7 +42,10 @@ export const CardView: React.FC<CardViewProps> = ({
     if (card.type === 'wild') return '/cards/wild.png';
     if (card.type === 'skip') return '/cards/skip.png';
     if (card.type === 'reverse') return '/cards/reverse.png';
-    if (card.type === 'draw_two') return '/cards/draw_two.png';
+    if (card.type === 'draw_two' || card.type === 'plus_two') return '/cards/custom/plus_two.png';
+    if (card.type === 'plus_three') return '/cards/custom/plus_three.png';
+    if (card.type === 'nuke') return '/cards/custom/nuke.png';
+    if (card.type === 'jester') return '/cards/custom/jester.png';
     if (card.type === 'number') return `/cards/${card.color}_${card.value}.png`;
     return null;
   }, [card.type, card.color, card.value]);
@@ -58,8 +61,14 @@ export const CardView: React.FC<CardViewProps> = ({
       ? 'S'
       : card.type === 'reverse'
       ? '⇄'
-      : card.type === 'draw_two'
+      : card.type === 'draw_two' || card.type === 'plus_two'
       ? '+2'
+      : card.type === 'plus_three'
+      ? '+3'
+      : card.type === 'nuke'
+      ? '☢'
+      : card.type === 'jester'
+      ? '🃏'
       : card.value;
 
   const innerContent = imageSrc && !imageError ? (
@@ -91,7 +100,10 @@ export const CardView: React.FC<CardViewProps> = ({
         {card.type === 'wild' && <div className="text-sm sm:text-base tracking-wider">WILD</div>}
         {card.type === 'skip' && <div className="text-sm sm:text-base tracking-wider">SKIP</div>}
         {card.type === 'reverse' && <div className="text-sm sm:text-base tracking-wider">REVERSE</div>}
-        {card.type === 'draw_two' && <div className="text-sm sm:text-base tracking-wider">+2 DRAW</div>}
+        {(card.type === 'draw_two' || card.type === 'plus_two') && <div className="text-sm sm:text-base tracking-wider">+2 DRAW</div>}
+        {card.type === 'plus_three' && <div className="text-sm sm:text-base tracking-wider">+3 DRAW</div>}
+        {card.type === 'nuke' && <div className="text-sm sm:text-base tracking-wider text-red-500 font-black">☢ NUKE</div>}
+        {card.type === 'jester' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">🃏 JESTER</div>}
         {card.type === 'number' && (
           <div>
             <div className="text-xl sm:text-3xl leading-none">{card.value}</div>

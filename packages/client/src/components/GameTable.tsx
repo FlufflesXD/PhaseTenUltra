@@ -14,6 +14,7 @@ import {
   findSingleRequirementMatch
 } from '@phase-ten/shared';
 import { CardView } from './CardView.js';
+import { playSpecialSound } from '../utils/audio.js';
 
 interface GameTableProps {
   gameState: PublicGameState;
@@ -67,6 +68,9 @@ export const GameTable: React.FC<GameTableProps> = ({
     targetRot: number;
   } | null>(null);
   const [discardKey, setDiscardKey] = useState(0);
+  const [nukeActive, setNukeActive] = useState(false);
+  const [jesterSwapEvent, setJesterSwapEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
+  const lastSoundActionIdRef = useRef<string | null>(null);
 
   const gameStateRef = useRef(gameState);
   useEffect(() => {
@@ -81,7 +85,11 @@ export const GameTable: React.FC<GameTableProps> = ({
       (latestAction.type === 'discard' ||
         latestAction.type === 'skip' ||
         latestAction.type === 'reverse' ||
-        latestAction.type === 'draw_two');
+        latestAction.type === 'draw_two' ||
+        latestAction.type === 'nuke' ||
+        latestAction.type === 'jester' ||
+        latestAction.type === 'plus_two' ||
+        latestAction.type === 'plus_three');
 
     if (discardFlightActiveRef.current || isNewDiscardAction) {
       const prevDiscard =
@@ -184,7 +192,11 @@ export const GameTable: React.FC<GameTableProps> = ({
       latestAction.type === 'discard' ||
       latestAction.type === 'skip' ||
       latestAction.type === 'reverse' ||
-      latestAction.type === 'draw_two'
+      latestAction.type === 'draw_two' ||
+      latestAction.type === 'nuke' ||
+      latestAction.type === 'jester' ||
+      latestAction.type === 'plus_two' ||
+      latestAction.type === 'plus_three'
     ) {
       discardFlightActiveRef.current = true;
       // Hold previous discard on the pile while the new card is in the air
@@ -274,6 +286,35 @@ export const GameTable: React.FC<GameTableProps> = ({
   }, [latestAction, secretToken]);
 
   useEffect(() => {
+    if (!latestAction || lastSoundActionIdRef.current === latestAction.id) return;
+    lastSoundActionIdRef.current = latestAction.id;
+
+    if (!isMuted) {
+      if (latestAction.type === 'nuke') {
+        playSpecialSound('nuke');
+      } else if (latestAction.type === 'jester') {
+        playSpecialSound('jester');
+      } else if (latestAction.type === 'plus_two') {
+        playSpecialSound('plus_two');
+      } else if (latestAction.type === 'plus_three') {
+        playSpecialSound('plus_three');
+      }
+    }
+
+    if (latestAction.type === 'nuke') {
+      setNukeActive(true);
+      const timer = setTimeout(() => setNukeActive(false), 5000);
+      return () => clearTimeout(timer);
+    } else if (latestAction.type === 'jester') {
+      const targetName =
+        gameState.players.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+      setJesterSwapEvent({ sourceName: latestAction.playerName, targetName });
+      const timer = setTimeout(() => setJesterSwapEvent(null), 2800);
+      return () => clearTimeout(timer);
+    }
+  }, [latestAction, gameState.players, isMuted]);
+
+  useEffect(() => {
     setLocalHand(prev => {
       const currentIds = new Set(hand.map(c => c.id));
       const retained = prev.filter(c => currentIds.has(c.id));
@@ -296,6 +337,17 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (!selectedCardId) return null;
     return localHand.find(c => c.id === selectedCardId) ?? null;
   }, [localHand, selectedCardId]);
+
+  const isJesterSelected =
+    selectedCard?.type === 'jester' &&
+    isMyTurn &&
+    (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+
+  const handleOpponentSwapClick = (targetPlayer: PlayerPublic) => {
+    if (!isJesterSelected || !selectedCard) return;
+    onDiscardCard(selectedCard.id, targetPlayer.id);
+    clearSelection();
+  };
 
   // Seating relative to the client
   // Clockwise order starting from client
@@ -437,7 +489,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     );
   };
 
-  // Render an opponent station (Nameplate, Card count pill, 3D fanned cards, and their laid melds)
+  // Render an opponent station (Nameplate, 3D fanned cards, and their laid melds)
   const renderOpponentStation = (
     player: PlayerPublic | null,
     position: 'left' | 'top' | 'right'
@@ -453,11 +505,16 @@ export const GameTable: React.FC<GameTableProps> = ({
           key={player.id}
           className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-20 pointer-events-auto select-none max-w-[1200px]"
         >
-          {/* Top Row: Player Banner & Card Count */}
+          {/* Top Row: Player Banner & Jester Swap Option */}
           <div className="flex items-center gap-3">
             {/* Player Banner */}
             <div
+              onClick={() => isJesterSelected && handleOpponentSwapClick(player)}
               className={`flex flex-col rounded-lg overflow-hidden border transition-all shrink-0 ${
+                isJesterSelected
+                  ? 'ring-4 ring-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+                  : ''
+              } ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                   : 'border-white/20 shadow-lg'
@@ -482,11 +539,17 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             </div>
 
-            {/* Card count pill */}
-            <div className="flex items-center gap-1.5 bg-white/95 text-black px-3 py-1 rounded-lg font-bold text-sm shadow-xl border border-neutral-300 shrink-0">
-              <span className="text-base">🂠</span>
-              <span>{cardCount}</span>
-            </div>
+            {/* Jester Swap Target Button */}
+            {isJesterSelected && (
+              <button
+                type="button"
+                onClick={() => handleOpponentSwapClick(player)}
+                className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+              >
+                <span>🃏</span>
+                <span>Swap Hands!</span>
+              </button>
+            )}
 
             {isSpectator && player.isBot && onClaimSeat && (
               <button
@@ -501,7 +564,10 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* 3D Horizontal Fanned Cards with Floor Reflection */}
           <div
             data-opponent-id={player.id}
-            className="card-reflect flex items-center justify-center pointer-events-none my-0.5"
+            onClick={() => isJesterSelected && handleOpponentSwapClick(player)}
+            className={`card-reflect flex items-center justify-center my-0.5 ${
+              isJesterSelected ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
+            }`}
             style={{
               transform: 'perspective(900px) rotateX(24deg)',
               transformStyle: 'preserve-3d'
@@ -517,7 +583,9 @@ export const GameTable: React.FC<GameTableProps> = ({
                     marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-46px' : '-40px',
                     zIndex: i + 1
                   }}
-                  className="w-[84px] h-[118px] aspect-[5/7] rounded-lg border border-neutral-600 overflow-hidden bg-neutral-900 shadow-2xl shrink-0"
+                  className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${
+                    isJesterSelected ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]' : 'border-neutral-600'
+                  }`}
                 >
                   <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                 </div>
@@ -550,10 +618,27 @@ export const GameTable: React.FC<GameTableProps> = ({
           key={player.id}
           className="absolute left-6 top-[250px] flex flex-col items-start gap-2.5 z-20 pointer-events-auto select-none"
         >
+          {/* Left Player Jester Swap Button */}
+          {isJesterSelected && (
+            <button
+              type="button"
+              onClick={() => handleOpponentSwapClick(player)}
+              className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
+            >
+              <span>🃏</span>
+              <span>Swap Hands!</span>
+            </button>
+          )}
+
           {/* Player Banner */}
           <div className="flex items-center gap-2.5">
             <div
+              onClick={() => isJesterSelected && handleOpponentSwapClick(player)}
               className={`flex flex-col rounded-lg overflow-hidden border transition-all ${
+                isJesterSelected
+                  ? 'ring-4 ring-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+                  : ''
+              } ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                   : 'border-white/20'
@@ -578,12 +663,6 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             </div>
 
-            {/* Card count pill */}
-            <div className="flex items-center gap-1.5 bg-white/95 text-black px-3 py-1 rounded-lg font-bold text-sm shadow-xl border border-neutral-300">
-              <span className="text-base">🂠</span>
-              <span>{cardCount}</span>
-            </div>
-
             {isSpectator && player.isBot && onClaimSeat && (
               <button
                 onClick={() => onClaimSeat(player.id)}
@@ -598,7 +677,10 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* 3D Angled Vertical Fanned Cards with Reflection */}
             <div
               data-opponent-id={player.id}
-              className="card-reflect mt-1 flex flex-col pointer-events-none"
+              onClick={() => isJesterSelected && handleOpponentSwapClick(player)}
+              className={`card-reflect mt-1 flex flex-col ${
+                isJesterSelected ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
+              }`}
               style={{
                 transform: 'perspective(900px) rotateY(48deg) rotateX(16deg) rotateZ(-8deg)',
                 transformStyle: 'preserve-3d'
@@ -614,7 +696,9 @@ export const GameTable: React.FC<GameTableProps> = ({
                       marginTop: i === 0 ? 0 : '-50px',
                       zIndex: i + 1
                     }}
-                    className="w-[84px] h-[118px] aspect-[5/7] rounded-lg border border-neutral-600 overflow-hidden bg-neutral-900 shadow-2xl"
+                    className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl ${
+                      isJesterSelected ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]' : 'border-neutral-600'
+                    }`}
                   >
                     <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                   </div>
@@ -648,6 +732,18 @@ export const GameTable: React.FC<GameTableProps> = ({
         key={player.id}
         className="absolute right-6 top-[250px] flex flex-col items-end gap-2.5 z-20 pointer-events-auto select-none"
       >
+        {/* Right Player Jester Swap Button */}
+        {isJesterSelected && (
+          <button
+            type="button"
+            onClick={() => handleOpponentSwapClick(player)}
+            className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
+          >
+            <span>🃏</span>
+            <span>Swap Hands!</span>
+          </button>
+        )}
+
         {/* Player Banner */}
         <div className="flex items-center gap-2.5">
           {isSpectator && player.isBot && onClaimSeat && (
@@ -659,14 +755,13 @@ export const GameTable: React.FC<GameTableProps> = ({
             </button>
           )}
 
-          {/* Card count pill */}
-          <div className="flex items-center gap-1.5 bg-white/95 text-black px-3 py-1 rounded-lg font-bold text-sm shadow-xl border border-neutral-300">
-            <span className="text-base">🂠</span>
-            <span>{cardCount}</span>
-          </div>
-
           <div
+            onClick={() => isJesterSelected && handleOpponentSwapClick(player)}
             className={`flex flex-col items-end rounded-lg overflow-hidden border transition-all ${
+              isJesterSelected
+                ? 'ring-4 ring-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+                : ''
+            } ${
               isPlayerTurn
                 ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                 : 'border-white/20'
@@ -712,7 +807,10 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* 3D Angled Vertical Fanned Cards with Reflection */}
           <div
             data-opponent-id={player.id}
-            className="card-reflect mt-1 flex flex-col pointer-events-none items-end"
+            onClick={() => isJesterSelected && handleOpponentSwapClick(player)}
+            className={`card-reflect mt-1 flex flex-col items-end ${
+              isJesterSelected ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
+            }`}
             style={{
               transform: 'perspective(900px) rotateY(-48deg) rotateX(16deg) rotateZ(8deg)',
               transformStyle: 'preserve-3d'
@@ -728,7 +826,9 @@ export const GameTable: React.FC<GameTableProps> = ({
                     marginTop: i === 0 ? 0 : '-50px',
                     zIndex: i + 1
                   }}
-                  className="w-[84px] h-[118px] aspect-[5/7] rounded-lg border border-neutral-600 overflow-hidden bg-neutral-900 shadow-2xl"
+                  className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl ${
+                    isJesterSelected ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]' : 'border-neutral-600'
+                  }`}
                 >
                   <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                 </div>
@@ -792,7 +892,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>🔗</span>
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v4.6</span>
+            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v4.7</span>
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
               <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
@@ -1145,6 +1245,14 @@ export const GameTable: React.FC<GameTableProps> = ({
               </>
             )}
 
+            {/* Jester Swap Guidance Banner */}
+            {isJesterSelected && (
+              <div className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/90 to-indigo-900/90 border border-purple-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.6)] text-xs text-purple-100 font-bold animate-pulse">
+                <span>🃏</span>
+                <span>Click an opponent's deck or banner above to swap hands!</span>
+              </div>
+            )}
+
             {/* Sort Controls & Deselect */}
             <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 shadow-lg text-xs">
               <button
@@ -1199,7 +1307,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                   >
                     <CardView card={c} size="lg" isSelected={isSelected} isSelectable={true} />
 
-                    {/* Red low-opacity DISCARD button right on the selected card */}
+                    {/* Low-opacity action button right on the selected card */}
                     {isSelected && isMyTurn && gameState.turnStage !== 'draw' && (
                       <button
                         type="button"
@@ -1207,10 +1315,20 @@ export const GameTable: React.FC<GameTableProps> = ({
                           e.stopPropagation();
                           handleDiscardSelected();
                         }}
-                        className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 bg-red-600/75 hover:bg-red-600/95 active:bg-red-700 text-white font-black text-xs py-1.5 px-3 rounded-lg border border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)] backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none"
+                        className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 ${
+                          c.type === 'nuke'
+                            ? 'bg-amber-600/85 hover:bg-amber-600/95 border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.85)]'
+                            : c.type === 'jester'
+                            ? 'bg-purple-600/85 hover:bg-purple-600/95 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.85)]'
+                            : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)]'
+                        } active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg border backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none`}
                       >
-                        <span className="text-xs">🗑️</span>
-                        <span>DISCARD</span>
+                        <span className="text-xs">
+                          {c.type === 'nuke' ? '☢️' : c.type === 'jester' ? '🃏' : '🗑️'}
+                        </span>
+                        <span>
+                          {c.type === 'nuke' ? 'DETONATE' : c.type === 'jester' ? 'SWAP / DISCARD' : 'DISCARD'}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -1220,6 +1338,44 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </footer>
       </div>
+
+      {/* 5-Second Nuclear Blast VFX Screen Overlay */}
+      {nukeActive && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden animate-nuke-flash">
+          <div className="relative w-full h-full flex flex-col items-center justify-center animate-nuke-shake">
+            <div className="w-[500px] h-[500px] rounded-full border-8 border-yellow-400/80 animate-ping absolute opacity-50" />
+            <div className="relative z-10 flex flex-col items-center gap-3 drop-shadow-[0_0_40px_rgba(255,0,0,1)] select-none">
+              <span className="text-8xl md:text-9xl">☢️</span>
+              <div className="text-4xl md:text-6xl font-black tracking-widest text-yellow-300 drop-shadow-[0_0_30px_rgba(239,68,68,0.9)] uppercase">
+                NUCLEAR DETONATION
+              </div>
+              <div className="text-lg md:text-2xl font-extrabold text-white bg-red-950/80 border border-red-500/80 px-6 py-1.5 rounded-full uppercase tracking-wider shadow-2xl">
+                ALL HANDS REDUCED TO 2 CARDS!
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jester Hand Swap Banner Animation */}
+      {jesterSwapEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-purple-950/95 via-indigo-950/95 to-purple-950/95 border-2 border-purple-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(168,85,247,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-bounce">🃏</span>
+              <span className="text-amber-400 animate-pulse">⇄</span>
+              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>🃏</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              HANDS SWAPPED!
+            </div>
+            <div className="text-lg font-bold text-purple-200 text-center">
+              <span className="text-amber-300">{jesterSwapEvent.sourceName}</span> swapped decks with{' '}
+              <span className="text-pink-300">{jesterSwapEvent.targetName}</span>!
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

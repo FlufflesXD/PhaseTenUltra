@@ -129,3 +129,72 @@ body {
   animation: spinSlowCCW 20s linear infinite;
 }
 
+/* Nuclear Flash Screen Explosion (5 Seconds) */
+@keyframes nukeFlashVFX {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+    filter: brightness(1);
+  }
+  4% {
+    opacity: 1;
+    transform: scale(1.04);
+    filter: brightness(3.5);
+    background-color: rgba(255, 255, 255, 1);
+  }
+  15% {
+    opacity: 0.95;
+    transform: scale(1);
+    background-color: rgba(255, 250, 220, 0.95);
+  }
+  35% {
+    opacity: 0.85;
+    background: radial-gradient(circle, rgba(255, 200, 50, 0.9) 0%, rgba(220, 38, 38, 0.8) 50%, rgba(15, 23, 42, 0.95) 100%);
+  }
+  60% {
+    opacity: 0.7;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.7) 0%, rgba(185, 28, 28, 0.7) 60%, rgba(0, 0, 0, 0.85) 100%);
+  }
+  85% {
+    opacity: 0.4;
+    background: radial-gradient(circle, rgba(239, 68, 68, 0.4) 0%, rgba(0, 0, 0, 0.7) 100%);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+    background: transparent;
+  }
+}
+
+.animate-nuke-flash {
+  animation: nukeFlashVFX 5s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes nukeShake {
+  0%, 100% { transform: translate(0, 0); }
+  5% { transform: translate(-8px, 6px); }
+  10% { transform: translate(7px, -6px); }
+  15% { transform: translate(-6px, 5px); }
+  20% { transform: translate(5px, -4px); }
+  30% { transform: translate(-3px, 3px); }
+  45% { transform: translate(2px, -2px); }
+  60% { transform: translate(0, 0); }
+}
+
+.animate-nuke-shake {
+  animation: nukeShake 2.5s ease-in-out;
+}
+
+/* Jester Hand Swap Banner Animation */
+@keyframes jesterSwapPop {
+  0% { transform: scale(0.6) rotate(-8deg); opacity: 0; }
+  15% { transform: scale(1.08) rotate(3deg); opacity: 1; }
+  25% { transform: scale(1) rotate(0deg); opacity: 1; }
+  85% { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.8) translateY(-30px); opacity: 0; }
+}
+
+.animate-jester-swap {
+  animation: jesterSwapPop 2.5s ease-in-out forwards;
+}
+

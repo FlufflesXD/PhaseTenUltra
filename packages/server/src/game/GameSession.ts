@@ -123,7 +123,7 @@ export class GameSession {
       player.cardCount = 0;
     }
 
-    this.drawPile = createDeck();
+    this.drawPile = createDeck(this.settings.gameMode);
     this.discardPile = [];
 
     // Deal 10 cards to each player
@@ -245,8 +245,8 @@ export class GameSession {
     if (source === 'discard') {
       if (this.discardPile.length === 0) throw new Error('Discard pile is empty');
       const top = this.discardPile[this.discardPile.length - 1];
-      if (top.type === 'wild' || top.type === 'skip') {
-        throw new Error('Cannot draw a Wild or Skip card from the discard pile');
+      if (top.type !== 'number') {
+        throw new Error('Cannot draw a Wild or Skip card (or Special card) from the discard pile');
       }
       drawnCard = this.discardPile.pop()!;
     } else {
@@ -611,6 +611,122 @@ export class GameSession {
         card,
         message: `${current.name} reversed play direction!`
       });
+    } else if (card.type === 'nuke') {
+      const active = this.getActivePlayers();
+      for (const player of active) {
+        if (player.cards.length > 2) {
+          const excess = player.cards.splice(2);
+          for (const extraCard of excess) {
+            this.discardPile.push(extraCard);
+          }
+        } else if (player.cards.length < 2) {
+          while (player.cards.length < 2) {
+            this.ensureDrawPileHasCards();
+            if (this.drawPile.length > 0) {
+              player.cards.push(this.drawPile.pop()!);
+            } else {
+              break;
+            }
+          }
+        }
+        player.cardCount = player.cards.length;
+        player.cards = sortCardsByValue(player.cards);
+      }
+
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `💥 ${current.name} detonated a NUKE! Everyone's hand is reduced to 2 cards!`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'nuke',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} detonated a NUKE! Everyone's hand was set to 2 cards!`
+      });
+    } else if (card.type === 'jester') {
+      const active = this.getActivePlayers();
+      let target = _skipTargetPlayerId
+        ? active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id)
+        : undefined;
+
+      if (!target) {
+        const opponents = active.filter(p => p.id !== current.id);
+        opponents.sort((a, b) => a.cards.length - b.cards.length);
+        target = opponents[0];
+      }
+
+      if (target) {
+        const tempCards = current.cards;
+        current.cards = target.cards;
+        target.cards = tempCards;
+
+        current.cardCount = current.cards.length;
+        target.cardCount = target.cards.length;
+
+        current.cards = sortCardsByValue(current.cards);
+        target.cards = sortCardsByValue(target.cards);
+
+        this.notify({
+          id: `notif_${Date.now()}`,
+          type: 'info',
+          message: `🃏 ${current.name} played Jester and swapped hands with ${target.name}!`,
+          playerId: current.id,
+          timestamp: Date.now()
+        });
+
+        this.emitAction({
+          type: 'jester',
+          playerId: current.id,
+          playerName: current.name,
+          targetPlayerId: target.id,
+          card,
+          message: `${current.name} swapped hands with ${target.name}!`
+        });
+      } else {
+        this.emitAction({
+          type: 'jester',
+          playerId: current.id,
+          playerName: current.name,
+          card,
+          message: `${current.name} played Jester!`
+        });
+      }
+    } else if (card.type === 'plus_two' || card.type === 'plus_three') {
+      const count = card.type === 'plus_three' ? 3 : 2;
+      const active = this.getActivePlayers();
+      const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
+      const target = active[nextIndex];
+
+      for (let i = 0; i < count; i++) {
+        this.ensureDrawPileHasCards();
+        if (this.drawPile.length > 0) {
+          target.cards.push(this.drawPile.pop()!);
+        }
+      }
+      target.cardCount = target.cards.length;
+      target.cards = sortCardsByValue(target.cards);
+
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `➕ ${current.name} played +${count} on ${target.name}!`,
+        playerId: target.id,
+        timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: card.type,
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        message: `${current.name} gave +${count} cards to ${target.name}!`
+      });
     } else if (card.type === 'draw_two') {
       const active = this.getActivePlayers();
       const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
@@ -788,7 +904,7 @@ export class GameSession {
   private ensureDrawPileHasCards(): void {
     if (this.drawPile.length === 0) {
       if (this.discardPile.length <= 1) {
-        this.drawPile = createDeck();
+        this.drawPile = createDeck(this.settings.gameMode);
       } else {
         const top = this.discardPile.pop()!;
         this.drawPile = shuffleDeck(this.discardPile);
@@ -940,8 +1056,17 @@ export class GameSession {
         ? nonSkipCards.sort((a, b) => b.points - a.points)[0]
         : bot.cards[0];
 
+      let targetPlayerId: string | undefined;
+      if (cardToDiscard.type === 'jester') {
+        const opponents = this.getActivePlayers().filter(p => p.id !== bot.id);
+        if (opponents.length > 0) {
+          opponents.sort((a, b) => a.cards.length - b.cards.length);
+          targetPlayerId = opponents[0].id;
+        }
+      }
+
       try {
-        this.discardCard(bot.id, cardToDiscard.id);
+        this.discardCard(bot.id, cardToDiscard.id, targetPlayerId);
       } catch (e) {
         if (bot.cards.length > 0) {
           try {

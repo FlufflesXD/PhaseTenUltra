@@ -1,13 +1,22 @@
 export type CardColor = 'red' | 'blue' | 'green' | 'yellow' | 'none';
 
-export type CardType = 'number' | 'wild' | 'skip' | 'reverse' | 'draw_two';
+export type CardType =
+  | 'number'
+  | 'wild'
+  | 'skip'
+  | 'reverse'
+  | 'draw_two'
+  | 'nuke'
+  | 'jester'
+  | 'plus_two'
+  | 'plus_three';
 
 export interface Card {
   id: string;
   type: CardType;
   color: CardColor;
   value: number; // 1-12 for number, 0 for special
-  points: number; // 1-9: 5pts, 10-12: 10pts, Skip: 15pts, Wild: 25pts, Reverse: 20pts, Draw Two: 20pts
+  points: number; // 1-9: 5pts, 10-12: 10pts, Skip: 15pts, Wild: 25pts, Reverse: 20pts, +2: 20pts, Jester: 25pts, +3: 25pts, Nuke: 50pts
 }
 
 export type RequirementType = 'set' | 'run' | 'color';
@@ -60,12 +69,12 @@ export interface PlayerPrivate extends PlayerPublic {
 
 export type TurnStage = 'draw' | 'play' | 'discard';
 
-export type GameMode = 'classic' | 'speed';
+export type GameMode = 'classic' | 'speed' | 'chaos';
 
 export interface GameSettings {
   turnTimerSeconds: number; // 0 = unlimited, 30, 45, 60
   allowPartialAndExtraSets?: boolean; // House rule: allow laying either side of '+' and extra sets
-  gameMode?: GameMode; // 'classic' (10 stages), 'speed' (5 stages)
+  gameMode?: GameMode; // 'classic' (10 stages), 'speed' (5 stages), 'chaos' (10 stages + chaos cards)
   customActionCards?: boolean;
 }
 
@@ -84,7 +93,19 @@ export interface WaitlistPlayer {
 
 export interface GameActionEvent {
   id: string;
-  type: 'draw' | 'discard' | 'lay_phase' | 'lay_extra' | 'hit' | 'skip' | 'reverse' | 'draw_two';
+  type:
+    | 'draw'
+    | 'discard'
+    | 'lay_phase'
+    | 'lay_extra'
+    | 'hit'
+    | 'skip'
+    | 'reverse'
+    | 'draw_two'
+    | 'nuke'
+    | 'jester'
+    | 'plus_two'
+    | 'plus_three';
   playerId: string;
   playerName: string;
   source?: 'deck' | 'discard';

@@ -1,6 +1,13 @@
-import { Card, CardColor } from './types.js';
+import { Card, CardColor, CardType, GameMode } from './types.js';
 
-export function createStandardDeck(): Card[] {
+export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
+  { type: 'nuke', points: 50 },
+  { type: 'jester', points: 25 },
+  { type: 'plus_two', points: 20 },
+  { type: 'plus_three', points: 25 }
+];
+
+export function createStandardDeck(mode?: GameMode): Card[] {
   const cards: Card[] = [];
   const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];
   let idCounter = 1;
@@ -18,6 +25,22 @@ export function createStandardDeck(): Card[] {
           points
         });
       }
+    }
+  }
+
+  // In Chaos Mode, replace regular colored cards with 1 copy of each custom card
+  if (mode === 'chaos') {
+    for (let i = 0; i < CHAOS_SPECIAL_CARDS.length; i++) {
+      cards.pop();
+    }
+    for (const special of CHAOS_SPECIAL_CARDS) {
+      cards.push({
+        id: `card_${idCounter++}`,
+        type: special.type,
+        color: 'none',
+        value: 0,
+        points: special.points
+      });
     }
   }
 
@@ -46,8 +69,8 @@ export function createStandardDeck(): Card[] {
   return cards;
 }
 
-export function createDeck(): Card[] {
-  return shuffleDeck(createStandardDeck());
+export function createDeck(mode?: GameMode): Card[] {
+  return shuffleDeck(createStandardDeck(mode));
 }
 
 function secureRandomInt(maxExclusive: number): number {

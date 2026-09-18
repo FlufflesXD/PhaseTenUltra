@@ -46,8 +46,21 @@ export const RulesModal: React.FC<RulesModalProps> = ({ onClose }) => {
             <div className="font-bold text-white mb-1">Scoring (Penalty points for cards remaining in hand):</div>
             <div>• Cards 1-9: 5 pts each</div>
             <div>• Cards 10-12: 10 pts each</div>
-            <div>• Skip: 15 pts</div>
-            <div>• Wild: 25 pts</div>
+            <div>• Skip: 15 pts | Wild: 25 pts</div>
+            <div>• Chaos Cards: +2 Draw (20 pts), Jester (25 pts), +3 Draw (25 pts), Nuke (50 pts)</div>
+          </div>
+
+          <div className="border-t border-neutral-800 pt-2.5">
+            <div className="font-bold text-amber-300 mb-1 flex items-center gap-1.5">
+              <span>⚡</span>
+              <span>Chaos Mode & Custom Cards:</span>
+            </div>
+            <div className="space-y-1.5 text-neutral-300">
+              <div>• <span className="text-red-400 font-semibold">☢ Nuke:</span> Triggers a 5-second blinding nuclear detonation. Immediately reduces every player's hand to exactly 2 cards! Players who haven't completed their Stage are left with 2 cards.</div>
+              <div>• <span className="text-purple-400 font-semibold">🃏 Jester:</span> Click on any opponent's cards or nameplate to swap hands with them instantly!</div>
+              <div>• <span className="text-emerald-400 font-semibold">+2 & +3 Draw:</span> Forces the next player in line to draw 2 or 3 extra penalty cards from the draw pile. Their turn is not skipped.</div>
+              <div>• <span className="text-yellow-400 font-semibold">Deck Balance:</span> Exactly 1 copy of each special card replaces a standard colored card, keeping the deck at 108 cards.</div>
+            </div>
           </div>
         </div>
       </div>
