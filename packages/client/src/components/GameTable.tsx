@@ -392,6 +392,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const handleDiscardSelected = () => {
     if (!selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    if (selectedCard.type === 'nuke' && !me?.phaseCompletedInRound) return;
     onDiscardCard(selectedCard.id);
     clearSelection();
   };
@@ -892,7 +893,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>🔗</span>
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v4.7</span>
+            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v4.8</span>
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
               <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
@@ -1114,13 +1115,14 @@ export const GameTable: React.FC<GameTableProps> = ({
                             handleDraw('discard');
                           }
                         } else if (isMyTurn && selectedCard && gameState.turnStage !== 'draw') {
+                          if (selectedCard.type === 'nuke' && !me?.phaseCompletedInRound) return;
                           handleDiscardSelected();
                         }
                       }}
                       className={`relative z-10 animate-card-land ${
                         isMyTurn &&
                         ((gameState.turnStage === 'draw' && displayedDiscardCard?.type !== 'skip' && displayedDiscardCard?.type !== 'wild') ||
-                          selectedCard)
+                          (selectedCard && (selectedCard.type !== 'nuke' || me?.phaseCompletedInRound)))
                           ? 'cursor-pointer hover:scale-105'
                           : ''
                       }`}
@@ -1253,6 +1255,14 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             )}
 
+            {/* Nuke Locked Guidance Banner */}
+            {selectedCard?.type === 'nuke' && !me?.phaseCompletedInRound && (
+              <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-950/95 to-red-950/95 border border-amber-500/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.6)] text-xs text-amber-200 font-bold animate-pulse">
+                <span>☢️</span>
+                <span>Nuke locked! Complete and lay down your Stage before detonating!</span>
+              </div>
+            )}
+
             {/* Sort Controls & Deselect */}
             <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 shadow-lg text-xs">
               <button
@@ -1309,27 +1319,36 @@ export const GameTable: React.FC<GameTableProps> = ({
 
                     {/* Low-opacity action button right on the selected card */}
                     {isSelected && isMyTurn && gameState.turnStage !== 'draw' && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDiscardSelected();
-                        }}
-                        className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 ${
-                          c.type === 'nuke'
-                            ? 'bg-amber-600/85 hover:bg-amber-600/95 border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.85)]'
-                            : c.type === 'jester'
-                            ? 'bg-purple-600/85 hover:bg-purple-600/95 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.85)]'
-                            : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)]'
-                        } active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg border backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none`}
-                      >
-                        <span className="text-xs">
-                          {c.type === 'nuke' ? '☢️' : c.type === 'jester' ? '🃏' : '🗑️'}
-                        </span>
-                        <span>
-                          {c.type === 'nuke' ? 'DETONATE' : c.type === 'jester' ? 'SWAP / DISCARD' : 'DISCARD'}
-                        </span>
-                      </button>
+                      c.type === 'nuke' && !me?.phaseCompletedInRound ? (
+                        <div
+                          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 bg-neutral-950/95 border border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.5)] text-amber-300 font-extrabold text-[11px] py-1.5 px-3 rounded-lg backdrop-blur-md flex items-center justify-center gap-1.5 whitespace-nowrap select-none pointer-events-none"
+                        >
+                          <span>🔒</span>
+                          <span>Open Stage First</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDiscardSelected();
+                          }}
+                          className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 ${
+                            c.type === 'nuke'
+                              ? 'bg-amber-600/85 hover:bg-amber-600/95 border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.85)]'
+                              : c.type === 'jester'
+                              ? 'bg-purple-600/85 hover:bg-purple-600/95 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.85)]'
+                              : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)]'
+                          } active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg border backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none`}
+                        >
+                          <span className="text-xs">
+                            {c.type === 'nuke' ? '☢️' : c.type === 'jester' ? '🃏' : '🗑️'}
+                          </span>
+                          <span>
+                            {c.type === 'nuke' ? 'DETONATE' : c.type === 'jester' ? 'SWAP / DISCARD' : 'DISCARD'}
+                          </span>
+                        </button>
+                      )
                     )}
                   </div>
                 );

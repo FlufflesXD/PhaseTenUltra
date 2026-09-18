@@ -227,7 +227,9 @@ export class GameSession {
       this.drawCard(current.id, 'deck');
     }
     if (this.turnStage === 'play' || this.turnStage === 'discard') {
-      const highestCard = current.cards.slice().sort((a, b) => b.points - a.points)[0];
+      const eligible = current.cards.filter(c => c.type !== 'nuke' || current.phaseCompletedInRound);
+      const candidates = eligible.length > 0 ? eligible : current.cards;
+      const highestCard = candidates.slice().sort((a, b) => b.points - a.points)[0];
       if (highestCard) {
         this.discardCard(current.id, highestCard.id);
       }
@@ -468,6 +470,9 @@ export class GameSession {
     for (const cid of cardIds) {
       const c = current.cards.find(card => card.id === cid);
       if (!c) throw new Error(`Card ${cid} not in hand`);
+      if (c.type !== 'number' && c.type !== 'wild') {
+        throw new Error('Special cards cannot be played on hits');
+      }
       cardsToHit.push(c);
     }
 
@@ -552,7 +557,13 @@ export class GameSession {
 
     const cardIndex = current.cards.findIndex(c => c.id === cardId);
     if (cardIndex === -1) throw new Error('Card not in hand');
-    const card = current.cards.splice(cardIndex, 1)[0];
+    const card = current.cards[cardIndex];
+
+    if (card.type === 'nuke' && !current.phaseCompletedInRound) {
+      throw new Error('Cannot play Nuke before completing your Stage!');
+    }
+
+    current.cards.splice(cardIndex, 1);
     current.cardCount = current.cards.length;
 
     this.discardPile.push(card);
@@ -1051,13 +1062,17 @@ export class GameSession {
 
     // 4. Discard
     if (this.turnStage === 'play' || this.turnStage === 'discard') {
-      const nonSkipCards = bot.cards.filter(c => c.type !== 'skip');
-      const cardToDiscard = nonSkipCards.length > 0
-        ? nonSkipCards.sort((a, b) => b.points - a.points)[0]
-        : bot.cards[0];
+      const eligibleCards = bot.cards.filter(c => {
+        if (c.type === 'skip') return false;
+        if (c.type === 'nuke' && !bot.phaseCompletedInRound) return false;
+        return true;
+      });
+      const cardToDiscard = eligibleCards.length > 0
+        ? eligibleCards.sort((a, b) => b.points - a.points)[0]
+        : (bot.cards.find(c => c.type !== 'nuke' || bot.phaseCompletedInRound) || bot.cards[0]);
 
       let targetPlayerId: string | undefined;
-      if (cardToDiscard.type === 'jester') {
+      if (cardToDiscard && cardToDiscard.type === 'jester') {
         const opponents = this.getActivePlayers().filter(p => p.id !== bot.id);
         if (opponents.length > 0) {
           opponents.sort((a, b) => a.cards.length - b.cards.length);
@@ -1066,11 +1081,14 @@ export class GameSession {
       }
 
       try {
-        this.discardCard(bot.id, cardToDiscard.id, targetPlayerId);
+        if (cardToDiscard) {
+          this.discardCard(bot.id, cardToDiscard.id, targetPlayerId);
+        }
       } catch (e) {
-        if (bot.cards.length > 0) {
+        const fallback = bot.cards.find(c => c.type !== 'nuke' || bot.phaseCompletedInRound) || bot.cards[0];
+        if (fallback) {
           try {
-            this.discardCard(bot.id, bot.cards[0].id);
+            this.discardCard(bot.id, fallback.id);
           } catch (err) {}
         }
       }

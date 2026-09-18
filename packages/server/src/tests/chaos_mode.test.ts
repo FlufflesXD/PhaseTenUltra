@@ -45,7 +45,7 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
         connected: true,
         score: 0,
         currentPhase: 1,
-        phaseCompletedInRound: false,
+        phaseCompletedInRound: true,
         cardCount: 6,
         cards: [
           { id: 'n1', type: 'nuke', color: 'none', value: 0, points: 50 },
@@ -278,4 +278,109 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
       /Cannot draw a Wild or Skip card/
     );
   });
+
+  test('Nuke Card: Cannot be played unless player has completed their Stage', () => {
+    const session = new GameSession(
+      'CHAOS5',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false, // NOT opened
+        cardCount: 2,
+        cards: [
+          { id: 'n1', type: 'nuke', color: 'none', value: 0, points: 50 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    assert.throws(
+      () => session.discardCard('p1', 'n1'),
+      /Cannot play Nuke before completing your Stage!/
+    );
+    // Hand should still have both cards
+    assert.strictEqual(session.players[0].cards.length, 2);
+  });
+
+  test('Special Cards: Cannot be played on hits onto table groups', () => {
+    const session = new GameSession(
+      'CHAOS6',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: true,
+        cardCount: 6,
+        cards: [
+          { id: 'n1', type: 'nuke', color: 'none', value: 0, points: 50 },
+          { id: 'j1', type: 'jester', color: 'none', value: 0, points: 25 },
+          { id: 'p2', type: 'plus_two', color: 'none', value: 0, points: 25 },
+          { id: 'p3', type: 'plus_three', color: 'none', value: 0, points: 25 },
+          { id: 's1', type: 'skip', color: 'none', value: 0, points: 15 },
+          { id: 'r1', type: 'reverse', color: 'none', value: 0, points: 15 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.allLaidDownPhases = [
+      {
+        id: 'grp1',
+        playerId: 'p1',
+        playerName: 'Player 1',
+        requirementIndex: 0,
+        type: 'set',
+        targetValue: 7,
+        cards: [
+          { id: 't1', type: 'number', color: 'red', value: 7, points: 5 },
+          { id: 't2', type: 'number', color: 'blue', value: 7, points: 5 },
+          { id: 't3', type: 'number', color: 'green', value: 7, points: 5 }
+        ]
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    for (const specialId of ['n1', 'j1', 'p2', 'p3', 's1', 'r1']) {
+      assert.throws(
+        () => session.hitCard('p1', specialId, 'grp1'),
+        /Special cards cannot be played on hits/
+      );
+    }
+  });
 });
+

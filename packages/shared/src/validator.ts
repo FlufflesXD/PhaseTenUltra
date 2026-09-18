@@ -18,8 +18,8 @@ export function validateSet(cards: Card[], minCount: number): { valid: boolean; 
     return { valid: false, error: `Need at least ${minCount} cards for this set (got ${cards.length})` };
   }
 
-  if (cards.some(c => c.type === 'skip')) {
-    return { valid: false, error: 'Skips cannot be part of a set' };
+  if (cards.some(c => c.type !== 'number' && c.type !== 'wild')) {
+    return { valid: false, error: 'Special cards cannot be part of a set' };
   }
 
   const naturalCards = cards.filter(c => c.type === 'number');
@@ -44,8 +44,8 @@ export function validateRun(
     return { valid: false, error: `Need at least ${minCount} cards for this run (got ${cards.length})` };
   }
 
-  if (cards.some(c => c.type === 'skip')) {
-    return { valid: false, error: 'Skips cannot be part of a run' };
+  if (cards.some(c => c.type !== 'number' && c.type !== 'wild')) {
+    return { valid: false, error: 'Special cards cannot be part of a run' };
   }
 
   const naturalCards = cards.filter(c => c.type === 'number');
@@ -101,8 +101,8 @@ export function validateColorGroup(
     return { valid: false, error: `Need at least ${minCount} cards for this color group (got ${cards.length})` };
   }
 
-  if (cards.some(c => c.type === 'skip')) {
-    return { valid: false, error: 'Skips cannot be part of a color group' };
+  if (cards.some(c => c.type !== 'number' && c.type !== 'wild')) {
+    return { valid: false, error: 'Special cards cannot be part of a color group' };
   }
 
   const naturalCards = cards.filter(c => c.type === 'number');
@@ -251,7 +251,7 @@ export function validateHit(
   targetGroup: LaidDownPhaseGroup,
   targetEnd?: 'low' | 'high'
 ): boolean {
-  if (card.type === 'skip') return false;
+  if (card.type !== 'number' && card.type !== 'wild') return false;
   const isWild = card.type === 'wild';
 
   if (targetGroup.type === 'set') {
