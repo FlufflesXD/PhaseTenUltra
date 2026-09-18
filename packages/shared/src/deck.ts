@@ -9,6 +9,10 @@ export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
   { type: 'time', points: 30 }
 ];
 
+export function isChaosSpecialCard(type: CardType): boolean {
+  return CHAOS_SPECIAL_CARDS.some(c => c.type === type);
+}
+
 export function createStandardDeck(mode?: GameMode): Card[] {
   const cards: Card[] = [];
   const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];

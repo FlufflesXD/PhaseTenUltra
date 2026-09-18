@@ -226,11 +226,36 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('discard_card', (data: { roomCode: string; secretToken: string; cardId: string; skipTargetPlayerId?: string }) => {
+  socket.on(
+    'discard_card',
+    (data: {
+      roomCode: string;
+      secretToken: string;
+      cardId: string;
+      skipTargetPlayerId?: string;
+      activateAbility?: boolean;
+    }) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (room && room.gameSession) {
+        try {
+          room.gameSession.discardCard(
+            data.secretToken,
+            data.cardId,
+            data.skipTargetPlayerId,
+            data.activateAbility !== false
+          );
+        } catch (err: any) {
+          socket.emit('error_message', err.message);
+        }
+      }
+    }
+  );
+
+  socket.on('resign', (data: { roomCode: string; secretToken: string }) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.gameSession) {
       try {
-        room.gameSession.discardCard(data.secretToken, data.cardId, data.skipTargetPlayerId);
+        room.gameSession.resignPlayer(data.secretToken);
       } catch (err: any) {
         socket.emit('error_message', err.message);
       }

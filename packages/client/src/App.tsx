@@ -31,6 +31,7 @@ export function App() {
     layExtraMeld,
     hitCard,
     discardCard,
+    resign,
     nextRound,
     startNewMatch,
     returnToLobby,
@@ -78,6 +79,7 @@ export function App() {
           onLayExtraMeld={layExtraMeld}
           onHitCard={hitCard}
           onDiscardCard={discardCard}
+          onResign={resign}
           onClaimSeat={claimSeat}
           onOpenRules={() => setRulesOpen(true)}
         />

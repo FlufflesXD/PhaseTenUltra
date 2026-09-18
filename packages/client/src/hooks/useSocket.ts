@@ -180,10 +180,10 @@ export function useSocket() {
     socketRef.current.emit('hit_card', { roomCode: code, secretToken, cardId, targetGroupId, targetEnd });
   }, [gameState, roomState, secretToken]);
 
-  const discardCard = useCallback((cardId: string, skipTargetPlayerId?: string) => {
+  const discardCard = useCallback((cardId: string, skipTargetPlayerId?: string, activateAbility?: boolean) => {
     const code = gameState?.roomCode || roomState?.code;
     if (!socketRef.current || !code) return;
-    socketRef.current.emit('discard_card', { roomCode: code, secretToken, cardId, skipTargetPlayerId });
+    socketRef.current.emit('discard_card', { roomCode: code, secretToken, cardId, skipTargetPlayerId, activateAbility });
   }, [gameState, roomState, secretToken]);
 
   const nextRound = useCallback(() => {
@@ -230,7 +230,14 @@ export function useSocket() {
     });
   }, [gameState, roomState, secretToken]);
 
+  const resign = useCallback(() => {
+    const code = gameState?.roomCode || roomState?.code;
+    if (!socketRef.current || !code) return;
+    socketRef.current.emit('resign', { roomCode: code, secretToken });
+  }, [gameState, roomState, secretToken]);
+
   return {
+    socket: socketRef.current,
     connected,
     secretToken,
     playerName,
@@ -255,6 +262,7 @@ export function useSocket() {
     layExtraMeld,
     hitCard,
     discardCard,
+    resign,
     nextRound,
     startNewMatch,
     returnToLobby,

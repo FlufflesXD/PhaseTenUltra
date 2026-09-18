@@ -11,7 +11,8 @@ import {
   sortGroupCards,
   validateHit,
   findValidPhaseCombination,
-  findSingleRequirementMatch
+  findSingleRequirementMatch,
+  isChaosSpecialCard
 } from '@phase-ten/shared';
 import { CardView } from './CardView.js';
 import { playSpecialSound } from '../utils/audio.js';
@@ -27,7 +28,8 @@ interface GameTableProps {
   onLayRequirement: (reqIndex: number, cardIds: string[]) => void;
   onLayExtraMeld: (cardIds: string[]) => void;
   onHitCard: (cardId: string | string[], targetGroupId: string, targetEnd?: 'low' | 'high') => void;
-  onDiscardCard: (cardId: string, targetPlayerId?: string) => void;
+  onDiscardCard: (cardId: string, targetPlayerId?: string, activateAbility?: boolean) => void;
+  onResign: () => void;
   onClaimSeat?: (targetPlayerId: string) => void;
   onOpenRules: () => void;
 }
@@ -44,6 +46,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   onLayExtraMeld,
   onHitCard,
   onDiscardCard,
+  onResign,
   onClaimSeat,
   onOpenRules
 }) => {
@@ -380,24 +383,26 @@ export const GameTable: React.FC<GameTableProps> = ({
     isMyTurn &&
     (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
 
-  const eligibleTimeTargets = useMemo(() => {
-    return gameState.players.filter(
-      p => p.id !== me?.id && !p.isSpectator && p.currentPhase > 1 && p.currentPhase < 10
-    );
+  const opponents = useMemo(() => {
+    return gameState.players.filter(p => p.id !== me?.id && !p.isSpectator);
   }, [gameState.players, me?.id]);
+
+  const eligibleTimeTargets = useMemo(() => {
+    return opponents.filter(p => p.currentPhase > 1 && p.currentPhase < 10);
+  }, [opponents]);
 
   const hasEligibleTimeTargets = eligibleTimeTargets.length > 0;
 
   const handleOpponentSwapClick = (targetPlayer: PlayerPublic) => {
     if (!isJesterSelected || !selectedCard) return;
-    onDiscardCard(selectedCard.id, targetPlayer.id);
+    onDiscardCard(selectedCard.id, targetPlayer.id, true);
     clearSelection();
   };
 
   const handleOpponentTimeClick = (targetPlayer: PlayerPublic) => {
     if (!isTimeSelected || !selectedCard) return;
     if (targetPlayer.currentPhase <= 1 || targetPlayer.currentPhase >= 10) return;
-    onDiscardCard(selectedCard.id, targetPlayer.id);
+    onDiscardCard(selectedCard.id, targetPlayer.id, true);
     clearSelection();
   };
 
@@ -429,6 +434,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleCardClick = (card: Card) => {
+    if (me?.isResigned) return;
     setSelectedCardId(prev => (prev === card.id ? null : card.id));
   };
 
@@ -437,9 +443,15 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleDraw = (source: 'deck' | 'discard') => {
-    if (!isMyTurn || gameState.turnStage !== 'draw') return;
+    if (me?.isResigned || !isMyTurn || gameState.turnStage !== 'draw') return;
     if (source === 'discard' && gameState.topDiscard?.type !== 'number') return;
     onDrawCard(source);
+  };
+
+  const handleNormalDiscard = () => {
+    if (me?.isResigned || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    onDiscardCard(selectedCard.id, undefined, false);
+    clearSelection();
   };
 
   const handleDiscardSelected = (explicitTargetId?: string) => {
@@ -448,11 +460,18 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (selectedCard.type === 'time') {
       const targetId = explicitTargetId || (hasEligibleTimeTargets ? eligibleTimeTargets[0].id : undefined);
       if (!targetId) return;
-      onDiscardCard(selectedCard.id, targetId);
+      onDiscardCard(selectedCard.id, targetId, true);
       clearSelection();
       return;
     }
-    onDiscardCard(selectedCard.id, explicitTargetId);
+    if (selectedCard.type === 'jester') {
+      const targetId = explicitTargetId || (opponents.length > 0 ? opponents[0].id : undefined);
+      if (!targetId) return;
+      onDiscardCard(selectedCard.id, targetId, true);
+      clearSelection();
+      return;
+    }
+    onDiscardCard(selectedCard.id, explicitTargetId, true);
     clearSelection();
   };
 
@@ -597,6 +616,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <span>{player.name}</span>
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
+                {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
               </div>
               <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -773,6 +793,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <span>{player.name}</span>
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
+                {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
               </div>
               <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -928,6 +949,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>{player.name}</span>
               {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
               {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
+              {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
             </div>
             <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
               <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -1050,7 +1072,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>🔗</span>
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v4.9</span>
+            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.0</span>
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
               <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
@@ -1272,17 +1294,13 @@ export const GameTable: React.FC<GameTableProps> = ({
                             handleDraw('discard');
                           }
                         } else if (isMyTurn && selectedCard && gameState.turnStage !== 'draw') {
-                          if (selectedCard.type === 'nuke' && !me?.phaseCompletedInRound) return;
-                          if (selectedCard.type === 'time' && !hasEligibleTimeTargets) return;
-                          handleDiscardSelected();
+                          handleNormalDiscard();
                         }
                       }}
                       className={`relative z-10 animate-card-land ${
                         isMyTurn &&
                         ((gameState.turnStage === 'draw' && displayedDiscardCard?.type === 'number') ||
-                          (selectedCard &&
-                            (selectedCard.type !== 'nuke' || me?.phaseCompletedInRound) &&
-                            (selectedCard.type !== 'time' || hasEligibleTimeTargets)))
+                          (selectedCard && gameState.turnStage !== 'draw'))
                           ? 'cursor-pointer hover:scale-105'
                           : ''
                       }`}
@@ -1322,6 +1340,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 >
                   <span>{me.name} (You)</span>
                   {me.isSkipped && <span className="text-[10px] text-red-300 font-bold">[SKIPPED]</span>}
+                  {me.isResigned && <span className="text-[10px] text-rose-400 font-extrabold">[RESIGNED]</span>}
                 </div>
                 <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-2">
                   <span className="font-semibold">Stage {me.currentPhase} {me.phaseCompletedInRound ? '✓' : ''}</span>
@@ -1443,37 +1462,69 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             )}
 
-            {/* Sort Controls & Deselect */}
-            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 shadow-lg text-xs">
-              <button
-                type="button"
-                onClick={() => setLocalHand(sortCardsByValue(localHand))}
-                className="px-2.5 py-0.5 rounded text-xs bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
-              >
-                Sort: Value
-              </button>
-              <button
-                type="button"
-                onClick={() => setLocalHand(sortCardsByColor(localHand))}
-                className="px-2.5 py-0.5 rounded text-xs bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
-              >
-                Sort: Color
-              </button>
-              {selectedCard && (
+            {/* Sort Controls, Deselect, and Resign */}
+            {me?.isResigned ? (
+              <div className="flex items-center gap-1.5 bg-red-950/90 border border-red-500/80 px-4 py-1 rounded-full text-xs text-red-200 font-bold shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                <span>🏳️</span>
+                <span>You have resigned this round. Your turns are skipped until next round.</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 shadow-lg text-xs">
                 <button
                   type="button"
-                  onClick={clearSelection}
-                  className="text-neutral-400 hover:text-white text-xs underline ml-1 cursor-pointer"
+                  onClick={() => setLocalHand(sortCardsByValue(localHand))}
+                  className="px-2.5 py-0.5 rounded text-xs bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
                 >
-                  Deselect
+                  Sort: Value
                 </button>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setLocalHand(sortCardsByColor(localHand))}
+                  className="px-2.5 py-0.5 rounded text-xs bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
+                >
+                  Sort: Color
+                </button>
+                {selectedCard && isMyTurn && gameState.turnStage !== 'draw' && (
+                  <button
+                    type="button"
+                    onClick={handleNormalDiscard}
+                    className="px-2.5 py-0.5 rounded text-xs bg-red-600 hover:bg-red-500 text-white cursor-pointer transition-colors font-bold flex items-center gap-1 shadow-md ml-1"
+                  >
+                    <span>🗑️</span>
+                    <span>Discard</span>
+                  </button>
+                )}
+                {selectedCard && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="text-neutral-400 hover:text-white text-xs underline ml-1 cursor-pointer"
+                  >
+                    Deselect
+                  </button>
+                )}
+                {!isSpectator && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Resign from this round? You will not be able to play and your turns will be skipped until next round.')) {
+                        onResign();
+                      }
+                    }}
+                    title="Resign from this round"
+                    className="px-2 py-0.5 rounded text-[11px] bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-white font-medium cursor-pointer transition-colors flex items-center gap-1 ml-1"
+                  >
+                    <span>🏳️</span>
+                    <span>Resign</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Client Hand: Curved Arc in Perspective */}
           <div className="w-full max-w-5xl px-4 flex items-end justify-center overflow-visible pb-1 pt-2">
-            <div className="flex items-end justify-center">
+            <div className={`flex items-end justify-center ${me?.isResigned ? 'opacity-50 pointer-events-none' : ''}`}>
               {localHand.map((c, i) => {
                 const count = localHand.length;
                 const offset = i - (count - 1) / 2;
@@ -1497,63 +1548,96 @@ export const GameTable: React.FC<GameTableProps> = ({
                   >
                     <CardView card={c} size="lg" isSelected={isSelected} isSelectable={true} />
 
-                    {/* Low-opacity action button right on the selected card */}
+                    {/* Action buttons right on the selected card */}
                     {isSelected && isMyTurn && gameState.turnStage !== 'draw' && (
-                      c.type === 'nuke' && !me?.phaseCompletedInRound ? (
-                        <div
-                          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 bg-neutral-950/95 border border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.5)] text-amber-300 font-extrabold text-[11px] py-1.5 px-3 rounded-lg backdrop-blur-md flex items-center justify-center gap-1.5 whitespace-nowrap select-none pointer-events-none"
-                        >
-                          <span>🔒</span>
-                          <span>Open Stage First</span>
-                        </div>
-                      ) : c.type === 'time' && !hasEligibleTimeTargets ? (
-                        <div
-                          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 bg-neutral-950/95 border border-emerald-500/80 shadow-[0_0_15px_rgba(16,185,129,0.5)] text-emerald-300 font-extrabold text-[11px] py-1.5 px-3 rounded-lg backdrop-blur-md flex items-center justify-center gap-1.5 whitespace-nowrap select-none pointer-events-none"
-                        >
-                          <span>🔒</span>
-                          <span>No Targets</span>
+                      isChaosSpecialCard(c.type) ? (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-1.5 bg-black/85 backdrop-blur-md p-2 rounded-xl border border-white/20 shadow-2xl select-none">
+                          {/* Ability Option or Lock Indicator */}
+                          {c.type === 'nuke' && !me?.phaseCompletedInRound ? (
+                            <div
+                              title="Complete and lay down your Stage before detonating Nuke"
+                              className="bg-neutral-900/90 border border-amber-500/50 text-amber-300 font-extrabold text-[10px] py-1 px-2 rounded-lg flex items-center justify-center gap-1 select-none whitespace-nowrap"
+                            >
+                              <span>🔒</span>
+                              <span>Stage Locked</span>
+                            </div>
+                          ) : c.type === 'time' && !hasEligibleTimeTargets ? (
+                            <div
+                              title="No opponents on Stage 2–9"
+                              className="bg-neutral-900/90 border border-emerald-500/50 text-emerald-300 font-extrabold text-[10px] py-1 px-2 rounded-lg flex items-center justify-center gap-1 select-none whitespace-nowrap"
+                            >
+                              <span>🔒</span>
+                              <span>No Targets</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDiscardSelected();
+                              }}
+                              className={`py-1 px-2.5 rounded-lg border text-white font-black text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap ${
+                                c.type === 'nuke'
+                                  ? 'bg-amber-600/90 hover:bg-amber-600 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.8)]'
+                                  : c.type === 'jester'
+                                  ? 'bg-purple-600/90 hover:bg-purple-600 border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.8)]'
+                                  : c.type === 'redo'
+                                  ? 'bg-pink-600/90 hover:bg-pink-600 border-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.8)]'
+                                  : c.type === 'time'
+                                  ? 'bg-emerald-600/90 hover:bg-emerald-600 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]'
+                                  : 'bg-indigo-600/90 hover:bg-indigo-600 border-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.8)]'
+                              }`}
+                            >
+                              <span>
+                                {c.type === 'nuke'
+                                  ? '☢️'
+                                  : c.type === 'jester'
+                                  ? '🃏'
+                                  : c.type === 'redo'
+                                  ? '🔄'
+                                  : c.type === 'time'
+                                  ? '⏳'
+                                  : '⚡'}
+                              </span>
+                              <span>
+                                {c.type === 'nuke'
+                                  ? 'DETONATE'
+                                  : c.type === 'jester'
+                                  ? 'SWAP HAND'
+                                  : c.type === 'redo'
+                                  ? 'REDO HAND'
+                                  : c.type === 'time'
+                                  ? 'TIME WARP'
+                                  : 'USE ABILITY'}
+                              </span>
+                            </button>
+                          )}
+
+                          {/* Regular Discard Button - ALWAYS available on special cards */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNormalDiscard();
+                            }}
+                            className="py-1 px-2.5 rounded-lg border border-red-500/80 bg-red-600/85 hover:bg-red-600 active:scale-95 text-white font-black text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[0_0_10px_rgba(239,68,68,0.7)] whitespace-nowrap"
+                          >
+                            <span>🗑️</span>
+                            <span>DISCARD</span>
+                          </button>
                         </div>
                       ) : (
+                        /* Standard Card */
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDiscardSelected();
+                            handleNormalDiscard();
                           }}
-                          className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 ${
-                            c.type === 'nuke'
-                              ? 'bg-amber-600/85 hover:bg-amber-600/95 border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.85)]'
-                              : c.type === 'jester'
-                              ? 'bg-purple-600/85 hover:bg-purple-600/95 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.85)]'
-                              : c.type === 'redo'
-                              ? 'bg-pink-600/85 hover:bg-pink-600/95 border-pink-400/80 shadow-[0_0_15px_rgba(236,72,153,0.85)]'
-                              : c.type === 'time'
-                              ? 'bg-emerald-600/85 hover:bg-emerald-600/95 border-emerald-400/80 shadow-[0_0_15px_rgba(16,185,129,0.85)]'
-                              : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)]'
-                          } active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg border backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none`}
+                          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 bg-red-600/75 hover:bg-red-600/95 border border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)] active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none"
                         >
-                          <span className="text-xs">
-                            {c.type === 'nuke'
-                              ? '☢️'
-                              : c.type === 'jester'
-                              ? '🃏'
-                              : c.type === 'redo'
-                              ? '🔄'
-                              : c.type === 'time'
-                              ? '⏳'
-                              : '🗑️'}
-                          </span>
-                          <span>
-                            {c.type === 'nuke'
-                              ? 'DETONATE'
-                              : c.type === 'jester'
-                              ? 'SWAP / DISCARD'
-                              : c.type === 'redo'
-                              ? 'REDO HAND'
-                              : c.type === 'time'
-                              ? 'TIME WARP'
-                              : 'DISCARD'}
-                          </span>
+                          <span className="text-xs">🗑️</span>
+                          <span>DISCARD</span>
                         </button>
                       )
                     )}

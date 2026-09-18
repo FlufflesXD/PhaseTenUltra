@@ -592,5 +592,212 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(session.players[2].laidDownPhases.length, 0);
     assert.strictEqual(session.players[2].cards.length, 2, 'Meld cards returned to hand');
   });
+
+  test('Special Cards: Can always be discarded normally with activateAbility = false to prevent softlocks', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'CHAOS_NORMAL_DISCARD',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false, // NOT opened stage!
+        cardCount: 2,
+        cards: [
+          { id: 'nuke_1', type: 'nuke', color: 'none', value: 0, points: 50 },
+          { id: 'time_1', type: 'time', color: 'none', value: 0, points: 30 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1, // Stage 1 (normally immune)
+        phaseCompletedInRound: false,
+        cardCount: 5,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // 1. Discarding Nuke with activateAbility = false succeeds even when stage is NOT completed!
+    session.discardCard('p1', 'nuke_1', undefined, false);
+    assert.strictEqual(lastAction?.type, 'discard', 'Action emitted must be standard discard, NOT nuke');
+    assert.strictEqual(session.players[0].cards.length, 1);
+    assert.strictEqual(session.players[1].cards.length, 0); // Opponent hand was not wiped by nuke
+
+    // Advance turn back to p1 for testing Time card
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // 2. Discarding Time with activateAbility = false succeeds even when opponent is on Stage 1!
+    // Also tests that player emptying their hand ends the round and wins!
+    session.discardCard('p1', 'time_1', undefined, false);
+    assert.strictEqual(lastAction?.type, 'discard', 'Action emitted must be standard discard, NOT time');
+    assert.strictEqual(session.players[0].cards.length, 0);
+    assert.strictEqual(session.status, 'round_end', 'Player emptying hand must end the round');
+  });
+
+  test('Time Card: Gracefully falls back to normal discard when no opponents are eligible and no target is given', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'CHAOS_TIME_FALLBACK',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 2,
+        phaseCompletedInRound: true,
+        cardCount: 1,
+        cards: [
+          { id: 'time_last', type: 'time', color: 'none', value: 0, points: 30 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2 (Stage 1)',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1, // Immune
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Discarding without explicit target when no targets are eligible does NOT throw or softlock!
+    session.discardCard('p1', 'time_last');
+    assert.strictEqual(lastAction?.type, 'discard');
+    assert.strictEqual(session.players[0].cards.length, 0);
+    assert.strictEqual(session.status, 'round_end');
+  });
+
+  test('Resignation: Player can resign, turns are skipped, actions blocked, and resets next round', () => {
+    const session = new GameSession(
+      'RESIGN_TEST',
+      { turnTimerSeconds: 0, gameMode: 'classic' },
+      () => {},
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'Alice',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 },
+          { id: 'c2', type: 'number', color: 'red', value: 2, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'Bob',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c3', type: 'number', color: 'blue', value: 3, points: 5 },
+          { id: 'c4', type: 'number', color: 'blue', value: 4, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'draw';
+
+    // Alice resigns while it is her turn
+    session.resignPlayer('p1_tok');
+
+    assert.strictEqual(session.players[0].isResigned, true, 'Alice should be marked as resigned');
+    // Turn should have automatically advanced to Bob (index 1)
+    assert.strictEqual(session.currentTurnIndex, 1, 'Turn should advance to Bob');
+    assert.strictEqual(session.turnStage, 'draw', 'Bob turn stage should be draw');
+
+    // Alice attempts to draw while resigned -> should fail
+    assert.throws(() => {
+      session.drawCard('p1_tok', 'deck');
+    }, /resigned/i);
+
+    // Bob draws a card
+    session.drawPile = [{ id: 'd1', type: 'number', color: 'green', value: 5, points: 5 }];
+    session.drawCard('p2_tok', 'deck');
+    assert.strictEqual(session.turnStage, 'play');
+
+    // Bob discards to finish turn
+    session.discardCard('p2_tok', 'c3');
+
+    // When Bob finishes turn, it tries to go to Alice (index 0), but Alice is resigned!
+    // GameSession automatically advances past Alice back to Bob (index 1)!
+    assert.strictEqual(session.currentTurnIndex, 1, 'Alice turn was skipped, so Bob is active again');
+
+    // Start a new round: verify isResigned resets to false
+    session.startRound();
+    assert.strictEqual(session.players[0].isResigned, false, 'Alice resignation should reset on new round');
+    assert.strictEqual(session.players[1].isResigned, false, 'Bob should not be resigned');
+  });
 });
 

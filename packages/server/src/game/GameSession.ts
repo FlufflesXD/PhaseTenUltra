@@ -119,6 +119,7 @@ export class GameSession {
       player.phaseCompletedInRound = false;
       player.laidDownPhases = [];
       player.isSkipped = false;
+      player.isResigned = false;
       player.cards = [];
       player.cardCount = 0;
     }
@@ -173,7 +174,19 @@ export class GameSession {
   }
 
   private startTurn(): void {
+    const active = this.getActivePlayers();
+    const nonResigned = active.filter(p => !p.isResigned);
+    if (nonResigned.length === 0) {
+      this.endRound();
+      return;
+    }
+
     const current = this.getCurrentPlayer();
+
+    if (current.isResigned) {
+      this.advanceTurn();
+      return;
+    }
 
     if (current.isSkipped) {
       current.isSkipped = false;
@@ -237,14 +250,19 @@ export class GameSession {
       const candidates = eligible.length > 0 ? eligible : current.cards;
       const highestCard = candidates.slice().sort((a, b) => b.points - a.points)[0];
       if (highestCard) {
-        this.discardCard(current.id, highestCard.id);
+        const canUseAbility =
+          (highestCard.type !== 'nuke' || current.phaseCompletedInRound) &&
+          (highestCard.type !== 'time' || hasEligibleTimeTargets);
+        this.discardCard(current.id, highestCard.id, undefined, canUseAbility);
       }
     }
   }
 
   public drawCard(playerId: string, source: 'deck' | 'discard'): Card {
+    const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
+    if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
-    if (current.id !== playerId) throw new Error('Not your turn');
+    if (current.id !== playerId && current.secretToken !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'draw') throw new Error('Already drawn a card this turn');
 
     this.ensureDrawPileHasCards();
@@ -286,8 +304,10 @@ export class GameSession {
   }
 
   public layDownPhase(playerId: string, cardGroups: Card[][]): void {
+    const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
+    if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
-    if (current.id !== playerId) throw new Error('Not your turn');
+    if (current.id !== playerId && current.secretToken !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw a card first');
     if (current.phaseCompletedInRound) throw new Error('You have already laid down your phase this round');
 
@@ -462,8 +482,10 @@ export class GameSession {
     targetGroupId: string,
     targetEnd?: 'low' | 'high'
   ): void {
+    const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
+    if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
-    if (current.id !== playerId) throw new Error('Not your turn');
+    if (current.id !== playerId && current.secretToken !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw a card first');
     if (!current.phaseCompletedInRound) {
       throw new Error('Must lay down your phase before hitting on other groups');
@@ -554,9 +576,16 @@ export class GameSession {
     this.onStateChange();
   }
 
-  public discardCard(playerId: string, cardId: string, _skipTargetPlayerId?: string): void {
+  public discardCard(
+    playerId: string,
+    cardId: string,
+    _skipTargetPlayerId?: string,
+    activateAbility: boolean = true
+  ): void {
+    const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
+    if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
-    if (current.id !== playerId) throw new Error('Not your turn');
+    if (current.id !== playerId && current.secretToken !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play' && this.turnStage !== 'discard') {
       throw new Error('Cannot discard before drawing');
     }
@@ -565,21 +594,25 @@ export class GameSession {
     if (cardIndex === -1) throw new Error('Card not in hand');
     const card = current.cards[cardIndex];
 
-    if (card.type === 'nuke' && !current.phaseCompletedInRound) {
-      throw new Error('Cannot play Nuke before completing your Stage!');
-    }
+    let shouldActivate = activateAbility;
 
-    if (card.type === 'time') {
-      const active = this.getActivePlayers();
-      const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
-      if (eligible.length === 0) {
-        throw new Error('No eligible targets for Time card (all opponents on Stage 1 or Stage 10)');
+    if (shouldActivate) {
+      if (card.type === 'nuke' && !current.phaseCompletedInRound) {
+        throw new Error('Cannot play Nuke before completing your Stage!');
       }
-      if (_skipTargetPlayerId) {
-        const target = active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id);
-        if (!target) throw new Error('Target player not found');
-        if (target.currentPhase <= 1 || target.currentPhase >= 10) {
-          throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
+
+      if (card.type === 'time') {
+        const active = this.getActivePlayers();
+        const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
+        if (_skipTargetPlayerId) {
+          const target = active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id);
+          if (!target) throw new Error('Target player not found');
+          if (target.currentPhase <= 1 || target.currentPhase >= 10) {
+            throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
+          }
+        } else if (eligible.length === 0) {
+          // If no target was specified and no eligible targets exist, gracefully fall back to normal discard
+          shouldActivate = false;
         }
       }
     }
@@ -589,7 +622,22 @@ export class GameSession {
 
     this.discardPile.push(card);
 
-    if (card.type === 'skip') {
+    if (!shouldActivate) {
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `${current.name} discarded a card.`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'discard',
+        playerId: current.id,
+        playerName: current.name,
+        card
+      });
+    } else if (card.type === 'skip') {
       // UNO rule: Always skip the nearest player in direction order (no choosing)
       const active = this.getActivePlayers();
       const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
@@ -910,18 +958,18 @@ export class GameSession {
     this.startTurn();
   }
 
-  private endRound(roundWinner: GamePlayerInternal): void {
+  private endRound(roundWinner?: GamePlayerInternal): void {
     if (this.turnTimerInterval) {
       clearInterval(this.turnTimerInterval);
       this.turnTimerInterval = undefined;
     }
 
     this.status = 'round_end';
-    this.roundWinnerId = roundWinner.id;
+    this.roundWinnerId = roundWinner ? roundWinner.id : undefined;
 
     const maxPhase = this.phaseDefinitions.length;
     for (const player of this.getActivePlayers()) {
-      if (player.id !== roundWinner.id) {
+      if (!roundWinner || player.id !== roundWinner.id) {
         const handPoints = player.cards.reduce((sum, c) => sum + c.points, 0);
         player.score += handPoints;
       }
@@ -939,8 +987,10 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'round_end',
-      message: `${roundWinner.name} went out. Round ${this.roundNumber} ended.`,
-      playerId: roundWinner.id,
+      message: roundWinner
+        ? `${roundWinner.name} went out. Round ${this.roundNumber} ended.`
+        : `All players resigned. Round ${this.roundNumber} ended.`,
+      playerId: roundWinner ? roundWinner.id : undefined,
       timestamp: Date.now()
     });
 
@@ -1066,7 +1116,8 @@ export class GameSession {
         completedAllPhases: p.completedAllPhases,
         cardCount: p.cards.length,
         laidDownPhases: p.laidDownPhases,
-        isSkipped: p.isSkipped
+        isSkipped: p.isSkipped,
+        isResigned: p.isResigned
       })),
       allLaidDownPhases: this.allLaidDownPhases,
       winnerId: this.winnerId,
@@ -1204,17 +1255,16 @@ export class GameSession {
 
       try {
         if (cardToDiscard) {
-          this.discardCard(bot.id, cardToDiscard.id, targetPlayerId);
+          const canUseAbility =
+            (cardToDiscard.type !== 'nuke' || bot.phaseCompletedInRound) &&
+            (cardToDiscard.type !== 'time' || eligibleTimeTargets.length > 0);
+          this.discardCard(bot.id, cardToDiscard.id, targetPlayerId, canUseAbility);
         }
       } catch (e) {
-        const fallback = bot.cards.find(c => {
-          if (c.type === 'nuke' && !bot.phaseCompletedInRound) return false;
-          if (c.type === 'time' && eligibleTimeTargets.length === 0) return false;
-          return true;
-        }) || bot.cards[0];
+        const fallback = bot.cards[0];
         if (fallback) {
           try {
-            this.discardCard(bot.id, fallback.id);
+            this.discardCard(bot.id, fallback.id, undefined, false);
           } catch (err) {}
         }
       }
@@ -1286,6 +1336,39 @@ export class GameSession {
     this.resumeTimer();
     this.onStateChange();
     return player;
+  }
+
+  public resignPlayer(secretTokenOrId: string): void {
+    const player = this.players.find(p => p.secretToken === secretTokenOrId || p.id === secretTokenOrId);
+    if (!player || player.isSpectator || player.isResigned) return;
+
+    player.isResigned = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `🏳️ ${player.name} resigned for this round. Turns will be skipped until next round.`,
+      playerId: player.id,
+      timestamp: Date.now()
+    });
+
+    const active = this.getActivePlayers();
+    const nonResigned = active.filter(p => !p.isResigned);
+    if (nonResigned.length === 0) {
+      this.endRound();
+      return;
+    }
+
+    const current = this.getCurrentPlayer();
+    if (current && current.id === player.id) {
+      if (this.turnTimerInterval) {
+        clearInterval(this.turnTimerInterval);
+        this.turnTimerInterval = undefined;
+      }
+      this.advanceTurn();
+    } else {
+      this.onStateChange();
+    }
   }
 
   public pauseTimer(): void {

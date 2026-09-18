@@ -63,6 +63,7 @@ export interface PlayerPublic {
   cardCount: number;
   laidDownPhases: LaidDownPhaseGroup[];
   isSkipped: boolean;
+  isResigned?: boolean;
 }
 
 export interface PlayerPrivate extends PlayerPublic {
