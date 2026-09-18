@@ -380,25 +380,25 @@ export const GameTable: React.FC<GameTableProps> = ({
         key={group.id}
         data-group-id={group.id}
         onClick={() => handleTableGroupClick(group)}
-        className={`relative border p-1 rounded-lg flex flex-col gap-0.5 transition-all pointer-events-auto shadow-xl backdrop-blur-md shrink-0 select-none ${
+        className={`relative border p-1 sm:p-1.5 rounded-xl flex flex-col gap-1 transition-all pointer-events-auto shadow-2xl backdrop-blur-md shrink-0 select-none ${
           canHit
-            ? 'border-amber-400 bg-amber-950/85 shadow-[0_0_15px_rgba(251,191,36,0.8)] cursor-pointer ring-2 ring-amber-300 animate-pulse'
-            : 'border-white/20 bg-black/80 hover:border-white/40 cursor-pointer'
+            ? 'border-amber-400 bg-amber-950/85 shadow-[0_0_18px_rgba(251,191,36,0.85)] cursor-pointer ring-2 ring-amber-300 animate-pulse'
+            : 'border-white/20 bg-black/85 hover:border-white/40 cursor-pointer'
         }`}
       >
-        <div className="text-[9px] text-neutral-300 flex justify-between items-center gap-1.5 font-bold">
+        <div className="text-[10px] sm:text-xs text-neutral-200 flex justify-between items-center gap-2 font-bold px-1">
           <span>{groupTitle}</span>
           <span className="text-neutral-400 font-normal">({group.cards.length})</span>
         </div>
-        <div className="flex items-center -space-x-5 overflow-visible py-0.5">
+        <div className="flex items-center -space-x-7 sm:-space-x-8 md:-space-x-9 overflow-visible py-0.5">
           {sortedCards.map(c => (
-            <div key={c.id} className="shrink-0 scale-90 origin-left hover:scale-100 transition-transform">
+            <div key={c.id} className="shrink-0 hover:scale-105 hover:z-20 transition-transform">
               <CardView card={c} size="sm" isSelectable={false} />
             </div>
           ))}
         </div>
         {canHit && (
-          <div className="bg-gradient-to-r from-amber-400 to-yellow-300 text-black text-[9px] font-extrabold py-0.5 px-1 rounded shadow text-center">
+          <div className="bg-gradient-to-r from-amber-400 to-yellow-300 text-black text-[10px] sm:text-xs font-black py-0.5 sm:py-1 px-1.5 rounded shadow text-center">
             HIT HERE
           </div>
         )}
@@ -414,63 +414,36 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (!player) return null;
     const isPlayerTurn = gameState.currentTurnPlayerId === player.id;
     const cardCount = player.cardCount || 0;
-    const visibleCardsCount = Math.min(cardCount, 14);
+    const visibleCardsCount = Math.min(10, cardCount);
 
     if (position === 'top') {
       return (
         <div
           key={player.id}
-          className="absolute top-2 sm:top-3 md:top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-20 pointer-events-auto select-none max-w-[95vw]"
+          className="absolute top-12 sm:top-13 md:top-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-20 pointer-events-auto select-none max-w-[95vw]"
         >
-          {/* Top Row: Fanned cards and Player Banner side by side */}
+          {/* Top Row: Player Banner & Card Count */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* 3D Horizontal Fanned Cards with Floor Reflection */}
-            <div
-              data-opponent-id={player.id}
-              className="card-reflect flex items-center justify-center pointer-events-none"
-              style={{
-                transform: 'perspective(900px) rotateX(28deg)',
-                transformStyle: 'preserve-3d'
-              }}
-            >
-              {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
-                const rot = (i - (visibleCardsCount - 1) / 2) * 2;
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      transform: `rotateZ(${rot}deg)`,
-                      marginLeft: i === 0 ? 0 : '-32px',
-                      zIndex: i + 1
-                    }}
-                    className="w-9 h-13 sm:w-11 sm:h-16 max-h-[8vh] aspect-[5/7] rounded-md border border-neutral-700/80 overflow-hidden bg-neutral-900 shadow-xl shrink-0"
-                  >
-                    <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
-                  </div>
-                );
-              })}
-            </div>
-
             {/* Player Banner */}
             <div
               className={`flex flex-col rounded-lg overflow-hidden border transition-all shrink-0 ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
-                  : 'border-white/20'
+                  : 'border-white/20 shadow-lg'
               }`}
             >
               <div
-                className={`px-2.5 sm:px-3 py-0.5 sm:py-1 font-bold text-[11px] sm:text-xs flex items-center gap-1.5 shadow ${
+                className={`px-3 py-0.5 sm:py-1 font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow ${
                   isPlayerTurn
                     ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-extrabold'
                     : 'bg-gradient-to-r from-purple-700 to-indigo-600 text-white'
                 }`}
               >
                 <span>{player.name}</span>
-                {player.isBot && <span className="text-[9px] opacity-80">[BOT]</span>}
-                {player.isSkipped && <span className="text-[9px] text-red-300 font-bold">[SKIPPED]</span>}
+                {player.isBot && <span className="text-[10px] opacity-80">[BOT]</span>}
+                {player.isSkipped && <span className="text-[10px] text-red-300 font-bold">[SKIPPED]</span>}
               </div>
-              <div className="bg-black/80 px-2 py-0.5 text-[9px] sm:text-[10px] text-neutral-300 flex items-center justify-between gap-2">
+              <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-3">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
                   <span className="text-amber-400 font-bold">({gameState.turnTimeRemaining}s)</span>
@@ -479,8 +452,8 @@ export const GameTable: React.FC<GameTableProps> = ({
             </div>
 
             {/* Card count pill */}
-            <div className="flex items-center gap-1 bg-white/95 text-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg font-bold text-xs shadow-lg border border-neutral-300 shrink-0">
-              <span className="text-xs sm:text-sm">🂠</span>
+            <div className="flex items-center gap-1.5 bg-white/95 text-black px-2.5 py-1 rounded-lg font-bold text-xs sm:text-sm shadow-xl border border-neutral-300 shrink-0">
+              <span className="text-sm sm:text-base">🂠</span>
               <span>{cardCount}</span>
             </div>
 
@@ -494,9 +467,36 @@ export const GameTable: React.FC<GameTableProps> = ({
             )}
           </div>
 
+          {/* 3D Horizontal Fanned Cards with Floor Reflection */}
+          <div
+            data-opponent-id={player.id}
+            className="card-reflect flex items-center justify-center pointer-events-none my-0.5"
+            style={{
+              transform: 'perspective(900px) rotateX(24deg)',
+              transformStyle: 'preserve-3d'
+            }}
+          >
+            {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
+              const rot = (i - (visibleCardsCount - 1) / 2) * 2.2;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    transform: `rotateZ(${rot}deg)`,
+                    marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-46px' : '-40px',
+                    zIndex: i + 1
+                  }}
+                  className="w-13 h-18 sm:w-16 sm:h-22 md:w-18 md:h-25 max-h-[12vh] aspect-[5/7] rounded-lg border border-neutral-600 overflow-hidden bg-neutral-900 shadow-2xl shrink-0"
+                >
+                  <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                </div>
+              );
+            })}
+          </div>
+
           {/* Top Player Laid Down Melds in Front of their deck */}
           {player.laidDownPhases && player.laidDownPhases.length > 0 && (
-            <div className="mt-1 flex items-center justify-center gap-1.5 sm:gap-2 pointer-events-auto max-w-full overflow-x-auto px-2">
+            <div className="mt-0.5 flex items-center justify-center gap-2 pointer-events-auto max-w-full overflow-x-auto px-2">
               {player.laidDownPhases.map(group => {
                 const canHit = Boolean(
                   me?.phaseCompletedInRound &&
@@ -580,10 +580,10 @@ export const GameTable: React.FC<GameTableProps> = ({
                     key={i}
                     style={{
                       transform: `rotateZ(${rot}deg)`,
-                      marginTop: i === 0 ? 0 : '-52px',
+                      marginTop: i === 0 ? 0 : '-48px',
                       zIndex: i + 1
                     }}
-                    className="w-16 h-24 sm:w-18 sm:h-26 rounded-md border border-neutral-700/80 overflow-hidden bg-neutral-900 shadow-xl"
+                    className="w-14 h-20 sm:w-16 sm:h-22 md:w-18 md:h-25 max-h-[12vh] aspect-[5/7] rounded-lg border border-neutral-600 overflow-hidden bg-neutral-900 shadow-2xl"
                   >
                     <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                   </div>
@@ -694,10 +694,10 @@ export const GameTable: React.FC<GameTableProps> = ({
                   key={i}
                   style={{
                     transform: `rotateZ(${rot}deg)`,
-                    marginTop: i === 0 ? 0 : '-52px',
+                    marginTop: i === 0 ? 0 : '-48px',
                     zIndex: i + 1
                   }}
-                  className="w-16 h-24 sm:w-18 sm:h-26 rounded-md border border-neutral-700/80 overflow-hidden bg-neutral-900 shadow-xl"
+                  className="w-14 h-20 sm:w-16 sm:h-22 md:w-18 md:h-25 max-h-[12vh] aspect-[5/7] rounded-lg border border-neutral-600 overflow-hidden bg-neutral-900 shadow-2xl"
                 >
                   <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                 </div>
@@ -725,19 +725,20 @@ export const GameTable: React.FC<GameTableProps> = ({
       {/* Subtle lighting vignette overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60 pointer-events-none z-0" />
 
-      {/* 2. Top Header Bar */}
-      <header className="relative z-30 px-3 py-2 flex items-center justify-between text-xs bg-black/50 backdrop-blur-sm border-b border-white/10">
-        <div className="flex items-center gap-2 sm:gap-3">
+      {/* 2. Top Header HUD: Floating Left & Right Control Panels (Leaves top-center open) */}
+      <header className="absolute top-0 inset-x-0 z-30 p-2 sm:p-3 flex items-start justify-between pointer-events-none">
+        {/* Left HUD Pill */}
+        <div className="flex items-center gap-2 sm:gap-2.5 pointer-events-auto bg-neutral-950/85 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-xl shadow-2xl">
           <button
             onClick={copyInviteLink}
             title="Click to copy invite link"
-            className="border border-white/20 bg-black/60 px-2.5 py-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-1.5 transition-colors font-medium"
+            className="border border-white/20 bg-black/60 px-2.5 py-1 rounded-lg hover:bg-white/10 cursor-pointer flex items-center gap-1.5 transition-colors font-medium text-xs"
           >
             <span>🔗</span>
             <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
           </button>
-          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.3</span>
-          <span className="text-neutral-300 font-bold">Round {gameState.roundNumber}</span>
+          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.4</span>
+          <span className="text-neutral-300 font-bold text-xs">Round {gameState.roundNumber}</span>
           {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
               {gameState.settings.gameMode}
@@ -745,7 +746,8 @@ export const GameTable: React.FC<GameTableProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Right HUD Pill */}
+        <div className="flex items-center gap-2 sm:gap-2.5 pointer-events-auto bg-neutral-950/85 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-xl shadow-2xl">
           {isMyTurn ? (
             <span className="bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-extrabold px-3 py-1 rounded-full text-xs shadow-[0_0_15px_rgba(251,191,36,0.8)] animate-pulse">
               YOUR TURN ({gameState.turnStage.toUpperCase()})
@@ -757,7 +759,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           )}
 
           {gameState.turnTimeRemaining > 0 && (
-            <span className="text-amber-300 font-bold text-xs bg-black/60 border border-amber-500/30 px-2 py-0.5 rounded">
+            <span className="text-amber-300 font-bold text-xs bg-black/60 border border-amber-500/30 px-2 py-0.5 rounded-lg">
               {gameState.turnTimeRemaining}s
             </span>
           )}
@@ -770,14 +772,14 @@ export const GameTable: React.FC<GameTableProps> = ({
               }
             }}
             title={isMuted ? 'Unmute Arena Audio' : 'Mute Arena Audio'}
-            className="text-neutral-400 hover:text-white px-2 py-0.5 border border-white/10 rounded bg-black/40 text-xs cursor-pointer"
+            className="text-neutral-400 hover:text-white px-2 py-1 border border-white/10 rounded-lg bg-black/40 text-xs cursor-pointer transition-colors"
           >
             {isMuted ? '🔇' : '🔊'}
           </button>
 
           <button
             onClick={onOpenRules}
-            className="text-neutral-300 hover:text-white underline text-xs cursor-pointer font-bold"
+            className="text-neutral-300 hover:text-white underline text-xs cursor-pointer font-bold px-1"
           >
             Rules
           </button>

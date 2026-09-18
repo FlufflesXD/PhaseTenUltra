@@ -23,8 +23,8 @@ export const CardView: React.FC<CardViewProps> = ({
   const [imageError, setImageError] = React.useState(false);
 
   const sizeClasses = {
-    xs: 'w-9 h-13 sm:w-10 sm:h-14 max-h-[8vh] aspect-[5/7] text-[9px]',
-    sm: 'w-11 h-15 sm:w-13 sm:h-18 max-h-[10vh] aspect-[5/7] text-[10px] sm:text-xs',
+    xs: 'w-10 h-14 sm:w-12 sm:h-17 max-h-[9vh] aspect-[5/7] text-[10px]',
+    sm: 'w-13 h-18 sm:w-15 sm:h-21 md:w-17 md:h-24 max-h-[13vh] aspect-[5/7] text-[11px] sm:text-xs md:text-sm',
     md: 'w-18 h-26 sm:w-22 sm:h-30 md:w-24 md:h-32 max-h-[16vh] aspect-[5/7] text-xs sm:text-sm',
     lg: 'w-18 h-26 sm:w-22 sm:h-30 md:w-26 md:h-36 max-h-[20vh] aspect-[5/7] text-xs sm:text-sm md:text-base'
   }[size];
