@@ -601,6 +601,79 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(session.players[2].cards.length, 2, 'Meld cards returned to hand');
   });
 
+  test('Special Cards: Time card has exact 50/50 chance for rewind vs advance', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'CHAOS_TIME_5050',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'time_a', type: 'time', color: 'none', value: 0, points: 30 },
+          { id: 'c2', type: 'number', color: 'red', value: 5, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 5,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'p2_c1', type: 'number', color: 'blue', value: 1, points: 5 },
+          { id: 'p2_c2', type: 'number', color: 'blue', value: 2, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+    session.status = 'in_game';
+    session.turnStage = 'discard';
+    session.currentTurnIndex = 0;
+
+    const originalRandom = Math.random;
+    try {
+      // 0.49 should be rewind (< 0.50) -> green, Stage 5 -> 4
+      Math.random = () => 0.49;
+      session.discardCard('p1', 'time_a', 'p2');
+      assert.strictEqual(lastAction?.timeResult, 'green');
+      assert.strictEqual(session.players[1].currentPhase, 4);
+
+      // Now test 0.50 which should be advance (>= 0.50) -> red, Stage 4 -> 5
+      session.currentTurnIndex = 0;
+      session.turnStage = 'discard';
+      session.players[0].cards.push({ id: 'time_b', type: 'time', color: 'none', value: 0, points: 30 });
+      Math.random = () => 0.50;
+      session.discardCard('p1', 'time_b', 'p2');
+      assert.strictEqual(lastAction?.timeResult, 'red');
+      assert.strictEqual(session.players[1].currentPhase, 5);
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
   test('Special Cards: Can always be discarded normally with activateAbility = false to prevent softlocks', () => {
     let lastAction: any = null;
     const session = new GameSession(

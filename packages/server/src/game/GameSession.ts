@@ -50,6 +50,7 @@ export class GameSession {
   private onStateChange: () => void;
   private onNotification: (notif: GameNotification) => void;
   private onActionEvent?: (action: GameActionEvent) => void;
+  private actionCounter: number = 0;
 
   constructor(
     roomCode: string,
@@ -68,7 +69,7 @@ export class GameSession {
   public emitAction(action: Omit<GameActionEvent, 'id' | 'timestamp'>): void {
     const event: GameActionEvent = {
       ...action,
-      id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: `act_${Date.now()}_${++this.actionCounter}_${Math.random().toString(36).substring(2, 7)}`,
       timestamp: Date.now()
     };
     if (this.onActionEvent) {
@@ -949,7 +950,7 @@ export class GameSession {
       throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
     }
 
-    const isRewind = Math.random() < 0.60;
+    const isRewind = Math.random() < 0.50;
     const oldPhase = target.currentPhase;
     const newPhase = isRewind ? oldPhase - 1 : oldPhase + 1;
     target.currentPhase = newPhase;

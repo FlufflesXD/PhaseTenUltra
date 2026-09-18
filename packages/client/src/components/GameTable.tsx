@@ -82,7 +82,50 @@ export const GameTable: React.FC<GameTableProps> = ({
     oldPhase: number;
     newPhase: number;
   } | null>(null);
+  const [numberEyeEvent, setNumberEyeEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
+  const [colorEyeEvent, setColorEyeEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
+
   const lastSoundActionIdRef = useRef<string | null>(null);
+
+  const nukeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const jesterTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const redoTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const reverseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const timeWarpTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const numberEyeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const colorEyeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const flyingCardTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (nukeTimerRef.current) clearTimeout(nukeTimerRef.current);
+      if (jesterTimerRef.current) clearTimeout(jesterTimerRef.current);
+      if (redoTimerRef.current) clearTimeout(redoTimerRef.current);
+      if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current);
+      if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
+      if (numberEyeTimerRef.current) clearTimeout(numberEyeTimerRef.current);
+      if (colorEyeTimerRef.current) clearTimeout(colorEyeTimerRef.current);
+      if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
+    };
+  }, []);
+
+  const isDiscardOrSpecialAction = (type?: string) => {
+    return (
+      type === 'discard' ||
+      type === 'skip' ||
+      type === 'reverse' ||
+      type === 'draw_two' ||
+      type === 'nuke' ||
+      type === 'jester' ||
+      type === 'plus_two' ||
+      type === 'plus_three' ||
+      type === 'redo' ||
+      type === 'time' ||
+      type === 'number_eye' ||
+      type === 'color_eye' ||
+      type === 'random'
+    );
+  };
 
   const gameStateRef = useRef(gameState);
   useEffect(() => {
@@ -94,16 +137,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     const isNewDiscardAction =
       latestAction &&
       lastHandledActionIdRef.current !== latestAction.id &&
-      (latestAction.type === 'discard' ||
-        latestAction.type === 'skip' ||
-        latestAction.type === 'reverse' ||
-        latestAction.type === 'draw_two' ||
-        latestAction.type === 'nuke' ||
-        latestAction.type === 'jester' ||
-        latestAction.type === 'plus_two' ||
-        latestAction.type === 'plus_three' ||
-        latestAction.type === 'redo' ||
-        latestAction.type === 'time');
+      isDiscardOrSpecialAction(latestAction.type);
 
     if (discardFlightActiveRef.current || isNewDiscardAction) {
       const prevDiscard =
@@ -169,6 +203,25 @@ export const GameTable: React.FC<GameTableProps> = ({
     };
   };
 
+  const me = gameState.players.find(p => p.id === secretToken);
+  const myIndex = me ? gameState.players.findIndex(p => p.id === me.id) : 0;
+  const numPlayers = gameState.players.length;
+
+  let leftPlayer: PlayerPublic | null = null;
+  let topPlayer: PlayerPublic | null = null;
+  let rightPlayer: PlayerPublic | null = null;
+
+  if (numPlayers === 2) {
+    topPlayer = gameState.players[(myIndex + 1) % 2];
+  } else if (numPlayers === 3) {
+    leftPlayer = gameState.players[(myIndex + 1) % 3];
+    rightPlayer = gameState.players[(myIndex + 2) % 3];
+  } else if (numPlayers >= 4) {
+    leftPlayer = gameState.players[(myIndex + 1) % numPlayers];
+    topPlayer = gameState.players[(myIndex + 2) % numPlayers];
+    rightPlayer = gameState.players[(myIndex + 3) % numPlayers];
+  }
+
   useEffect(() => {
     if (!latestAction || lastHandledActionIdRef.current === latestAction.id) return;
     lastHandledActionIdRef.current = latestAction.id;
@@ -183,44 +236,43 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     if (latestAction.type === 'draw') {
       if (latestAction.source === 'discard') {
-        startCoords = getCenterCoords(discardRef.current);
+        startCoords = getCenterCoords(discardRef.current) || { x: 1045, y: 535 };
       } else {
-        startCoords = getCenterCoords(deckRef.current);
+        startCoords = getCenterCoords(deckRef.current) || { x: 875, y: 535 };
       }
 
       if (isMe) {
-        targetCoords = getCenterCoords(handRef.current);
+        targetCoords = getCenterCoords(handRef.current) || { x: 960, y: 980 };
         startScale = 1;
         targetScale = 0.85;
         startRot = 0;
         targetRot = -4;
       } else {
-        const oppEl = document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`);
-        targetCoords = getCenterCoords(oppEl);
+        const oppEl =
+          document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`) ||
+          document.querySelector(`[data-player-station="${latestAction.playerId}"]`) ||
+          document.querySelector(`[data-station-header="${latestAction.playerId}"]`);
+        let oppCoords = getCenterCoords(oppEl);
+        if (!oppCoords) {
+          if (topPlayer?.id === latestAction.playerId) oppCoords = { x: 960, y: 70 };
+          else if (leftPlayer?.id === latestAction.playerId) oppCoords = { x: 140, y: 350 };
+          else if (rightPlayer?.id === latestAction.playerId) oppCoords = { x: 1780, y: 350 };
+          else oppCoords = { x: 960, y: 120 };
+        }
+        targetCoords = oppCoords;
         startScale = 1;
         targetScale = 0.65;
         startRot = 0;
         targetRot = 4;
       }
-    } else if (
-      latestAction.type === 'discard' ||
-      latestAction.type === 'skip' ||
-      latestAction.type === 'reverse' ||
-      latestAction.type === 'draw_two' ||
-      latestAction.type === 'nuke' ||
-      latestAction.type === 'jester' ||
-      latestAction.type === 'plus_two' ||
-      latestAction.type === 'plus_three' ||
-      latestAction.type === 'redo' ||
-      latestAction.type === 'time'
-    ) {
+    } else if (isDiscardOrSpecialAction(latestAction.type)) {
       discardFlightActiveRef.current = true;
       // Hold previous discard on the pile while the new card is in the air
       const prevDiscard = gameState.discardHistory && gameState.discardHistory.length > 1
         ? gameState.discardHistory[gameState.discardHistory.length - 2]
         : null;
       setDisplayedDiscardCard(prevDiscard);
-      targetCoords = getCenterCoords(discardRef.current);
+      targetCoords = getCenterCoords(discardRef.current) || { x: 1045, y: 535 };
 
       if (isMe) {
         let cardEl: Element | null = null;
@@ -230,14 +282,24 @@ export const GameTable: React.FC<GameTableProps> = ({
         if (!cardEl && selectedCardIdRef.current) {
           cardEl = document.querySelector(`[data-card-id="${selectedCardIdRef.current}"]`);
         }
-        startCoords = getCenterCoords(cardEl) || getCenterCoords(handRef.current);
+        startCoords = getCenterCoords(cardEl) || getCenterCoords(handRef.current) || { x: 960, y: 980 };
         startScale = 0.85;
         targetScale = 1;
         startRot = -3;
         targetRot = 0;
       } else {
-        const oppEl = document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`);
-        startCoords = getCenterCoords(oppEl);
+        const oppEl =
+          document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`) ||
+          document.querySelector(`[data-player-station="${latestAction.playerId}"]`) ||
+          document.querySelector(`[data-station-header="${latestAction.playerId}"]`);
+        let oppCoords = getCenterCoords(oppEl);
+        if (!oppCoords) {
+          if (topPlayer?.id === latestAction.playerId) oppCoords = { x: 960, y: 70 };
+          else if (leftPlayer?.id === latestAction.playerId) oppCoords = { x: 140, y: 350 };
+          else if (rightPlayer?.id === latestAction.playerId) oppCoords = { x: 1780, y: 350 };
+          else oppCoords = { x: 960, y: 120 };
+        }
+        startCoords = oppCoords;
         startScale = 0.65;
         targetScale = 1;
         startRot = 4;
@@ -247,7 +309,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       const groupEl = latestAction.targetGroupId
         ? document.querySelector(`[data-group-id="${latestAction.targetGroupId}"]`)
         : null;
-      targetCoords = getCenterCoords(groupEl) || getCenterCoords(discardRef.current);
+      targetCoords = getCenterCoords(groupEl) || getCenterCoords(discardRef.current) || { x: 960, y: 540 };
 
       const hitCard = latestAction.card || latestAction.cards?.[0];
       if (isMe) {
@@ -255,14 +317,24 @@ export const GameTable: React.FC<GameTableProps> = ({
         if (hitCard?.id) {
           cardEl = document.querySelector(`[data-card-id="${hitCard.id}"]`);
         }
-        startCoords = getCenterCoords(cardEl) || getCenterCoords(handRef.current);
+        startCoords = getCenterCoords(cardEl) || getCenterCoords(handRef.current) || { x: 960, y: 980 };
         startScale = 0.85;
         targetScale = 0.75;
         startRot = -3;
         targetRot = 0;
       } else {
-        const oppEl = document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`);
-        startCoords = getCenterCoords(oppEl);
+        const oppEl =
+          document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`) ||
+          document.querySelector(`[data-player-station="${latestAction.playerId}"]`) ||
+          document.querySelector(`[data-station-header="${latestAction.playerId}"]`);
+        let oppCoords = getCenterCoords(oppEl);
+        if (!oppCoords) {
+          if (topPlayer?.id === latestAction.playerId) oppCoords = { x: 960, y: 70 };
+          else if (leftPlayer?.id === latestAction.playerId) oppCoords = { x: 140, y: 350 };
+          else if (rightPlayer?.id === latestAction.playerId) oppCoords = { x: 1780, y: 350 };
+          else oppCoords = { x: 960, y: 120 };
+        }
+        startCoords = oppCoords;
         startScale = 0.65;
         targetScale = 0.75;
         startRot = 4;
@@ -275,6 +347,11 @@ export const GameTable: React.FC<GameTableProps> = ({
         latestAction.type === 'draw' && latestAction.source !== 'discard'
           ? undefined
           : latestAction.card || latestAction.cards?.[0];
+
+      if (flyingCardTimerRef.current) {
+        clearTimeout(flyingCardTimerRef.current);
+        flyingCardTimerRef.current = null;
+      }
 
       setActiveFlyingCard({
         id: `${latestAction.id}_${Date.now()}`,
@@ -289,17 +366,17 @@ export const GameTable: React.FC<GameTableProps> = ({
         targetRot
       });
 
-      const timer = setTimeout(() => {
+      flyingCardTimerRef.current = setTimeout(() => {
         setActiveFlyingCard(null);
+        flyingCardTimerRef.current = null;
         if (discardFlightActiveRef.current) {
           discardFlightActiveRef.current = false;
           setDiscardKey(prev => prev + 1);
           setDisplayedDiscardCard(gameStateRef.current.topDiscard);
         }
       }, 430);
-      return () => clearTimeout(timer);
     }
-  }, [latestAction, secretToken]);
+  }, [latestAction, secretToken, topPlayer?.id, leftPlayer?.id, rightPlayer?.id]);
 
   useEffect(() => {
     if (!latestAction || lastSoundActionIdRef.current === latestAction.id) return;
@@ -318,33 +395,53 @@ export const GameTable: React.FC<GameTableProps> = ({
         playSpecialSound('redo');
       } else if (latestAction.type === 'time') {
         playSpecialSound('time');
+      } else if (latestAction.type === 'number_eye') {
+        playSpecialSound('number_eye');
+      } else if (latestAction.type === 'color_eye') {
+        playSpecialSound('color_eye');
       }
     }
 
+    const currentPlayers = gameStateRef.current.players;
+    const currentPlayDirection = gameStateRef.current.playDirection;
+
     if (latestAction.type === 'nuke') {
+      if (nukeTimerRef.current) clearTimeout(nukeTimerRef.current);
       setNukeActive(true);
-      const timer = setTimeout(() => setNukeActive(false), 5000);
-      return () => clearTimeout(timer);
+      nukeTimerRef.current = setTimeout(() => {
+        setNukeActive(false);
+        nukeTimerRef.current = null;
+      }, 5000);
     } else if (latestAction.type === 'jester') {
+      if (jesterTimerRef.current) clearTimeout(jesterTimerRef.current);
       const targetName =
-        gameState.players.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
       setJesterSwapEvent({ sourceName: latestAction.playerName, targetName });
-      const timer = setTimeout(() => setJesterSwapEvent(null), 2800);
-      return () => clearTimeout(timer);
+      jesterTimerRef.current = setTimeout(() => {
+        setJesterSwapEvent(null);
+        jesterTimerRef.current = null;
+      }, 2800);
     } else if (latestAction.type === 'redo') {
+      if (redoTimerRef.current) clearTimeout(redoTimerRef.current);
       setRedoEvent({ playerName: latestAction.playerName });
-      const timer = setTimeout(() => setRedoEvent(null), 2800);
-      return () => clearTimeout(timer);
+      redoTimerRef.current = setTimeout(() => {
+        setRedoEvent(null);
+        redoTimerRef.current = null;
+      }, 2800);
     } else if (latestAction.type === 'reverse') {
+      if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current);
       setReverseEvent({
         playerName: latestAction.playerName,
-        direction: gameState.playDirection
+        direction: currentPlayDirection
       });
-      const timer = setTimeout(() => setReverseEvent(null), 3000);
-      return () => clearTimeout(timer);
+      reverseTimerRef.current = setTimeout(() => {
+        setReverseEvent(null);
+        reverseTimerRef.current = null;
+      }, 3000);
     } else if (latestAction.type === 'time') {
+      if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
       const targetName =
-        gameState.players.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
       setTimeWarpEvent({
         sourceName: latestAction.playerName,
         targetName,
@@ -352,10 +449,30 @@ export const GameTable: React.FC<GameTableProps> = ({
         oldPhase: latestAction.timeOldPhase ?? 2,
         newPhase: latestAction.timeNewPhase ?? (latestAction.timeResult === 'green' ? 1 : 3)
       });
-      const timer = setTimeout(() => setTimeWarpEvent(null), 5200);
-      return () => clearTimeout(timer);
+      timeWarpTimerRef.current = setTimeout(() => {
+        setTimeWarpEvent(null);
+        timeWarpTimerRef.current = null;
+      }, 5200);
+    } else if (latestAction.type === 'number_eye') {
+      if (numberEyeTimerRef.current) clearTimeout(numberEyeTimerRef.current);
+      const targetName =
+        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+      setNumberEyeEvent({ sourceName: latestAction.playerName, targetName });
+      numberEyeTimerRef.current = setTimeout(() => {
+        setNumberEyeEvent(null);
+        numberEyeTimerRef.current = null;
+      }, 3000);
+    } else if (latestAction.type === 'color_eye') {
+      if (colorEyeTimerRef.current) clearTimeout(colorEyeTimerRef.current);
+      const targetName =
+        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+      setColorEyeEvent({ sourceName: latestAction.playerName, targetName });
+      colorEyeTimerRef.current = setTimeout(() => {
+        setColorEyeEvent(null);
+        colorEyeTimerRef.current = null;
+      }, 3000);
     }
-  }, [latestAction, gameState.players, isMuted]);
+  }, [latestAction, isMuted]);
 
   useEffect(() => {
     setLocalHand(prev => {
@@ -370,7 +487,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     });
   }, [hand]);
 
-  const me = gameState.players.find(p => p.id === secretToken);
   const isSpectator = !me || me.isSpectator;
   const isMyTurn = gameState.currentTurnPlayerId === secretToken;
   const botPlayers = gameState.players.filter(p => p.isBot || !p.connected);
@@ -435,26 +551,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     onDiscardCard(selectedCard.id, targetPlayer.id, true);
     clearSelection();
   };
-
-  // Seating relative to the client
-  // Clockwise order starting from client
-  const myIndex = me ? gameState.players.findIndex(p => p.id === me.id) : 0;
-  const numPlayers = gameState.players.length;
-
-  let leftPlayer: PlayerPublic | null = null;
-  let topPlayer: PlayerPublic | null = null;
-  let rightPlayer: PlayerPublic | null = null;
-
-  if (numPlayers === 2) {
-    topPlayer = gameState.players[(myIndex + 1) % 2];
-  } else if (numPlayers === 3) {
-    leftPlayer = gameState.players[(myIndex + 1) % 3];
-    rightPlayer = gameState.players[(myIndex + 2) % 3];
-  } else if (numPlayers >= 4) {
-    leftPlayer = gameState.players[(myIndex + 1) % numPlayers];
-    topPlayer = gameState.players[(myIndex + 2) % numPlayers];
-    rightPlayer = gameState.players[(myIndex + 3) % numPlayers];
-  }
 
   const copyInviteLink = () => {
     const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${gameState.roomCode}`;
@@ -651,12 +747,14 @@ export const GameTable: React.FC<GameTableProps> = ({
       return (
         <div
           key={player.id}
+          data-player-station={player.id}
           className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-20 pointer-events-auto select-none max-w-[1200px]"
         >
           {/* Top Row: Player Banner & Action Option */}
           <div className="flex items-center gap-3">
             {/* Player Banner */}
             <div
+              data-station-header={player.id}
               onClick={handleStationClick}
               className={`flex flex-col rounded-lg overflow-hidden border transition-all shrink-0 ${targetRingClass} ${
                 isPlayerTurn
@@ -815,6 +913,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       return (
         <div
           key={player.id}
+          data-player-station={player.id}
           className="absolute left-6 top-[28%] flex flex-col items-start gap-2 z-20 pointer-events-auto select-none max-w-[340px]"
         >
           {/* Left Player Action Buttons */}
@@ -872,6 +971,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Player Banner */}
           <div className="flex items-center gap-2.5">
             <div
+              data-station-header={player.id}
               onClick={handleStationClick}
               className={`flex flex-col rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
                 isPlayerTurn
@@ -976,6 +1076,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     return (
       <div
         key={player.id}
+        data-player-station={player.id}
         className="absolute right-6 top-[28%] flex flex-col items-end gap-2 z-20 pointer-events-auto select-none max-w-[340px]"
       >
         {/* Right Player Action Buttons */}
@@ -1042,6 +1143,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           )}
 
           <div
+            data-station-header={player.id}
             onClick={handleStationClick}
             className={`flex flex-col items-end rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
               isPlayerTurn
@@ -1185,7 +1287,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>🔗</span>
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.1</span>
+            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.2</span>
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             <span
               title={`Play Direction: ${gameState.playDirection === 1 ? 'Clockwise' : 'Counter-Clockwise'}`}
@@ -1516,12 +1618,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-2">
                   <span className="font-semibold">Stage {me.currentPhase} {me.phaseCompletedInRound ? '✓' : ''}</span>
                 </div>
-              </div>
-
-              {/* Card Count Pill */}
-              <div className="flex items-center gap-1 bg-white/95 text-black px-2.5 py-1 rounded-lg font-bold text-xs shadow-lg border border-neutral-300">
-                <span className="text-sm">🂠</span>
-                <span>{localHand.length}</span>
               </div>
             </div>
           )}
@@ -2063,6 +2159,54 @@ export const GameTable: React.FC<GameTableProps> = ({
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Number Eye Obscure Banner Animation */}
+      {numberEyeEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-amber-950/95 via-yellow-950/95 to-amber-950/95 border-2 border-amber-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(245,158,11,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-bounce">👁️</span>
+              <img
+                src="/cards/custom/number_eye.png"
+                alt="Number Eye"
+                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(245,158,11,0.8)]"
+              />
+              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>❓</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              NUMBERS OBSCURED!
+            </div>
+            <div className="text-lg font-bold text-amber-200 text-center">
+              <span className="text-yellow-300">{numberEyeEvent.sourceName}</span> turned{' '}
+              <span className="text-pink-300">{numberEyeEvent.targetName}</span>'s card numbers into question marks!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Color Eye Greyscale Banner Animation */}
+      {colorEyeEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-neutral-900/95 via-stone-900/95 to-zinc-900/95 border-2 border-neutral-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(163,163,163,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-pulse">👁️</span>
+              <img
+                src="/cards/custom/color_eye.png"
+                alt="Color Eye"
+                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(255,255,255,0.8)] grayscale"
+              />
+              <span className="animate-pulse" style={{ animationDelay: '150ms' }}>🌫️</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              VISION GREYSCALED!
+            </div>
+            <div className="text-lg font-bold text-neutral-300 text-center">
+              <span className="text-yellow-300">{colorEyeEvent.sourceName}</span> stripped all color from{' '}
+              <span className="text-pink-300">{colorEyeEvent.targetName}</span>'s cards!
             </div>
           </div>
         </div>
