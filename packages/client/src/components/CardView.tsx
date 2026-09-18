@@ -23,10 +23,10 @@ export const CardView: React.FC<CardViewProps> = ({
   const [imageError, setImageError] = React.useState(false);
 
   const sizeClasses = {
-    xs: 'w-10 h-14 sm:w-12 sm:h-17 max-h-[9vh] aspect-[5/7] text-[10px]',
-    sm: 'w-13 h-18 sm:w-15 sm:h-21 md:w-17 md:h-24 max-h-[13vh] aspect-[5/7] text-[11px] sm:text-xs md:text-sm',
-    md: 'w-18 h-26 sm:w-22 sm:h-30 md:w-24 md:h-32 max-h-[16vh] aspect-[5/7] text-xs sm:text-sm',
-    lg: 'w-18 h-26 sm:w-22 sm:h-30 md:w-26 md:h-36 max-h-[20vh] aspect-[5/7] text-xs sm:text-sm md:text-base'
+    xs: 'w-[48px] h-[67px] aspect-[5/7] text-[10px]',
+    sm: 'w-[72px] h-[100px] aspect-[5/7] text-xs',
+    md: 'w-[105px] h-[147px] aspect-[5/7] text-sm',
+    lg: 'w-[115px] h-[161px] aspect-[5/7] text-base'
   }[size];
 
   // Inverted styling when selected
