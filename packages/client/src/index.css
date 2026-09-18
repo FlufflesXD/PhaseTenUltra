@@ -122,11 +122,11 @@ body {
 }
 
 .animate-spin-cw {
-  animation: spinSlowCW 20s linear infinite;
+  animation: spinSlowCW 14s linear infinite;
 }
 
 .animate-spin-ccw {
-  animation: spinSlowCCW 20s linear infinite;
+  animation: spinSlowCCW 14s linear infinite;
 }
 
 /* Nuclear Flash Screen Explosion (5 Seconds) */

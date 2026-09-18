@@ -37,11 +37,8 @@ export function createStandardDeck(mode?: GameMode): Card[] {
     }
   }
 
-  // In Chaos Mode, replace regular colored cards with 1 copy of each custom card
+  // In Chaos Mode, add 1 copy of each custom card onto the deck
   if (mode === 'chaos') {
-    for (let i = 0; i < CHAOS_SPECIAL_CARDS.length; i++) {
-      cards.pop();
-    }
     for (const special of CHAOS_SPECIAL_CARDS) {
       cards.push({
         id: `card_${idCounter++}`,

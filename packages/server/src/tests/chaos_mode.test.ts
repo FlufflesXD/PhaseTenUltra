@@ -4,9 +4,9 @@ import { createStandardDeck, createDeck, Card } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
 
 describe('Chaos Game Mode & Custom Card Tests', () => {
-  test('Chaos Mode Deck Composition: Exactly 112 cards with 1 copy of each of 9 special cards replacing 9 colored cards and 4 reverses', () => {
+  test('Chaos Mode Deck Composition: Exactly 121 cards with all 96 colored cards plus 9 special cards, 8 wilds, 4 skips, and 4 reverses', () => {
     const deck = createStandardDeck('chaos');
-    assert.strictEqual(deck.length, 112, 'Chaos deck must contain exactly 112 cards');
+    assert.strictEqual(deck.length, 121, 'Chaos deck must contain exactly 121 cards');
 
     const nukes = deck.filter(c => c.type === 'nuke');
     const jesters = deck.filter(c => c.type === 'jester');
@@ -34,7 +34,7 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(reverses.length, 4, 'Exactly 4 reverse cards in deck');
     assert.strictEqual(wilds.length, 8, 'Exactly 8 wilds in deck');
     assert.strictEqual(skips.length, 4, 'Exactly 4 skips in deck');
-    assert.strictEqual(coloredCards.length, 87, '87 colored cards in deck (96 - 9 replaced)');
+    assert.strictEqual(coloredCards.length, 96, 'All 96 colored cards remain in deck');
   });
 
   test('Nuke Card: Detonation reduces all players hands to 2 cards', () => {
@@ -1079,6 +1079,94 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     // Random must roll into one of the known effects
     const validRollTypes = ['redo', 'jester', 'plus_two', 'plus_three', 'number_eye', 'color_eye'];
     assert.ok(validRollTypes.includes(lastAction.type), `Rolled action type ${lastAction.type} must be in valid list`);
+  });
+
+  test('Skip and Reverse cards: Always activate their rules even if activateAbility is false', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'SKIPREV1',
+      { turnTimerSeconds: 0, gameMode: 'classic' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 's1', type: 'skip', color: 'none', value: 0, points: 15 },
+          { id: 'r1', type: 'reverse', color: 'none', value: 0, points: 15 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'Player 2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 },
+          { id: 'c2', type: 'number', color: 'red', value: 2, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p3',
+        secretToken: 'p3_tok',
+        name: 'Player 3',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c3', type: 'number', color: 'blue', value: 3, points: 5 },
+          { id: 'c4', type: 'number', color: 'blue', value: 4, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Player 1 discards Skip with activateAbility = false (e.g. from generic discard button)
+    session.discardCard('p1_tok', 's1', undefined, false);
+
+    assert.strictEqual(lastAction.type, 'skip', 'Action type must be skip');
+    // Player 2 was skipped, so turn passes directly to Player 3 (index 2)
+    assert.strictEqual(session.currentTurnIndex, 2, 'Turn must skip Player 2 and land on Player 3');
+    assert.strictEqual(session.getCurrentPlayer().id, 'p3');
+
+    // Now give Player 3 a Reverse card and discard with activateAbility = false
+    session.players[2].cards.push({ id: 'r2', type: 'reverse', color: 'none', value: 0, points: 15 });
+    session.turnStage = 'play';
+    session.discardCard('p3_tok', 'r2', undefined, false);
+
+    assert.strictEqual(session.playDirection, -1, 'Reverse card must flip direction even if activateAbility was false');
+    assert.strictEqual(lastAction.type, 'reverse');
   });
 });
 

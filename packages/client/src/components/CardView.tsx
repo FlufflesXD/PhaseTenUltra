@@ -34,7 +34,11 @@ export const CardView: React.FC<CardViewProps> = ({
   }[size];
 
   // Inverted styling when selected
-  const baseStyle = isSelected
+  const baseStyle = isColorEyeActive && card.type === 'number'
+    ? (isSelected
+        ? 'bg-neutral-300 text-black border-2 border-white font-bold'
+        : 'bg-neutral-800 text-neutral-200 border border-neutral-600 hover:border-white')
+    : isSelected
     ? 'bg-white text-black border-2 border-white font-bold'
     : 'bg-black text-white border border-neutral-600 hover:border-white';
 
@@ -56,13 +60,19 @@ export const CardView: React.FC<CardViewProps> = ({
     if (card.type === 'color_eye') return '/cards/custom/color_eye.png';
     if (card.type === 'random') return '/cards/custom/random.png';
     if (card.type === 'number') {
+      if (isNumberEyeActive && isColorEyeActive) {
+        return '/cards/custom/color_eye/grey_unknown.png';
+      }
       if (isNumberEyeActive) {
         return `/cards/custom/number_eye/${card.color}_unknown.png`;
+      }
+      if (isColorEyeActive) {
+        return `/cards/custom/color_eye/grey_${card.value}.png`;
       }
       return `/cards/${card.color}_${card.value}.png`;
     }
     return null;
-  }, [card.type, card.color, card.value, isNumberEyeActive]);
+  }, [card.type, card.color, card.value, isNumberEyeActive, isColorEyeActive]);
 
   React.useEffect(() => {
     setImageError(false);
@@ -104,9 +114,7 @@ export const CardView: React.FC<CardViewProps> = ({
           src={imageSrc}
           alt={`${card.color} ${card.value || card.type}`}
           onError={() => setImageError(true)}
-          className={`w-full h-full object-contain pointer-events-none rounded transition-all ${
-            isColorEyeActive && card.type === 'number' ? 'grayscale contrast-125' : ''
-          }`}
+          className="w-full h-full object-contain pointer-events-none rounded transition-all"
         />
       </div>
       {badge && (

@@ -22,7 +22,7 @@ import {
   validateSet,
   GameActionEvent
 } from '@phase-ten/shared';
-import { createDeck, shuffleDeck } from '@phase-ten/shared';
+import { createDeck, shuffleDeck, isChaosSpecialCard } from '@phase-ten/shared';
 
 export interface GamePlayerInternal extends PlayerPrivate {
   secretToken: string;
@@ -596,8 +596,8 @@ export class GameSession {
     const cardIndex = current.cards.findIndex(c => c.id === cardId);
     if (cardIndex === -1) throw new Error('Card not in hand');
     const card = current.cards[cardIndex];
-
-    let shouldActivate = activateAbility;
+    const isSpecialChaosCard = isChaosSpecialCard(card.type);
+    let shouldActivate = isSpecialChaosCard ? activateAbility : true;
 
     if (shouldActivate) {
       if (card.type === 'nuke' && !current.phaseCompletedInRound) {

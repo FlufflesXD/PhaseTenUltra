@@ -72,6 +72,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   } | null>(null);
   const [discardKey, setDiscardKey] = useState(0);
   const [nukeActive, setNukeActive] = useState(false);
+  const [reverseEvent, setReverseEvent] = useState<{ playerName: string; direction: 1 | -1 } | null>(null);
   const [jesterSwapEvent, setJesterSwapEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
   const [redoEvent, setRedoEvent] = useState<{ playerName: string } | null>(null);
   const [timeWarpEvent, setTimeWarpEvent] = useState<{
@@ -334,6 +335,13 @@ export const GameTable: React.FC<GameTableProps> = ({
       setRedoEvent({ playerName: latestAction.playerName });
       const timer = setTimeout(() => setRedoEvent(null), 2800);
       return () => clearTimeout(timer);
+    } else if (latestAction.type === 'reverse') {
+      setReverseEvent({
+        playerName: latestAction.playerName,
+        direction: gameState.playDirection
+      });
+      const timer = setTimeout(() => setReverseEvent(null), 3000);
+      return () => clearTimeout(timer);
     } else if (latestAction.type === 'time') {
       const targetName =
         gameState.players.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
@@ -472,7 +480,8 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const handleNormalDiscard = () => {
     if (me?.isResigned || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
-    onDiscardCard(selectedCard.id, undefined, false);
+    const isSpecial = isChaosSpecialCard(selectedCard.type);
+    onDiscardCard(selectedCard.id, undefined, isSpecial ? false : true);
     clearSelection();
   };
 
@@ -1178,6 +1187,13 @@ export const GameTable: React.FC<GameTableProps> = ({
             </button>
             <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.1</span>
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
+            <span
+              title={`Play Direction: ${gameState.playDirection === 1 ? 'Clockwise' : 'Counter-Clockwise'}`}
+              className="text-xs font-bold px-2 py-0.5 rounded border border-sky-500/40 bg-sky-950/70 text-sky-300 flex items-center gap-1 cursor-default select-none shadow-sm"
+            >
+              <span className="text-sm font-black">{gameState.playDirection === 1 ? '↻' : '↺'}</span>
+              <span>{gameState.playDirection === 1 ? 'Clockwise' : 'Counter-CW'}</span>
+            </span>
             {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
               <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
                 {gameState.settings.gameMode}
@@ -1286,11 +1302,12 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div className="relative w-[600px] h-[520px] flex items-center justify-center">
             {/* Central Circular Direction Arrow Indicator */}
             <div
+              key={`direction_disk_${gameState.playDirection}`}
               className={`absolute w-[520px] h-[520px] rounded-full pointer-events-none flex items-center justify-center transition-all ${
                 gameState.playDirection === 1 ? 'animate-spin-cw' : 'animate-spin-ccw'
               }`}
             >
-              <svg viewBox="0 0 100 100" className="w-full h-full opacity-60 drop-shadow-[0_0_12px_rgba(56,189,248,0.4)]">
+              <svg viewBox="0 0 100 100" className="w-full h-full opacity-70 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]">
                 <defs>
                   <linearGradient id="orbitGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
@@ -1302,23 +1319,61 @@ export const GameTable: React.FC<GameTableProps> = ({
                     <stop offset="60%" stopColor="#06b6d4" stopOpacity="0.5" />
                     <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.1" />
                   </linearGradient>
+                  <marker
+                    id="orbitArrow"
+                    viewBox="0 0 10 10"
+                    refX="5"
+                    refY="5"
+                    markerWidth="4"
+                    markerHeight="4"
+                    orient="auto"
+                  >
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38bdf8" />
+                  </marker>
                 </defs>
-                <path
-                  d="M 50,6 A 44,44 0 0,1 94,50"
-                  stroke="url(#orbitGrad1)"
-                  strokeWidth="2.5"
-                  fill="none"
-                  strokeDasharray="9,5"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M 50,94 A 44,44 0 0,1 6,50"
-                  stroke="url(#orbitGrad2)"
-                  strokeWidth="2.5"
-                  fill="none"
-                  strokeDasharray="9,5"
-                  strokeLinecap="round"
-                />
+                {gameState.playDirection === 1 ? (
+                  <>
+                    <path
+                      d="M 50,6 A 44,44 0 0,1 94,50"
+                      stroke="url(#orbitGrad1)"
+                      strokeWidth="2.5"
+                      fill="none"
+                      strokeDasharray="9,5"
+                      strokeLinecap="round"
+                      markerEnd="url(#orbitArrow)"
+                    />
+                    <path
+                      d="M 50,94 A 44,44 0 0,1 6,50"
+                      stroke="url(#orbitGrad2)"
+                      strokeWidth="2.5"
+                      fill="none"
+                      strokeDasharray="9,5"
+                      strokeLinecap="round"
+                      markerEnd="url(#orbitArrow)"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <path
+                      d="M 50,6 A 44,44 0 0,0 6,50"
+                      stroke="url(#orbitGrad1)"
+                      strokeWidth="2.5"
+                      fill="none"
+                      strokeDasharray="9,5"
+                      strokeLinecap="round"
+                      markerEnd="url(#orbitArrow)"
+                    />
+                    <path
+                      d="M 50,94 A 44,44 0 0,0 94,50"
+                      stroke="url(#orbitGrad2)"
+                      strokeWidth="2.5"
+                      fill="none"
+                      strokeDasharray="9,5"
+                      strokeLinecap="round"
+                      markerEnd="url(#orbitArrow)"
+                    />
+                  </>
+                )}
                 <circle
                   cx="50"
                   cy="50"
@@ -1327,7 +1382,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                   strokeWidth="0.5"
                   strokeDasharray="3,6"
                   fill="none"
-                  opacity="0.25"
+                  opacity="0.3"
                 />
               </svg>
             </div>
@@ -1630,8 +1685,8 @@ export const GameTable: React.FC<GameTableProps> = ({
                     onClick={handleNormalDiscard}
                     className="px-2.5 py-0.5 rounded text-xs bg-red-600 hover:bg-red-500 text-white cursor-pointer transition-colors font-bold flex items-center gap-1 shadow-md ml-1"
                   >
-                    <span>🗑️</span>
-                    <span>Discard</span>
+                    <span>{selectedCard.type === 'reverse' ? '⇄' : selectedCard.type === 'skip' ? '🚫' : '🗑️'}</span>
+                    <span>{selectedCard.type === 'reverse' ? 'Play Reverse' : selectedCard.type === 'skip' ? 'Play Skip' : 'Discard'}</span>
                   </button>
                 )}
                 {selectedCard && (
@@ -1799,10 +1854,16 @@ export const GameTable: React.FC<GameTableProps> = ({
                             e.stopPropagation();
                             handleNormalDiscard();
                           }}
-                          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 bg-red-600/75 hover:bg-red-600/95 border border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)] active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none"
+                          className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 border shadow-[0_0_15px_rgba(239,68,68,0.85)] active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none ${
+                            c.type === 'reverse'
+                              ? 'bg-sky-600/85 hover:bg-sky-600 border-sky-400'
+                              : c.type === 'skip'
+                              ? 'bg-blue-600/85 hover:bg-blue-600 border-blue-400'
+                              : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80'
+                          }`}
                         >
-                          <span className="text-xs">🗑️</span>
-                          <span>DISCARD</span>
+                          <span className="text-xs">{c.type === 'reverse' ? '⇄' : c.type === 'skip' ? '🚫' : '🗑️'}</span>
+                          <span>{c.type === 'reverse' ? 'PLAY REVERSE' : c.type === 'skip' ? 'PLAY SKIP' : 'DISCARD'}</span>
                         </button>
                       )
                     )}
@@ -1827,6 +1888,25 @@ export const GameTable: React.FC<GameTableProps> = ({
               <div className="text-lg md:text-2xl font-extrabold text-white bg-red-950/80 border border-red-500/80 px-6 py-1.5 rounded-full uppercase tracking-wider shadow-2xl">
                 ALL HANDS REDUCED TO 2 CARDS!
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reverse Turn Direction Banner Animation */}
+      {reverseEvent && (
+        <div className="fixed top-24 inset-x-0 z-50 pointer-events-none flex items-center justify-center animate-bounce">
+          <div className="flex items-center gap-3 bg-gradient-to-r from-sky-950/95 via-blue-950/95 to-indigo-950/95 border-2 border-sky-400/85 px-7 py-3 rounded-full shadow-[0_0_40px_rgba(56,189,248,0.9)] backdrop-blur-md">
+            <span className="text-3xl font-black text-sky-400">
+              {reverseEvent.direction === 1 ? '↻' : '↺'}
+            </span>
+            <div className="flex flex-col">
+              <span className="text-sm font-black text-sky-200 uppercase tracking-wider">
+                Turn Direction Reversed!
+              </span>
+              <span className="text-xs text-neutral-300 font-semibold">
+                <strong className="text-white">{reverseEvent.playerName}</strong> switched order to {reverseEvent.direction === 1 ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}
+              </span>
             </div>
           </div>
         </div>
