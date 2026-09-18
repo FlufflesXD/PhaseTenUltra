@@ -6,7 +6,10 @@ export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
   { type: 'plus_two', points: 20 },
   { type: 'plus_three', points: 25 },
   { type: 'redo', points: 30 },
-  { type: 'time', points: 30 }
+  { type: 'time', points: 30 },
+  { type: 'number_eye', points: 30 },
+  { type: 'color_eye', points: 30 },
+  { type: 'random', points: 35 }
 ];
 
 export function isChaosSpecialCard(type: CardType): boolean {
@@ -66,6 +69,17 @@ export function createStandardDeck(mode?: GameMode): Card[] {
     cards.push({
       id: `card_${idCounter++}`,
       type: 'skip',
+      color: 'none',
+      value: 0,
+      points: 15
+    });
+  }
+
+  // 4 Reverse cards = 15 points each (in classic, speed, and chaos)
+  for (let i = 0; i < 4; i++) {
+    cards.push({
+      id: `card_${idCounter++}`,
+      type: 'reverse',
       color: 'none',
       value: 0,
       points: 15

@@ -383,6 +383,16 @@ export const GameTable: React.FC<GameTableProps> = ({
     isMyTurn &&
     (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
 
+  const isNumberEyeSelected =
+    selectedCard?.type === 'number_eye' &&
+    isMyTurn &&
+    (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+
+  const isColorEyeSelected =
+    selectedCard?.type === 'color_eye' &&
+    isMyTurn &&
+    (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+
   const opponents = useMemo(() => {
     return gameState.players.filter(p => p.id !== me?.id && !p.isSpectator);
   }, [gameState.players, me?.id]);
@@ -402,6 +412,18 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleOpponentTimeClick = (targetPlayer: PlayerPublic) => {
     if (!isTimeSelected || !selectedCard) return;
     if (targetPlayer.currentPhase <= 1 || targetPlayer.currentPhase >= 10) return;
+    onDiscardCard(selectedCard.id, targetPlayer.id, true);
+    clearSelection();
+  };
+
+  const handleOpponentNumberEyeClick = (targetPlayer: PlayerPublic) => {
+    if (!isNumberEyeSelected || !selectedCard) return;
+    onDiscardCard(selectedCard.id, targetPlayer.id, true);
+    clearSelection();
+  };
+
+  const handleOpponentColorEyeClick = (targetPlayer: PlayerPublic) => {
+    if (!isColorEyeSelected || !selectedCard) return;
     onDiscardCard(selectedCard.id, targetPlayer.id, true);
     clearSelection();
   };
@@ -464,7 +486,11 @@ export const GameTable: React.FC<GameTableProps> = ({
       clearSelection();
       return;
     }
-    if (selectedCard.type === 'jester') {
+    if (
+      selectedCard.type === 'jester' ||
+      selectedCard.type === 'number_eye' ||
+      selectedCard.type === 'color_eye'
+    ) {
       const targetId = explicitTargetId || (opponents.length > 0 ? opponents[0].id : undefined);
       if (!targetId) return;
       onDiscardCard(selectedCard.id, targetId, true);
@@ -579,6 +605,38 @@ export const GameTable: React.FC<GameTableProps> = ({
     const visibleCardsCount = Math.min(10, cardCount);
     const isEligibleTimeTarget = isTimeSelected && player.currentPhase > 1 && player.currentPhase < 10;
     const isImmuneTimeTarget = isTimeSelected && (player.currentPhase <= 1 || player.currentPhase >= 10);
+    const isTargetable =
+      isJesterSelected ||
+      isEligibleTimeTarget ||
+      isNumberEyeSelected ||
+      isColorEyeSelected;
+
+    const handleStationClick = () => {
+      if (isJesterSelected) handleOpponentSwapClick(player);
+      else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
+      else if (isNumberEyeSelected) handleOpponentNumberEyeClick(player);
+      else if (isColorEyeSelected) handleOpponentColorEyeClick(player);
+    };
+
+    const targetRingClass = isTargetable
+      ? isJesterSelected
+        ? 'ring-4 ring-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : isEligibleTimeTarget
+        ? 'ring-4 ring-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : isNumberEyeSelected
+        ? 'ring-4 ring-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : 'ring-4 ring-neutral-400 shadow-[0_0_25px_rgba(200,200,200,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+      : '';
+
+    const targetCardBorderClass = isJesterSelected
+      ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]'
+      : isEligibleTimeTarget
+      ? 'border-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]'
+      : isNumberEyeSelected
+      ? 'border-amber-400 drop-shadow-[0_0_12px_rgba(245,158,11,0.8)]'
+      : isColorEyeSelected
+      ? 'border-neutral-300 drop-shadow-[0_0_12px_rgba(200,200,200,0.8)]'
+      : 'border-neutral-600';
 
     if (position === 'top') {
       return (
@@ -586,21 +644,12 @@ export const GameTable: React.FC<GameTableProps> = ({
           key={player.id}
           className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-20 pointer-events-auto select-none max-w-[1200px]"
         >
-          {/* Top Row: Player Banner & Jester / Time Action Option */}
+          {/* Top Row: Player Banner & Action Option */}
           <div className="flex items-center gap-3">
             {/* Player Banner */}
             <div
-              onClick={() => {
-                if (isJesterSelected) handleOpponentSwapClick(player);
-                else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
-              }}
-              className={`flex flex-col rounded-lg overflow-hidden border transition-all shrink-0 ${
-                isJesterSelected
-                  ? 'ring-4 ring-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.95)] cursor-pointer hover:scale-105 animate-pulse'
-                  : isEligibleTimeTarget
-                  ? 'ring-4 ring-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.95)] cursor-pointer hover:scale-105 animate-pulse'
-                  : ''
-              } ${
+              onClick={handleStationClick}
+              className={`flex flex-col rounded-lg overflow-hidden border transition-all shrink-0 ${targetRingClass} ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                   : 'border-white/20 shadow-lg'
@@ -617,6 +666,18 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
+                {player.hasNumberEyeEffect && (
+                  <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
+                    <span>👁️</span>
+                    <span>?</span>
+                  </span>
+                )}
+                {player.hasColorEyeEffect && (
+                  <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
+                    <span>👁️</span>
+                    <span>Grey</span>
+                  </span>
+                )}
               </div>
               <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -630,7 +691,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {isJesterSelected && (
               <button
                 type="button"
-                onClick={() => handleOpponentSwapClick(player)}
+                onClick={handleStationClick}
                 className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
               >
                 <span>🃏</span>
@@ -642,7 +703,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {isEligibleTimeTarget && (
               <button
                 type="button"
-                onClick={() => handleOpponentTimeClick(player)}
+                onClick={handleStationClick}
                 className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
               >
                 <span>⏳</span>
@@ -658,6 +719,30 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             )}
 
+            {/* Number Eye Target Button */}
+            {isNumberEyeSelected && (
+              <button
+                type="button"
+                onClick={handleStationClick}
+                className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+              >
+                <span>👁️</span>
+                <span>Blind Numbers!</span>
+              </button>
+            )}
+
+            {/* Color Eye Target Button */}
+            {isColorEyeSelected && (
+              <button
+                type="button"
+                onClick={handleStationClick}
+                className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+              >
+                <span>👁️</span>
+                <span>Greyscale!</span>
+              </button>
+            )}
+
             {isSpectator && player.isBot && onClaimSeat && (
               <button
                 onClick={() => onClaimSeat(player.id)}
@@ -671,12 +756,9 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* 3D Horizontal Fanned Cards with Floor Reflection */}
           <div
             data-opponent-id={player.id}
-            onClick={() => {
-              if (isJesterSelected) handleOpponentSwapClick(player);
-              else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
-            }}
+            onClick={handleStationClick}
             className={`card-reflect flex items-center justify-center my-0.5 ${
-              isJesterSelected || isEligibleTimeTarget ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
+              isTargetable ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
             }`}
             style={{
               transform: 'perspective(900px) rotateX(24deg)',
@@ -693,13 +775,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-46px' : '-40px',
                     zIndex: i + 1
                   }}
-                  className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${
-                    isJesterSelected
-                      ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]'
-                      : isEligibleTimeTarget
-                      ? 'border-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]'
-                      : 'border-neutral-600'
-                  }`}
+                  className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass}`}
                 >
                   <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                 </div>
@@ -730,13 +806,13 @@ export const GameTable: React.FC<GameTableProps> = ({
       return (
         <div
           key={player.id}
-          className="absolute left-6 top-[250px] flex flex-col items-start gap-2.5 z-20 pointer-events-auto select-none"
+          className="absolute left-6 top-[28%] flex flex-col items-start gap-2 z-20 pointer-events-auto select-none max-w-[340px]"
         >
-          {/* Left Player Jester Swap Button */}
+          {/* Left Player Action Buttons */}
           {isJesterSelected && (
             <button
               type="button"
-              onClick={() => handleOpponentSwapClick(player)}
+              onClick={handleStationClick}
               className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
             >
               <span>🃏</span>
@@ -744,11 +820,10 @@ export const GameTable: React.FC<GameTableProps> = ({
             </button>
           )}
 
-          {/* Left Player Time Warp Button */}
           {isEligibleTimeTarget && (
             <button
               type="button"
-              onClick={() => handleOpponentTimeClick(player)}
+              onClick={handleStationClick}
               className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
             >
               <span>⏳</span>
@@ -756,7 +831,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             </button>
           )}
 
-          {/* Left Player Time Immune Badge */}
           {isImmuneTimeTarget && (
             <div className="bg-neutral-900/90 text-neutral-400 border border-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 select-none pointer-events-none">
               <span>🔒</span>
@@ -764,20 +838,33 @@ export const GameTable: React.FC<GameTableProps> = ({
             </div>
           )}
 
+          {isNumberEyeSelected && (
+            <button
+              type="button"
+              onClick={handleStationClick}
+              className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
+            >
+              <span>👁️</span>
+              <span>Blind Numbers!</span>
+            </button>
+          )}
+
+          {isColorEyeSelected && (
+            <button
+              type="button"
+              onClick={handleStationClick}
+              className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
+            >
+              <span>👁️</span>
+              <span>Greyscale!</span>
+            </button>
+          )}
+
           {/* Player Banner */}
           <div className="flex items-center gap-2.5">
             <div
-              onClick={() => {
-                if (isJesterSelected) handleOpponentSwapClick(player);
-                else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
-              }}
-              className={`flex flex-col rounded-lg overflow-hidden border transition-all ${
-                isJesterSelected
-                  ? 'ring-4 ring-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.95)] cursor-pointer hover:scale-105 animate-pulse'
-                  : isEligibleTimeTarget
-                  ? 'ring-4 ring-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.95)] cursor-pointer hover:scale-105 animate-pulse'
-                  : ''
-              } ${
+              onClick={handleStationClick}
+              className={`flex flex-col rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                   : 'border-white/20'
@@ -794,6 +881,18 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
+                {player.hasNumberEyeEffect && (
+                  <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
+                    <span>👁️</span>
+                    <span>?</span>
+                  </span>
+                )}
+                {player.hasColorEyeEffect && (
+                  <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
+                    <span>👁️</span>
+                    <span>Grey</span>
+                  </span>
+                )}
               </div>
               <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -814,38 +913,29 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
 
           <div className="flex items-start gap-3">
-            {/* 3D Angled Vertical Fanned Cards with Reflection */}
+            {/* 3D Horizontal Fanned Cards with Perspective */}
             <div
               data-opponent-id={player.id}
-              onClick={() => {
-                if (isJesterSelected) handleOpponentSwapClick(player);
-                else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
-              }}
-              className={`card-reflect mt-1 flex flex-col ${
-                isJesterSelected || isEligibleTimeTarget ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
+              onClick={handleStationClick}
+              className={`card-reflect flex items-center justify-start my-1 ${
+                isTargetable ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
               }`}
               style={{
-                transform: 'perspective(900px) rotateY(48deg) rotateX(16deg) rotateZ(-8deg)',
+                transform: 'perspective(900px) rotateY(26deg) rotateX(16deg)',
                 transformStyle: 'preserve-3d'
               }}
             >
               {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
-                const rot = (i - (visibleCardsCount - 1) / 2) * 2;
+                const rot = (i - (visibleCardsCount - 1) / 2) * 2.2;
                 return (
                   <div
                     key={i}
                     style={{
                       transform: `rotateZ(${rot}deg)`,
-                      marginTop: i === 0 ? 0 : '-50px',
+                      marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-42px' : '-36px',
                       zIndex: i + 1
                     }}
-                    className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl ${
-                      isJesterSelected
-                        ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]'
-                        : isEligibleTimeTarget
-                        ? 'border-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]'
-                        : 'border-neutral-600'
-                    }`}
+                    className={`w-[56px] h-[78px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass}`}
                   >
                     <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                   </div>
@@ -855,7 +945,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             {/* Left Player Laid Down Melds in Front of their deck */}
             {player.laidDownPhases && player.laidDownPhases.length > 0 && (
-              <div className="mt-1 flex flex-col gap-2.5 pointer-events-auto">
+              <div className="flex flex-col gap-2 pointer-events-auto">
                 {player.laidDownPhases.map(group => {
                   const canHit = Boolean(
                     me?.phaseCompletedInRound &&
@@ -877,13 +967,13 @@ export const GameTable: React.FC<GameTableProps> = ({
     return (
       <div
         key={player.id}
-        className="absolute right-6 top-[250px] flex flex-col items-end gap-2.5 z-20 pointer-events-auto select-none"
+        className="absolute right-6 top-[28%] flex flex-col items-end gap-2 z-20 pointer-events-auto select-none max-w-[340px]"
       >
-        {/* Right Player Jester Swap Button */}
+        {/* Right Player Action Buttons */}
         {isJesterSelected && (
           <button
             type="button"
-            onClick={() => handleOpponentSwapClick(player)}
+            onClick={handleStationClick}
             className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
           >
             <span>🃏</span>
@@ -891,11 +981,10 @@ export const GameTable: React.FC<GameTableProps> = ({
           </button>
         )}
 
-        {/* Right Player Time Warp Button */}
         {isEligibleTimeTarget && (
           <button
             type="button"
-            onClick={() => handleOpponentTimeClick(player)}
+            onClick={handleStationClick}
             className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
           >
             <span>⏳</span>
@@ -903,12 +992,33 @@ export const GameTable: React.FC<GameTableProps> = ({
           </button>
         )}
 
-        {/* Right Player Time Immune Badge */}
         {isImmuneTimeTarget && (
           <div className="bg-neutral-900/90 text-neutral-400 border border-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 select-none pointer-events-none">
             <span>🔒</span>
             <span>Stage {player.currentPhase} Immune</span>
           </div>
+        )}
+
+        {isNumberEyeSelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
+          >
+            <span>👁️</span>
+            <span>Blind Numbers!</span>
+          </button>
+        )}
+
+        {isColorEyeSelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
+          >
+            <span>👁️</span>
+            <span>Greyscale!</span>
+          </button>
         )}
 
         {/* Player Banner */}
@@ -923,17 +1033,8 @@ export const GameTable: React.FC<GameTableProps> = ({
           )}
 
           <div
-            onClick={() => {
-              if (isJesterSelected) handleOpponentSwapClick(player);
-              else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
-            }}
-            className={`flex flex-col items-end rounded-lg overflow-hidden border transition-all ${
-              isJesterSelected
-                ? 'ring-4 ring-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.95)] cursor-pointer hover:scale-105 animate-pulse'
-                : isEligibleTimeTarget
-                ? 'ring-4 ring-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.95)] cursor-pointer hover:scale-105 animate-pulse'
-                : ''
-            } ${
+            onClick={handleStationClick}
+            className={`flex flex-col items-end rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
               isPlayerTurn
                 ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                 : 'border-white/20'
@@ -950,6 +1051,18 @@ export const GameTable: React.FC<GameTableProps> = ({
               {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
               {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
               {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
+              {player.hasNumberEyeEffect && (
+                <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
+                  <span>👁️</span>
+                  <span>?</span>
+                </span>
+              )}
+              {player.hasColorEyeEffect && (
+                <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
+                  <span>👁️</span>
+                  <span>Grey</span>
+                </span>
+              )}
             </div>
             <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
               <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -963,7 +1076,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         <div className="flex items-start gap-3">
           {/* Right Player Laid Down Melds in Front of their deck */}
           {player.laidDownPhases && player.laidDownPhases.length > 0 && (
-            <div className="mt-1 flex flex-col items-end gap-2.5 pointer-events-auto">
+            <div className="flex flex-col items-end gap-2 pointer-events-auto">
               {player.laidDownPhases.map(group => {
                 const canHit = Boolean(
                   me?.phaseCompletedInRound &&
@@ -977,38 +1090,29 @@ export const GameTable: React.FC<GameTableProps> = ({
             </div>
           )}
 
-          {/* 3D Angled Vertical Fanned Cards with Reflection */}
+          {/* 3D Horizontal Fanned Cards with Perspective */}
           <div
             data-opponent-id={player.id}
-            onClick={() => {
-              if (isJesterSelected) handleOpponentSwapClick(player);
-              else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
-            }}
-            className={`card-reflect mt-1 flex flex-col items-end ${
-              isJesterSelected || isEligibleTimeTarget ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
+            onClick={handleStationClick}
+            className={`card-reflect flex items-center justify-end my-1 ${
+              isTargetable ? 'pointer-events-auto cursor-pointer hover:scale-105 transition-transform' : 'pointer-events-none'
             }`}
             style={{
-              transform: 'perspective(900px) rotateY(-48deg) rotateX(16deg) rotateZ(8deg)',
+              transform: 'perspective(900px) rotateY(-26deg) rotateX(16deg)',
               transformStyle: 'preserve-3d'
             }}
           >
             {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
-              const rot = (i - (visibleCardsCount - 1) / 2) * -2;
+              const rot = (i - (visibleCardsCount - 1) / 2) * -2.2;
               return (
                 <div
                   key={i}
                   style={{
                     transform: `rotateZ(${rot}deg)`,
-                    marginTop: i === 0 ? 0 : '-50px',
+                    marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-42px' : '-36px',
                     zIndex: i + 1
                   }}
-                  className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl ${
-                    isJesterSelected
-                      ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]'
-                      : isEligibleTimeTarget
-                      ? 'border-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.8)]'
-                      : 'border-neutral-600'
-                  }`}
+                  className={`w-[56px] h-[78px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass}`}
                 >
                   <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                 </div>
@@ -1072,7 +1176,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>🔗</span>
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.0</span>
+            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.1</span>
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
               <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
@@ -1341,6 +1445,18 @@ export const GameTable: React.FC<GameTableProps> = ({
                   <span>{me.name} (You)</span>
                   {me.isSkipped && <span className="text-[10px] text-red-300 font-bold">[SKIPPED]</span>}
                   {me.isResigned && <span className="text-[10px] text-rose-400 font-extrabold">[RESIGNED]</span>}
+                  {me.hasNumberEyeEffect && (
+                    <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
+                      <span>👁️</span>
+                      <span>?</span>
+                    </span>
+                  )}
+                  {me.hasColorEyeEffect && (
+                    <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
+                      <span>👁️</span>
+                      <span>Grey</span>
+                    </span>
+                  )}
                 </div>
                 <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-2">
                   <span className="font-semibold">Stage {me.currentPhase} {me.phaseCompletedInRound ? '✓' : ''}</span>
@@ -1462,6 +1578,30 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             )}
 
+            {/* Number Eye Guidance Banner */}
+            {isNumberEyeSelected && (
+              <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-950/90 to-orange-950/90 border border-amber-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.6)] text-xs text-amber-100 font-bold animate-pulse">
+                <span>👁️</span>
+                <span>Click an opponent's deck or banner above to blind their card numbers!</span>
+              </div>
+            )}
+
+            {/* Color Eye Guidance Banner */}
+            {isColorEyeSelected && (
+              <div className="flex items-center gap-1.5 bg-gradient-to-r from-neutral-900/90 to-stone-900/90 border border-neutral-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(163,163,163,0.6)] text-xs text-neutral-100 font-bold animate-pulse">
+                <span>👁️</span>
+                <span>Click an opponent's deck or banner above to turn their hand grayscale!</span>
+              </div>
+            )}
+
+            {/* Random Guidance Banner */}
+            {selectedCard?.type === 'random' && isMyTurn && gameState.turnStage !== 'draw' && (
+              <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-950/90 to-blue-950/90 border border-cyan-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.6)] text-xs text-cyan-100 font-bold animate-pulse">
+                <span>🎲</span>
+                <span>Click ROLL RANDOM below to trigger a random special card power!</span>
+              </div>
+            )}
+
             {/* Sort Controls, Deselect, and Resign */}
             {me?.isResigned ? (
               <div className="flex items-center gap-1.5 bg-red-950/90 border border-red-500/80 px-4 py-1 rounded-full text-xs text-red-200 font-bold shadow-[0_0_15px_rgba(239,68,68,0.5)]">
@@ -1546,7 +1686,14 @@ export const GameTable: React.FC<GameTableProps> = ({
                     }`}
                     onClick={() => handleCardClick(c)}
                   >
-                    <CardView card={c} size="lg" isSelected={isSelected} isSelectable={true} />
+                    <CardView
+                      card={c}
+                      size="lg"
+                      isSelected={isSelected}
+                      isSelectable={true}
+                      isNumberEyeActive={Boolean(me?.hasNumberEyeEffect)}
+                      isColorEyeActive={Boolean(me?.hasColorEyeEffect)}
+                    />
 
                     {/* Action buttons right on the selected card */}
                     {isSelected && isMyTurn && gameState.turnStage !== 'draw' && (
@@ -1585,6 +1732,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   ? 'bg-pink-600/90 hover:bg-pink-600 border-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.8)]'
                                   : c.type === 'time'
                                   ? 'bg-emerald-600/90 hover:bg-emerald-600 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]'
+                                  : c.type === 'number_eye'
+                                  ? 'bg-amber-600/90 hover:bg-amber-600 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.8)]'
+                                  : c.type === 'color_eye'
+                                  ? 'bg-stone-600/90 hover:bg-stone-600 border-stone-400 shadow-[0_0_12px_rgba(163,163,163,0.8)]'
+                                  : c.type === 'random'
+                                  ? 'bg-cyan-600/90 hover:bg-cyan-600 border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.8)]'
                                   : 'bg-indigo-600/90 hover:bg-indigo-600 border-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.8)]'
                               }`}
                             >
@@ -1597,6 +1750,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   ? '🔄'
                                   : c.type === 'time'
                                   ? '⏳'
+                                  : c.type === 'number_eye'
+                                  ? '👁️'
+                                  : c.type === 'color_eye'
+                                  ? '👁️'
+                                  : c.type === 'random'
+                                  ? '🎲'
                                   : '⚡'}
                               </span>
                               <span>
@@ -1608,6 +1767,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   ? 'REDO HAND'
                                   : c.type === 'time'
                                   ? 'TIME WARP'
+                                  : c.type === 'number_eye'
+                                  ? 'BLIND NUMBERS'
+                                  : c.type === 'color_eye'
+                                  ? 'GREYSCALE'
+                                  : c.type === 'random'
+                                  ? 'ROLL RANDOM'
                                   : 'USE ABILITY'}
                               </span>
                             </button>

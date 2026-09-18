@@ -11,14 +11,17 @@ export type CardType =
   | 'plus_two'
   | 'plus_three'
   | 'redo'
-  | 'time';
+  | 'time'
+  | 'number_eye'
+  | 'color_eye'
+  | 'random';
 
 export interface Card {
   id: string;
   type: CardType;
   color: CardColor;
   value: number; // 1-12 for number, 0 for special
-  points: number; // 1-9: 5pts, 10-12: 10pts, Skip: 15pts, Wild: 25pts, Reverse: 20pts, +2: 20pts, Jester: 25pts, +3: 25pts, Nuke: 50pts
+  points: number; // 1-9: 5pts, 10-12: 10pts, Skip/Reverse: 15pts, Wild: 25pts, Specials: 20-50pts
 }
 
 export type RequirementType = 'set' | 'run' | 'color';
@@ -64,6 +67,8 @@ export interface PlayerPublic {
   laidDownPhases: LaidDownPhaseGroup[];
   isSkipped: boolean;
   isResigned?: boolean;
+  hasNumberEyeEffect?: boolean;
+  hasColorEyeEffect?: boolean;
 }
 
 export interface PlayerPrivate extends PlayerPublic {
@@ -110,7 +115,10 @@ export interface GameActionEvent {
     | 'plus_two'
     | 'plus_three'
     | 'redo'
-    | 'time';
+    | 'time'
+    | 'number_eye'
+    | 'color_eye'
+    | 'random';
   playerId: string;
   playerName: string;
   source?: 'deck' | 'discard';
@@ -121,6 +129,7 @@ export interface GameActionEvent {
   timeResult?: 'green' | 'red';
   timeOldPhase?: number;
   timeNewPhase?: number;
+  randomChosenType?: CardType;
   message?: string;
   timestamp: number;
 }

@@ -1,6 +1,7 @@
 import {
   Card,
   CardColor,
+  CardType,
   CLASSIC_PHASES,
   findExtraMeldMatch,
   findValidPhaseCombination,
@@ -120,6 +121,8 @@ export class GameSession {
       player.laidDownPhases = [];
       player.isSkipped = false;
       player.isResigned = false;
+      player.hasNumberEyeEffect = false;
+      player.hasColorEyeEffect = false;
       player.cards = [];
       player.cardCount = 0;
     }
@@ -661,29 +664,14 @@ export class GameSession {
         message: `${current.name} skipped ${target.name}!`
       });
     } else if (card.type === 'reverse') {
-      const active = this.getActivePlayers();
-      if (active.length === 2) {
-        // In 2-player games, reverse acts as a skip
-        const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
-        const target = active[nextIndex];
-        target.isSkipped = true;
-        this.notify({
-          id: `notif_${Date.now()}`,
-          type: 'skip',
-          message: `${current.name} played Reverse! In 2-player, ${target.name} is skipped.`,
-          playerId: target.id,
-          timestamp: Date.now()
-        });
-      } else {
-        this.playDirection = this.playDirection === 1 ? -1 : 1;
-        this.notify({
-          id: `notif_${Date.now()}`,
-          type: 'info',
-          message: `${current.name} reversed turn order (${this.playDirection === 1 ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}).`,
-          playerId: current.id,
-          timestamp: Date.now()
-        });
-      }
+      this.playDirection = this.playDirection === 1 ? -1 : 1;
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `${current.name} played Reverse! Turn order reversed (${this.playDirection === 1 ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}).`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
       this.emitAction({
         type: 'reverse',
         playerId: current.id,
@@ -692,240 +680,24 @@ export class GameSession {
         message: `${current.name} reversed play direction!`
       });
     } else if (card.type === 'nuke') {
-      const active = this.getActivePlayers();
-      for (const player of active) {
-        if (player.cards.length > 2) {
-          const excess = player.cards.splice(2);
-          for (const extraCard of excess) {
-            this.discardPile.push(extraCard);
-          }
-        } else if (player.cards.length < 2) {
-          while (player.cards.length < 2) {
-            this.ensureDrawPileHasCards();
-            if (this.drawPile.length > 0) {
-              player.cards.push(this.drawPile.pop()!);
-            } else {
-              break;
-            }
-          }
-        }
-        player.cardCount = player.cards.length;
-        player.cards = sortCardsByValue(player.cards);
-      }
-
-      this.notify({
-        id: `notif_${Date.now()}`,
-        type: 'info',
-        message: `💥 ${current.name} detonated a NUKE! Everyone's hand is reduced to 2 cards!`,
-        playerId: current.id,
-        timestamp: Date.now()
-      });
-
-      this.emitAction({
-        type: 'nuke',
-        playerId: current.id,
-        playerName: current.name,
-        card,
-        message: `${current.name} detonated a NUKE! Everyone's hand was set to 2 cards!`
-      });
+      this.applyNukeEffect(current, card);
     } else if (card.type === 'jester') {
-      const active = this.getActivePlayers();
-      let target = _skipTargetPlayerId
-        ? active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id)
-        : undefined;
-
-      if (!target) {
-        const opponents = active.filter(p => p.id !== current.id);
-        opponents.sort((a, b) => a.cards.length - b.cards.length);
-        target = opponents[0];
-      }
-
-      if (target) {
-        const tempCards = current.cards;
-        current.cards = target.cards;
-        target.cards = tempCards;
-
-        current.cardCount = current.cards.length;
-        target.cardCount = target.cards.length;
-
-        current.cards = sortCardsByValue(current.cards);
-        target.cards = sortCardsByValue(target.cards);
-
-        this.notify({
-          id: `notif_${Date.now()}`,
-          type: 'info',
-          message: `🃏 ${current.name} played Jester and swapped hands with ${target.name}!`,
-          playerId: current.id,
-          timestamp: Date.now()
-        });
-
-        this.emitAction({
-          type: 'jester',
-          playerId: current.id,
-          playerName: current.name,
-          targetPlayerId: target.id,
-          card,
-          message: `${current.name} swapped hands with ${target.name}!`
-        });
-      } else {
-        this.emitAction({
-          type: 'jester',
-          playerId: current.id,
-          playerName: current.name,
-          card,
-          message: `${current.name} played Jester!`
-        });
-      }
+      this.applyJesterEffect(current, card, _skipTargetPlayerId);
     } else if (card.type === 'plus_two' || card.type === 'plus_three') {
       const count = card.type === 'plus_three' ? 3 : 2;
-      const active = this.getActivePlayers();
-      const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
-      const target = active[nextIndex];
-
-      for (let i = 0; i < count; i++) {
-        this.ensureDrawPileHasCards();
-        if (this.drawPile.length > 0) {
-          target.cards.push(this.drawPile.pop()!);
-        }
-      }
-      target.cardCount = target.cards.length;
-      target.cards = sortCardsByValue(target.cards);
-
-      this.notify({
-        id: `notif_${Date.now()}`,
-        type: 'info',
-        message: `➕ ${current.name} played +${count} on ${target.name}!`,
-        playerId: target.id,
-        timestamp: Date.now()
-      });
-
-      this.emitAction({
-        type: card.type,
-        playerId: current.id,
-        playerName: current.name,
-        targetPlayerId: target.id,
-        card,
-        message: `${current.name} gave +${count} cards to ${target.name}!`
-      });
+      this.applyPlusCardsEffect(current, card, count, _skipTargetPlayerId);
     } else if (card.type === 'draw_two') {
-      const active = this.getActivePlayers();
-      const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
-      const target = active[nextIndex];
-      for (let i = 0; i < 2; i++) {
-        this.ensureDrawPileHasCards();
-        if (this.drawPile.length > 0) {
-          target.cards.push(this.drawPile.pop()!);
-        }
-      }
-      target.cardCount = target.cards.length;
-      target.cards = sortCardsByValue(target.cards);
-      target.isSkipped = true;
-
-      this.notify({
-        id: `notif_${Date.now()}`,
-        type: 'info',
-        message: `${current.name} played Draw Two! ${target.name} draws 2 cards and is skipped.`,
-        playerId: target.id,
-        timestamp: Date.now()
-      });
-
-      this.emitAction({
-        type: 'draw_two',
-        playerId: current.id,
-        playerName: current.name,
-        targetPlayerId: target.id,
-        card,
-        message: `${current.name} played Draw Two on ${target.name}!`
-      });
+      this.applyDrawTwoEffect(current, card);
     } else if (card.type === 'redo') {
-      // Draw fresh 10 cards from a brand-new independent deck (using current game mode)
-      const freshDeck = createDeck(this.settings.gameMode);
-      const freshHand = freshDeck.slice(0, 10).map((c, idx) => ({
-        ...c,
-        id: `fresh_${c.type}_${Date.now()}_${idx}`
-      }));
-      current.cards = sortCardsByValue(freshHand);
-      current.cardCount = current.cards.length;
-
-      this.notify({
-        id: `notif_${Date.now()}`,
-        type: 'info',
-        message: `🔄 ${current.name} played REDO! Hand replaced with 10 cards from a fresh deck!`,
-        playerId: current.id,
-        timestamp: Date.now()
-      });
-
-      this.emitAction({
-        type: 'redo',
-        playerId: current.id,
-        playerName: current.name,
-        card,
-        message: `${current.name} replaced their hand with 10 cards from a fresh deck!`
-      });
+      this.applyRedoEffect(current, card);
     } else if (card.type === 'time') {
-      const active = this.getActivePlayers();
-      let target = _skipTargetPlayerId
-        ? active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id)
-        : undefined;
-
-      if (!target) {
-        const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
-        eligible.sort((a, b) => b.currentPhase - a.currentPhase);
-        target = eligible[0];
-      }
-
-      if (!target) {
-        throw new Error('No eligible targets for Time card (target must be between Stage 2 and 9)');
-      }
-
-      if (target.currentPhase <= 1 || target.currentPhase >= 10) {
-        throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
-      }
-
-      // Roll 60/40 chance: 60% rewind (-1 stage, green), 40% forward (+1 stage, red)
-      const isRewind = Math.random() < 0.60;
-      const oldPhase = target.currentPhase;
-      const newPhase = isRewind ? oldPhase - 1 : oldPhase + 1;
-      target.currentPhase = newPhase;
-
-      if (target.phaseCompletedInRound) {
-        target.phaseCompletedInRound = false;
-        const returnedCards: Card[] = [];
-        for (const group of target.laidDownPhases) {
-          returnedCards.push(...group.cards);
-        }
-        this.allLaidDownPhases = this.allLaidDownPhases.filter(g => g.playerId !== target!.id);
-        target.laidDownPhases = [];
-        target.cards.push(...returnedCards);
-        target.cards = sortCardsByValue(target.cards);
-        target.cardCount = target.cards.length;
-      }
-
-      const rollResult: 'green' | 'red' = isRewind ? 'green' : 'red';
-
-      this.notify({
-        id: `notif_${Date.now()}`,
-        type: 'info',
-        message: isRewind
-          ? `⏳ ${current.name} used TIME on ${target.name}! ⏪ Rewound from Stage ${oldPhase} back to Stage ${newPhase}!`
-          : `⏳ ${current.name} used TIME on ${target.name}! ⏩ Fast-forwarded from Stage ${oldPhase} to Stage ${newPhase}!`,
-        playerId: current.id,
-        timestamp: Date.now()
-      });
-
-      this.emitAction({
-        type: 'time',
-        playerId: current.id,
-        playerName: current.name,
-        targetPlayerId: target.id,
-        card,
-        timeResult: rollResult,
-        timeOldPhase: oldPhase,
-        timeNewPhase: newPhase,
-        message: isRewind
-          ? `⏳ ${current.name} rewound ${target.name} to Stage ${newPhase}!`
-          : `⏳ ${current.name} advanced ${target.name} to Stage ${newPhase}!`
-      });
+      this.applyTimeEffect(current, card, _skipTargetPlayerId);
+    } else if (card.type === 'number_eye') {
+      this.applyNumberEyeEffect(current, card, _skipTargetPlayerId);
+    } else if (card.type === 'color_eye') {
+      this.applyColorEyeEffect(current, card, _skipTargetPlayerId);
+    } else if (card.type === 'random') {
+      this.applyRandomEffect(current, card, _skipTargetPlayerId);
     } else {
       this.notify({
         id: `notif_${Date.now()}`,
@@ -949,6 +721,409 @@ export class GameSession {
     }
 
     this.advanceTurn();
+  }
+
+  private applyNukeEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType): void {
+    const active = this.getActivePlayers();
+    for (const player of active) {
+      if (player.cards.length > 2) {
+        const excess = player.cards.splice(2);
+        for (const extraCard of excess) {
+          this.discardPile.push(extraCard);
+        }
+      } else if (player.cards.length < 2) {
+        while (player.cards.length < 2) {
+          this.ensureDrawPileHasCards();
+          if (this.drawPile.length > 0) {
+            player.cards.push(this.drawPile.pop()!);
+          } else {
+            break;
+          }
+        }
+      }
+      player.cardCount = player.cards.length;
+      player.cards = sortCardsByValue(player.cards);
+    }
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `💥 ${current.name} detonated a NUKE! Everyone's hand is reduced to 2 cards!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'nuke',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      randomChosenType,
+      message: `${current.name} detonated a NUKE! Everyone's hand was set to 2 cards!`
+    });
+  }
+
+  private applyJesterEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId?: string,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId && p.id !== current.id)
+      : undefined;
+
+    if (!target) {
+      const opponents = active.filter(p => p.id !== current.id);
+      opponents.sort((a, b) => a.cards.length - b.cards.length);
+      target = opponents[0];
+    }
+
+    if (target) {
+      const tempCards = current.cards;
+      current.cards = target.cards;
+      target.cards = tempCards;
+
+      current.cardCount = current.cards.length;
+      target.cardCount = target.cards.length;
+
+      current.cards = sortCardsByValue(current.cards);
+      target.cards = sortCardsByValue(target.cards);
+
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `🃏 ${current.name} played Jester and swapped hands with ${target.name}!`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'jester',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        randomChosenType,
+        message: `${current.name} swapped hands with ${target.name}!`
+      });
+    } else {
+      this.emitAction({
+        type: 'jester',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        randomChosenType,
+        message: `${current.name} played Jester!`
+      });
+    }
+  }
+
+  private applyPlusCardsEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    count: 2 | 3,
+    skipTargetPlayerId?: string,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId && p.id !== current.id)
+      : undefined;
+
+    if (!target) {
+      const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
+      target = active[nextIndex];
+    }
+
+    for (let i = 0; i < count; i++) {
+      this.ensureDrawPileHasCards();
+      if (this.drawPile.length > 0) {
+        target.cards.push(this.drawPile.pop()!);
+      }
+    }
+    target.cardCount = target.cards.length;
+    target.cards = sortCardsByValue(target.cards);
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `➕ ${current.name} played +${count} on ${target.name}!`,
+      playerId: target.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: count === 3 ? 'plus_three' : 'plus_two',
+      playerId: current.id,
+      playerName: current.name,
+      targetPlayerId: target.id,
+      card,
+      randomChosenType,
+      message: `${current.name} gave +${count} cards to ${target.name}!`
+    });
+  }
+
+  private applyDrawTwoEffect(current: GamePlayerInternal, card: Card): void {
+    const active = this.getActivePlayers();
+    const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
+    const target = active[nextIndex];
+    for (let i = 0; i < 2; i++) {
+      this.ensureDrawPileHasCards();
+      if (this.drawPile.length > 0) {
+        target.cards.push(this.drawPile.pop()!);
+      }
+    }
+    target.cardCount = target.cards.length;
+    target.cards = sortCardsByValue(target.cards);
+    target.isSkipped = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `${current.name} played Draw Two! ${target.name} draws 2 cards and is skipped.`,
+      playerId: target.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'draw_two',
+      playerId: current.id,
+      playerName: current.name,
+      targetPlayerId: target.id,
+      card,
+      message: `${current.name} played Draw Two on ${target.name}!`
+    });
+  }
+
+  private applyRedoEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType): void {
+    const freshDeck = createDeck(this.settings.gameMode);
+    const freshHand = freshDeck.slice(0, 10).map((c, idx) => ({
+      ...c,
+      id: `fresh_${c.type}_${Date.now()}_${idx}`
+    }));
+    current.cards = sortCardsByValue(freshHand);
+    current.cardCount = current.cards.length;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `🔄 ${current.name} played REDO! Hand replaced with 10 cards from a fresh deck!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'redo',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      randomChosenType,
+      message: `${current.name} replaced their hand with 10 cards from a fresh deck!`
+    });
+  }
+
+  private applyTimeEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId?: string,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId && p.id !== current.id)
+      : undefined;
+
+    if (!target) {
+      const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
+      eligible.sort((a, b) => b.currentPhase - a.currentPhase);
+      target = eligible[0];
+    }
+
+    if (!target) {
+      throw new Error('No eligible targets for Time card (target must be between Stage 2 and 9)');
+    }
+
+    if (target.currentPhase <= 1 || target.currentPhase >= 10) {
+      throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
+    }
+
+    const isRewind = Math.random() < 0.60;
+    const oldPhase = target.currentPhase;
+    const newPhase = isRewind ? oldPhase - 1 : oldPhase + 1;
+    target.currentPhase = newPhase;
+
+    if (target.phaseCompletedInRound) {
+      target.phaseCompletedInRound = false;
+      const returnedCards: Card[] = [];
+      for (const group of target.laidDownPhases) {
+        returnedCards.push(...group.cards);
+      }
+      this.allLaidDownPhases = this.allLaidDownPhases.filter(g => g.playerId !== target!.id);
+      target.laidDownPhases = [];
+      target.cards.push(...returnedCards);
+      target.cards = sortCardsByValue(target.cards);
+      target.cardCount = target.cards.length;
+    }
+
+    const rollResult: 'green' | 'red' = isRewind ? 'green' : 'red';
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: isRewind
+        ? `⏳ ${current.name} used TIME on ${target.name}! ⏪ Rewound from Stage ${oldPhase} back to Stage ${newPhase}!`
+        : `⏳ ${current.name} used TIME on ${target.name}! ⏩ Fast-forwarded from Stage ${oldPhase} to Stage ${newPhase}!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'time',
+      playerId: current.id,
+      playerName: current.name,
+      targetPlayerId: target.id,
+      card,
+      randomChosenType,
+      timeResult: rollResult,
+      timeOldPhase: oldPhase,
+      timeNewPhase: newPhase,
+      message: isRewind
+        ? `⏳ ${current.name} rewound ${target.name} to Stage ${newPhase}!`
+        : `⏳ ${current.name} advanced ${target.name} to Stage ${newPhase}!`
+    });
+  }
+
+  private applyNumberEyeEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId?: string,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId && p.id !== current.id)
+      : undefined;
+
+    if (!target) {
+      const opponents = active.filter(p => p.id !== current.id);
+      target = opponents[0];
+    }
+
+    if (!target) {
+      throw new Error('No opponents available to target with Number Eye');
+    }
+
+    target.hasNumberEyeEffect = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `👁️ ${current.name} played NUMBER EYE on ${target.name}! Their number cards are now question marks!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'number_eye',
+      playerId: current.id,
+      playerName: current.name,
+      targetPlayerId: target.id,
+      card,
+      randomChosenType,
+      message: `👁️ ${current.name} obscured ${target.name}'s card numbers with question marks!`
+    });
+  }
+
+  private applyColorEyeEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId?: string,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId && p.id !== current.id)
+      : undefined;
+
+    if (!target) {
+      const opponents = active.filter(p => p.id !== current.id);
+      target = opponents[0];
+    }
+
+    if (!target) {
+      throw new Error('No opponents available to target with Color Eye');
+    }
+
+    target.hasColorEyeEffect = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `👁️ ${current.name} played COLOR EYE on ${target.name}! Their cards are now grayscale!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'color_eye',
+      playerId: current.id,
+      playerName: current.name,
+      targetPlayerId: target.id,
+      card,
+      randomChosenType,
+      message: `👁️ ${current.name} turned ${target.name}'s cards grayscale!`
+    });
+  }
+
+  private applyRandomEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId?: string
+  ): void {
+    const active = this.getActivePlayers();
+    const opponents = active.filter(p => p.id !== current.id);
+    const eligibleTimeTargets = opponents.filter(p => p.currentPhase > 1 && p.currentPhase < 10);
+
+    const possibleAbilities: CardType[] = ['redo'];
+    if (current.phaseCompletedInRound) {
+      possibleAbilities.push('nuke');
+    }
+    if (opponents.length > 0) {
+      possibleAbilities.push('jester', 'plus_two', 'plus_three', 'number_eye', 'color_eye');
+      if (eligibleTimeTargets.length > 0) {
+        possibleAbilities.push('time');
+      }
+    }
+
+    const chosen = possibleAbilities[Math.floor(Math.random() * possibleAbilities.length)];
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `🎲 ${current.name} played RANDOM and rolled: ${chosen.toUpperCase().replace(/_/g, ' ')}!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    if (chosen === 'nuke') {
+      this.applyNukeEffect(current, card, chosen);
+    } else if (chosen === 'jester') {
+      this.applyJesterEffect(current, card, skipTargetPlayerId, chosen);
+    } else if (chosen === 'plus_two') {
+      this.applyPlusCardsEffect(current, card, 2, skipTargetPlayerId, chosen);
+    } else if (chosen === 'plus_three') {
+      this.applyPlusCardsEffect(current, card, 3, skipTargetPlayerId, chosen);
+    } else if (chosen === 'redo') {
+      this.applyRedoEffect(current, card, chosen);
+    } else if (chosen === 'time') {
+      this.applyTimeEffect(current, card, skipTargetPlayerId, chosen);
+    } else if (chosen === 'number_eye') {
+      this.applyNumberEyeEffect(current, card, skipTargetPlayerId, chosen);
+    } else if (chosen === 'color_eye') {
+      this.applyColorEyeEffect(current, card, skipTargetPlayerId, chosen);
+    }
   }
 
   private advanceTurn(): void {
@@ -1117,7 +1292,9 @@ export class GameSession {
         cardCount: p.cards.length,
         laidDownPhases: p.laidDownPhases,
         isSkipped: p.isSkipped,
-        isResigned: p.isResigned
+        isResigned: p.isResigned,
+        hasNumberEyeEffect: p.hasNumberEyeEffect,
+        hasColorEyeEffect: p.hasColorEyeEffect
       })),
       allLaidDownPhases: this.allLaidDownPhases,
       winnerId: this.winnerId,

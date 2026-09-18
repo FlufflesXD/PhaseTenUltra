@@ -9,6 +9,8 @@ interface CardViewProps {
   size?: 'xs' | 'sm' | 'md' | 'lg';
   onClick?: () => void;
   badge?: string;
+  isNumberEyeActive?: boolean;
+  isColorEyeActive?: boolean;
 }
 
 export const CardView: React.FC<CardViewProps> = ({
@@ -18,7 +20,9 @@ export const CardView: React.FC<CardViewProps> = ({
   isSelectable = true,
   size = 'md',
   onClick,
-  badge
+  badge,
+  isNumberEyeActive = false,
+  isColorEyeActive = false
 }) => {
   const [imageError, setImageError] = React.useState(false);
 
@@ -36,7 +40,7 @@ export const CardView: React.FC<CardViewProps> = ({
 
   const highlightStyle = isHighlighted && !isSelected ? 'ring-2 ring-white' : '';
 
-  const colorLabel = card.color !== 'none' ? card.color.toUpperCase() : '';
+  const colorLabel = isColorEyeActive && card.type === 'number' ? 'GREY' : (card.color !== 'none' ? card.color.toUpperCase() : '');
 
   const imageSrc = React.useMemo(() => {
     if (card.type === 'wild') return '/cards/wild.png';
@@ -48,13 +52,21 @@ export const CardView: React.FC<CardViewProps> = ({
     if (card.type === 'jester') return '/cards/custom/jester.png';
     if (card.type === 'redo') return '/cards/custom/redo.png';
     if (card.type === 'time') return '/cards/custom/time.png';
-    if (card.type === 'number') return `/cards/${card.color}_${card.value}.png`;
+    if (card.type === 'number_eye') return '/cards/custom/number_eye.png';
+    if (card.type === 'color_eye') return '/cards/custom/color_eye.png';
+    if (card.type === 'random') return '/cards/custom/random.png';
+    if (card.type === 'number') {
+      if (isNumberEyeActive) {
+        return `/cards/custom/number_eye/${card.color}_unknown.png`;
+      }
+      return `/cards/${card.color}_${card.value}.png`;
+    }
     return null;
-  }, [card.type, card.color, card.value]);
+  }, [card.type, card.color, card.value, isNumberEyeActive]);
 
   React.useEffect(() => {
     setImageError(false);
-  }, [card.id, card.type, card.color, card.value]);
+  }, [card.id, card.type, card.color, card.value, isNumberEyeActive, isColorEyeActive]);
 
   const symbol =
     card.type === 'wild'
@@ -75,6 +87,14 @@ export const CardView: React.FC<CardViewProps> = ({
       ? '🔄'
       : card.type === 'time'
       ? '⏳'
+      : card.type === 'number_eye'
+      ? '👁'
+      : card.type === 'color_eye'
+      ? '👁'
+      : card.type === 'random'
+      ? '🎲'
+      : isNumberEyeActive
+      ? '?'
       : card.value;
 
   const innerContent = imageSrc && !imageError ? (
@@ -84,7 +104,9 @@ export const CardView: React.FC<CardViewProps> = ({
           src={imageSrc}
           alt={`${card.color} ${card.value || card.type}`}
           onError={() => setImageError(true)}
-          className="w-full h-full object-contain pointer-events-none rounded"
+          className={`w-full h-full object-contain pointer-events-none rounded transition-all ${
+            isColorEyeActive && card.type === 'number' ? 'grayscale contrast-125' : ''
+          }`}
         />
       </div>
       {badge && (
@@ -112,9 +134,12 @@ export const CardView: React.FC<CardViewProps> = ({
         {card.type === 'jester' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">🃏 JESTER</div>}
         {card.type === 'redo' && <div className="text-sm sm:text-base tracking-wider text-pink-400 font-black">🔄 REDO</div>}
         {card.type === 'time' && <div className="text-sm sm:text-base tracking-wider text-emerald-400 font-black">⏳ TIME</div>}
+        {card.type === 'number_eye' && <div className="text-sm sm:text-base tracking-wider text-amber-400 font-black">👁 NUM EYE</div>}
+        {card.type === 'color_eye' && <div className="text-sm sm:text-base tracking-wider text-neutral-400 font-black">👁 COLOR EYE</div>}
+        {card.type === 'random' && <div className="text-sm sm:text-base tracking-wider text-cyan-400 font-black">🎲 RANDOM</div>}
         {card.type === 'number' && (
           <div>
-            <div className="text-xl sm:text-3xl leading-none">{card.value}</div>
+            <div className="text-xl sm:text-3xl leading-none">{isNumberEyeActive ? '?' : card.value}</div>
             <div className="text-[10px] tracking-wider opacity-75 mt-0.5">{colorLabel}</div>
           </div>
         )}

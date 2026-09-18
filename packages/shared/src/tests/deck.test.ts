@@ -3,26 +3,29 @@ import assert from 'node:assert';
 import { createStandardDeck, createDeck, sortCardsByValue } from '../deck.js';
 
 describe('Deck Creation and Manipulation Tests', () => {
-  test('createStandardDeck creates exactly 108 cards', () => {
+  test('createStandardDeck creates exactly 112 cards', () => {
     const deck = createStandardDeck();
-    assert.strictEqual(deck.length, 108);
+    assert.strictEqual(deck.length, 112);
 
     const wilds = deck.filter(c => c.type === 'wild');
     const skips = deck.filter(c => c.type === 'skip');
+    const reverses = deck.filter(c => c.type === 'reverse');
     const numbers = deck.filter(c => c.type === 'number');
 
     assert.strictEqual(wilds.length, 8);
     assert.strictEqual(skips.length, 4);
+    assert.strictEqual(reverses.length, 4);
     assert.strictEqual(numbers.length, 96);
   });
 
-  test('createDeck returns 108 shuffled cards with exact distribution', () => {
+  test('createDeck returns 112 shuffled cards with exact distribution', () => {
     const deck = createDeck();
-    assert.strictEqual(deck.length, 108);
+    assert.strictEqual(deck.length, 112);
 
-    // 8 wilds and 4 skips
+    // 8 wilds, 4 skips, 4 reverses
     assert.strictEqual(deck.filter(c => c.type === 'wild').length, 8);
     assert.strictEqual(deck.filter(c => c.type === 'skip').length, 4);
+    assert.strictEqual(deck.filter(c => c.type === 'reverse').length, 4);
 
     // 96 numbers total (24 per color, 8 of each number 1-12)
     const numbers = deck.filter(c => c.type === 'number');
@@ -44,7 +47,7 @@ describe('Deck Creation and Manipulation Tests', () => {
     for (let i = 0; i < standard.length; i++) {
       if (standard[i].id !== deck[i].id) diffCount++;
     }
-    // A truly shuffled deck of 108 cards will differ in almost every position (> 90 positions)
+    // A truly shuffled deck of 112 cards will differ in almost every position (> 90 positions)
     assert.ok(diffCount > 90, `Shuffled deck must differ from standard ordered deck`);
   });
 

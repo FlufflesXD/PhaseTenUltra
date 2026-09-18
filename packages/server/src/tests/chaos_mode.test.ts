@@ -4,9 +4,9 @@ import { createStandardDeck, createDeck, Card } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
 
 describe('Chaos Game Mode & Custom Card Tests', () => {
-  test('Chaos Mode Deck Composition: Exactly 108 cards with 1 copy of each of 6 special cards replacing 6 colored cards', () => {
+  test('Chaos Mode Deck Composition: Exactly 112 cards with 1 copy of each of 9 special cards replacing 9 colored cards and 4 reverses', () => {
     const deck = createStandardDeck('chaos');
-    assert.strictEqual(deck.length, 108, 'Chaos deck must contain exactly 108 cards');
+    assert.strictEqual(deck.length, 112, 'Chaos deck must contain exactly 112 cards');
 
     const nukes = deck.filter(c => c.type === 'nuke');
     const jesters = deck.filter(c => c.type === 'jester');
@@ -14,6 +14,10 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     const plusThrees = deck.filter(c => c.type === 'plus_three');
     const redos = deck.filter(c => c.type === 'redo');
     const times = deck.filter(c => c.type === 'time');
+    const numberEyes = deck.filter(c => c.type === 'number_eye');
+    const colorEyes = deck.filter(c => c.type === 'color_eye');
+    const randoms = deck.filter(c => c.type === 'random');
+    const reverses = deck.filter(c => c.type === 'reverse');
     const wilds = deck.filter(c => c.type === 'wild');
     const skips = deck.filter(c => c.type === 'skip');
     const coloredCards = deck.filter(c => c.type === 'number');
@@ -24,9 +28,13 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(plusThrees.length, 1, 'Exactly 1 plus_three card in deck');
     assert.strictEqual(redos.length, 1, 'Exactly 1 redo card in deck');
     assert.strictEqual(times.length, 1, 'Exactly 1 time card in deck');
+    assert.strictEqual(numberEyes.length, 1, 'Exactly 1 number_eye card in deck');
+    assert.strictEqual(colorEyes.length, 1, 'Exactly 1 color_eye card in deck');
+    assert.strictEqual(randoms.length, 1, 'Exactly 1 random card in deck');
+    assert.strictEqual(reverses.length, 4, 'Exactly 4 reverse cards in deck');
     assert.strictEqual(wilds.length, 8, 'Exactly 8 wilds in deck');
     assert.strictEqual(skips.length, 4, 'Exactly 4 skips in deck');
-    assert.strictEqual(coloredCards.length, 90, '90 colored cards in deck (96 - 6 replaced)');
+    assert.strictEqual(coloredCards.length, 87, '87 colored cards in deck (96 - 9 replaced)');
   });
 
   test('Nuke Card: Detonation reduces all players hands to 2 cards', () => {
@@ -798,6 +806,279 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     session.startRound();
     assert.strictEqual(session.players[0].isResigned, false, 'Alice resignation should reset on new round');
     assert.strictEqual(session.players[1].isResigned, false, 'Bob should not be resigned');
+  });
+
+  test('Reverse Card: Inverts play direction and turn progression in 3-player match', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'REV1',
+      { turnTimerSeconds: 0, gameMode: 'classic' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'rev1', type: 'reverse', color: 'none', value: 0, points: 15 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'Player 2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 },
+          { id: 'c3', type: 'number', color: 'blue', value: 3, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p3',
+        secretToken: 'p3_tok',
+        name: 'Player 3',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c4', type: 'number', color: 'green', value: 4, points: 5 },
+          { id: 'c5', type: 'number', color: 'green', value: 5, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.playDirection = 1;
+    session.turnStage = 'play';
+
+    // Player 1 discards reverse card
+    session.discardCard('p1_tok', 'rev1');
+
+    assert.strictEqual(session.playDirection, -1, 'Play direction should now be -1');
+    assert.strictEqual(lastAction.type, 'reverse');
+    // With playDirection = -1, next turn from index 0 should be index (0 - 1 + 3) % 3 = 2 (Player 3) instead of index 1
+    assert.strictEqual(session.currentTurnIndex, 2, 'Turn should go backwards to Player 3');
+  });
+
+  test('Number Eye Card: Chooses opponent and marks hasNumberEyeEffect until round reset', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'NUMEYE1',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'ne1', type: 'number_eye', color: 'none', value: 0, points: 30 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'Player 2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 },
+          { id: 'c3', type: 'number', color: 'blue', value: 3, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Player 1 discards number_eye targeting Player 2
+    session.discardCard('p1_tok', 'ne1', 'p2');
+
+    assert.strictEqual(session.players[1].hasNumberEyeEffect, true, 'Player 2 should have number eye effect active');
+    const pub = session.getPublicState();
+    assert.strictEqual(pub.players.find(p => p.id === 'p2')?.hasNumberEyeEffect, true);
+    assert.strictEqual(lastAction.type, 'number_eye');
+
+    // Round reset clears it
+    session.startRound();
+    assert.strictEqual(session.players[1].hasNumberEyeEffect, false, 'Number eye effect should reset on new round');
+  });
+
+  test('Color Eye Card: Chooses opponent and marks hasColorEyeEffect until round reset', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'COLOREYE1',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'ce1', type: 'color_eye', color: 'none', value: 0, points: 30 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'Player 2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 },
+          { id: 'c3', type: 'number', color: 'blue', value: 3, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Player 1 discards color_eye targeting Player 2
+    session.discardCard('p1_tok', 'ce1', 'p2');
+
+    assert.strictEqual(session.players[1].hasColorEyeEffect, true, 'Player 2 should have color eye effect active');
+    const pub = session.getPublicState();
+    assert.strictEqual(pub.players.find(p => p.id === 'p2')?.hasColorEyeEffect, true);
+    assert.strictEqual(lastAction.type, 'color_eye');
+
+    // Round reset clears it
+    session.startRound();
+    assert.strictEqual(session.players[1].hasColorEyeEffect, false, 'Color eye effect should reset on new round');
+  });
+
+  test('Random Card: Discarding triggers one of the eligible abilities', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'RAND1',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'rnd1', type: 'random', color: 'none', value: 0, points: 35 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'Player 2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 },
+          { id: 'c3', type: 'number', color: 'blue', value: 3, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    session.discardCard('p1_tok', 'rnd1', 'p2');
+    assert.ok(lastAction, 'An action should have been emitted');
+    // Random must roll into one of the known effects
+    const validRollTypes = ['redo', 'jester', 'plus_two', 'plus_three', 'number_eye', 'color_eye'];
+    assert.ok(validRollTypes.includes(lastAction.type), `Rolled action type ${lastAction.type} must be in valid list`);
   });
 });
 
