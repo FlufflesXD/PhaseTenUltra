@@ -68,11 +68,32 @@ export const GameTable: React.FC<GameTableProps> = ({
   } | null>(null);
   const [discardKey, setDiscardKey] = useState(0);
 
+  const gameStateRef = useRef(gameState);
   useEffect(() => {
-    if (!discardFlightActiveRef.current) {
-      setDisplayedDiscardCard(gameState.topDiscard);
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
+    // If a new discard action is pending or in flight, do NOT display the new top card yet!
+    const isNewDiscardAction =
+      latestAction &&
+      lastHandledActionIdRef.current !== latestAction.id &&
+      (latestAction.type === 'discard' ||
+        latestAction.type === 'skip' ||
+        latestAction.type === 'reverse' ||
+        latestAction.type === 'draw_two');
+
+    if (discardFlightActiveRef.current || isNewDiscardAction) {
+      const prevDiscard =
+        gameState.discardHistory && gameState.discardHistory.length > 1
+          ? gameState.discardHistory[gameState.discardHistory.length - 2]
+          : null;
+      setDisplayedDiscardCard(prevDiscard);
+      return;
     }
-  }, [gameState.topDiscard]);
+
+    setDisplayedDiscardCard(gameState.topDiscard);
+  }, [gameState.topDiscard, latestAction]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const deckRef = useRef<HTMLButtonElement | null>(null);
@@ -140,8 +161,6 @@ export const GameTable: React.FC<GameTableProps> = ({
         ? gameState.discardHistory[gameState.discardHistory.length - 2]
         : null;
       setDisplayedDiscardCard(prevDiscard);
-
-      setDiscardKey(prev => prev + 1);
       targetCoords = getCenterCoords(discardRef.current);
 
       if (isMe) {
@@ -215,7 +234,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         setActiveFlyingCard(null);
         if (discardFlightActiveRef.current) {
           discardFlightActiveRef.current = false;
-          setDisplayedDiscardCard(gameState.topDiscard);
+          setDiscardKey(prev => prev + 1);
+          setDisplayedDiscardCard(gameStateRef.current.topDiscard);
         }
       }, 430);
       return () => clearTimeout(timer);
@@ -400,7 +420,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       return (
         <div
           key={player.id}
-          className="absolute top-10 sm:top-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-20 pointer-events-auto select-none"
+          className="absolute top-10 sm:top-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-20 pointer-events-auto select-none max-w-[95vw]"
         >
           {/* Player Banner */}
           <div className="flex items-center gap-2">
@@ -446,7 +466,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             )}
           </div>
 
-          {/* 3D Horizontal Fanned Cards with Reflection */}
+          {/* 3D Horizontal Fanned Cards with Floor Reflection */}
           <div
             data-opponent-id={player.id}
             className="card-reflect mt-1 flex items-center justify-center pointer-events-none"
@@ -462,10 +482,10 @@ export const GameTable: React.FC<GameTableProps> = ({
                   key={i}
                   style={{
                     transform: `rotateZ(${rot}deg)`,
-                    marginLeft: i === 0 ? 0 : '-44px',
+                    marginLeft: i === 0 ? 0 : '-36px',
                     zIndex: i + 1
                   }}
-                  className="w-16 h-24 sm:w-18 sm:h-26 rounded-md border border-neutral-700/80 overflow-hidden bg-neutral-900 shadow-xl shrink-0"
+                  className="w-12 h-18 sm:w-16 sm:h-24 rounded-md border border-neutral-700/80 overflow-hidden bg-neutral-900 shadow-xl shrink-0"
                 >
                   <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
                 </div>
@@ -475,7 +495,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
           {/* Top Player Laid Down Melds in Front of their deck */}
           {player.laidDownPhases && player.laidDownPhases.length > 0 && (
-            <div className="mt-1 flex items-center justify-center gap-2 pointer-events-auto">
+            <div className="mt-1 flex items-center justify-center gap-1.5 sm:gap-2 pointer-events-auto max-w-full overflow-x-auto px-2">
               {player.laidDownPhases.map(group => {
                 const canHit = Boolean(
                   me?.phaseCompletedInRound &&
@@ -689,7 +709,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-black text-white font-sans select-none flex flex-col justify-between">
+    <div className="relative w-full h-screen h-[100dvh] overflow-hidden bg-black text-white font-sans select-none flex flex-col justify-between">
       {/* 1. Looping 3D Arena Video Background */}
       <video
         ref={videoRef}
@@ -715,7 +735,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span>🔗</span>
             <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
           </button>
-          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.1</span>
+          <span className="text-[10px] text-neutral-400 border border-white/10 px-1.5 py-0.5 rounded font-medium">v4.2</span>
           <span className="text-neutral-300 font-bold">Round {gameState.roundNumber}</span>
           {gameState.settings?.gameMode && gameState.settings.gameMode !== 'classic' && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-amber-500/50 bg-amber-950/80 text-amber-300 uppercase">
@@ -784,7 +804,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           {activeFlyingCard.card ? (
             <CardView card={activeFlyingCard.card} size="lg" isSelectable={false} />
           ) : (
-            <div className="w-24 h-34 sm:w-28 sm:h-40 rounded-xl border border-neutral-700 overflow-hidden bg-neutral-900 shadow-2xl">
+            <div className="w-20 h-28 sm:w-24 sm:h-32 md:w-28 md:h-40 rounded-xl border border-neutral-700 overflow-hidden bg-neutral-900 shadow-2xl">
               <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
             </div>
           )}
@@ -820,41 +840,68 @@ export const GameTable: React.FC<GameTableProps> = ({
       {renderOpponentStation(rightPlayer, 'right')}
 
       {/* 6. Center Table Arena (Deck, Discard, Direction Arrows) */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-        <div className="relative w-full max-w-2xl h-[420px] flex items-center justify-center">
-          {/* Central Circular Direction Arrow Indicator */}
+      <div className="absolute inset-x-0 top-[37%] sm:top-[39%] md:top-[41%] -translate-y-1/2 flex items-center justify-center pointer-events-none z-10">
+        <div className="relative w-full max-w-2xl h-[340px] sm:h-[420px] flex items-center justify-center">
+          {/* Central Circular Direction Arrow Indicator (Enlarged orbital ring that circles cleanly outside the cards) */}
           <div
-            className={`absolute w-72 h-72 sm:w-96 sm:h-96 rounded-full border border-cyan-500/20 pointer-events-none flex items-center justify-center ${
+            className={`absolute w-[330px] h-[330px] sm:w-[450px] sm:h-[450px] md:w-[520px] md:h-[520px] max-w-[94vw] max-h-[94vw] rounded-full pointer-events-none flex items-center justify-center transition-all ${
               gameState.playDirection === 1 ? 'animate-spin-cw' : 'animate-spin-ccw'
             }`}
           >
-            <svg viewBox="0 0 100 100" className="w-full h-full opacity-40">
+            <svg viewBox="0 0 100 100" className="w-full h-full opacity-60 drop-shadow-[0_0_12px_rgba(56,189,248,0.4)]">
+              <defs>
+                <linearGradient id="orbitGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
+                  <stop offset="60%" stopColor="#06b6d4" stopOpacity="0.5" />
+                  <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.1" />
+                </linearGradient>
+                <linearGradient id="orbitGrad2" x1="100%" y1="100%" x2="0%" y2="0%">
+                  <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
+                  <stop offset="60%" stopColor="#06b6d4" stopOpacity="0.5" />
+                  <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.1" />
+                </linearGradient>
+              </defs>
+              {/* Outer Glowing Neon Dashed Arc 1 */}
               <path
-                d="M 50,8 A 42,42 0 0,1 92,50"
-                stroke="#38bdf8"
-                strokeWidth="3"
+                d="M 50,6 A 44,44 0 0,1 94,50"
+                stroke="url(#orbitGrad1)"
+                strokeWidth="2.5"
                 fill="none"
-                strokeDasharray="6,4"
+                strokeDasharray="9,5"
+                strokeLinecap="round"
               />
+              {/* Outer Glowing Neon Dashed Arc 2 */}
               <path
-                d="M 50,92 A 42,42 0 0,1 8,50"
-                stroke="#38bdf8"
-                strokeWidth="3"
+                d="M 50,94 A 44,44 0 0,1 6,50"
+                stroke="url(#orbitGrad2)"
+                strokeWidth="2.5"
                 fill="none"
-                strokeDasharray="6,4"
+                strokeDasharray="9,5"
+                strokeLinecap="round"
+              />
+              {/* Concentric Guide Ring */}
+              <circle
+                cx="50"
+                cy="50"
+                r="44"
+                stroke="#06b6d4"
+                strokeWidth="0.5"
+                strokeDasharray="3,6"
+                fill="none"
+                opacity="0.25"
               />
             </svg>
           </div>
 
           {/* Draw & Discard Piles in the Arena Ring */}
-          <div className="flex items-center gap-8 sm:gap-14 pointer-events-auto z-20">
+          <div className="flex items-center gap-6 sm:gap-10 md:gap-14 pointer-events-auto z-20">
             {/* Draw Pile (Upper-Left of Center) */}
             <div className="flex flex-col items-center">
               <button
                 ref={deckRef}
                 onClick={() => handleDraw('deck')}
                 disabled={!isMyTurn || gameState.turnStage !== 'draw'}
-                className={`relative w-24 h-34 sm:w-28 sm:h-40 rounded-xl flex flex-col items-center justify-center transition-transform deck-3d-stack overflow-hidden ${
+                className={`relative w-20 h-28 sm:w-24 sm:h-32 rounded-xl flex flex-col items-center justify-center transition-transform deck-3d-stack overflow-hidden ${
                   isMyTurn && gameState.turnStage === 'draw'
                     ? 'border-2 border-yellow-300 ring-4 ring-yellow-400/50 hover:scale-105 cursor-pointer animate-pulse'
                     : 'border border-neutral-700 cursor-default opacity-90'
@@ -868,11 +915,11 @@ export const GameTable: React.FC<GameTableProps> = ({
                       onError={() => setDeckBackError(true)}
                       className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                     />
-                    <div className="absolute top-2 right-2 bg-black/85 text-white text-[11px] px-2 py-0.5 rounded-md font-bold border border-white/20">
+                    <div className="absolute top-1.5 right-1.5 bg-black/85 text-white text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-md font-bold border border-white/20">
                       {gameState.drawPileCount}
                     </div>
                     {isMyTurn && gameState.turnStage === 'draw' && (
-                      <div className="absolute bottom-3 bg-gradient-to-r from-amber-400 to-yellow-300 text-black text-xs px-2.5 py-1 rounded font-extrabold shadow-lg">
+                      <div className="absolute bottom-2.5 bg-gradient-to-r from-amber-400 to-yellow-300 text-black text-[11px] sm:text-xs px-2 sm:px-2.5 py-0.5 sm:py-1 rounded font-extrabold shadow-lg">
                         DRAW
                       </div>
                     )}
@@ -884,14 +931,14 @@ export const GameTable: React.FC<GameTableProps> = ({
                   </>
                 )}
               </button>
-              <span className="text-[11px] text-neutral-300 font-bold mt-1.5 drop-shadow">Draw Pile</span>
+              <span className="text-[10px] sm:text-[11px] text-neutral-300 font-bold mt-1 drop-shadow">Draw Pile</span>
             </div>
 
             {/* Discard Pile (Bottom-Center of Arena) */}
             <div className="flex flex-col items-center">
               <div
                 ref={discardRef}
-                className="relative w-24 h-34 sm:w-28 sm:h-40 discard-3d-shadow rounded-xl"
+                className="relative w-20 h-28 sm:w-24 sm:h-32 discard-3d-shadow rounded-xl"
               >
                 {/* Peek previous card underneath */}
                 {gameState.discardHistory && gameState.discardHistory.length > 1 && (
@@ -899,7 +946,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     className="absolute inset-0 rounded-xl overflow-hidden border border-neutral-800 pointer-events-none opacity-60"
                     style={{ transform: 'rotate(-9deg) translate(-4px, 2px)' }}
                   >
-                    <CardView card={gameState.discardHistory[gameState.discardHistory.length - 2]} size="lg" isSelectable={false} />
+                    <CardView card={gameState.discardHistory[gameState.discardHistory.length - 2]} size="md" isSelectable={false} />
                   </div>
                 )}
 
@@ -923,7 +970,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                         : ''
                     }`}
                   >
-                    <CardView card={displayedDiscardCard} size="lg" isSelectable={false} />
+                    <CardView card={displayedDiscardCard} size="md" isSelectable={false} />
                   </div>
                 ) : (
                   <div className="w-full h-full border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-xs text-neutral-400 bg-black/40">
@@ -931,17 +978,17 @@ export const GameTable: React.FC<GameTableProps> = ({
                   </div>
                 )}
               </div>
-              <span className="text-[11px] text-neutral-300 font-bold mt-1.5 drop-shadow">Discard Pile</span>
+              <span className="text-[10px] sm:text-[11px] text-neutral-300 font-bold mt-1 drop-shadow">Discard Pile</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* 7. Client Station & Hand (Bottom) */}
-      <footer ref={handRef} className="relative z-30 pb-3 pointer-events-auto flex flex-col items-center select-none">
+      <footer ref={handRef} className="relative z-30 pb-2 sm:pb-3 pointer-events-auto flex flex-col items-center select-none w-full">
         {/* Client Nameplate & Card Count (Bottom Left) */}
         {me && (
-          <div className="absolute left-3 sm:left-8 bottom-3 sm:bottom-4 flex items-center gap-2 z-40">
+          <div className="absolute left-2 sm:left-6 bottom-2 sm:bottom-4 flex items-center gap-1.5 sm:gap-2 z-40">
             <div
               className={`flex flex-col rounded-lg overflow-hidden border transition-all ${
                 isMyTurn
@@ -950,7 +997,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               }`}
             >
               <div
-                className={`px-3 py-1 font-bold text-xs flex items-center gap-2 shadow ${
+                className={`px-2.5 sm:px-3 py-0.5 sm:py-1 font-bold text-[11px] sm:text-xs flex items-center gap-1.5 shadow ${
                   isMyTurn
                     ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-extrabold'
                     : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white'
@@ -959,14 +1006,14 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <span>{me.name} (You)</span>
                 {me.isSkipped && <span className="text-[9px] text-red-300 font-bold">[SKIPPED]</span>}
               </div>
-              <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-3">
+              <div className="bg-black/80 px-2 py-0.5 text-[9px] sm:text-[10px] text-neutral-300 flex items-center justify-between gap-2">
                 <span className="font-semibold">Stage {me.currentPhase} {me.phaseCompletedInRound ? '✓' : ''}</span>
               </div>
             </div>
 
             {/* Card Count Pill */}
-            <div className="flex items-center gap-1.5 bg-white/95 text-black px-2.5 py-1 rounded-lg font-bold text-xs shadow-lg border border-neutral-300">
-              <span className="text-sm">🂠</span>
+            <div className="flex items-center gap-1 bg-white/95 text-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg font-bold text-xs shadow-lg border border-neutral-300">
+              <span className="text-xs sm:text-sm">🂠</span>
               <span>{localHand.length}</span>
             </div>
           </div>
@@ -974,7 +1021,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         {/* Client Laid Down Melds in Front of their hand */}
         {me && me.laidDownPhases && me.laidDownPhases.length > 0 && (
-          <div className="mb-2 flex items-center justify-center gap-2 pointer-events-auto">
+          <div className="mb-1.5 sm:mb-2 flex items-center justify-center gap-1.5 sm:gap-2 pointer-events-auto max-w-full overflow-x-auto px-2">
             {me.laidDownPhases.map(group => {
               const canHit = Boolean(
                 me?.phaseCompletedInRound &&
@@ -988,105 +1035,91 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         )}
 
-        {/* In-situ Stage Action Zone (Replaces the clunky drawer toggle button) */}
-        {currentPhaseDef && (
-          <div className="mb-2 flex items-center justify-center gap-2 pointer-events-auto">
-            {!me?.phaseCompletedInRound ? (
-              <div className="flex items-center gap-2 bg-black/80 backdrop-blur-md border border-white/20 px-3.5 py-1.5 rounded-full shadow-xl">
-                <span className="text-amber-400 font-bold text-xs">Stage {me?.currentPhase}:</span>
-                <span className="text-neutral-200 text-xs font-medium">
-                  {currentPhaseDef.requirements
-                    .map(r => r.type === 'set' ? `Set of ${r.count}` : r.type === 'run' ? `Run of ${r.count}` : `${r.count} Same Color`)
-                    .join(' + ')}
-                </span>
-                {fullPhaseCombination ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isMyTurn && gameState.turnStage === 'play') {
-                        onLayDownPhase(fullPhaseCombination);
-                      }
-                    }}
-                    disabled={!isMyTurn || gameState.turnStage !== 'play'}
-                    className={`ml-1 px-3.5 py-1 rounded-full font-extrabold text-xs transition-all shadow-md flex items-center gap-1.5 ${
-                      isMyTurn && gameState.turnStage === 'play'
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black hover:scale-105 cursor-pointer shadow-[0_0_15px_rgba(52,211,153,0.8)] animate-pulse'
-                        : 'bg-neutral-800 text-neutral-400 border border-neutral-700 cursor-not-allowed'
-                    }`}
-                  >
-                    <span>✨</span>
-                    <span>{isMyTurn && gameState.turnStage === 'play' ? `Lay Down Stage ${me?.currentPhase}` : 'Draw Card First to Lay'}</span>
-                  </button>
-                ) : (
-                  <span className="text-[11px] text-neutral-400 italic ml-1">(Incomplete)</span>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold text-xs px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow">
-                  <span>✓</span>
-                  <span>Stage {me?.currentPhase} Completed</span>
+        {/* Unified Stage Action Zone & Hand Toolbar */}
+        <div className="mb-1.5 sm:mb-2 flex flex-wrap items-center justify-center gap-2 pointer-events-auto px-2">
+          {/* Stage Goal / Lay Down Phase status */}
+          {currentPhaseDef && (
+            <>
+              {!me?.phaseCompletedInRound ? (
+                <div className="flex items-center gap-1.5 sm:gap-2 bg-black/80 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full shadow-lg text-xs">
+                  <span className="text-amber-400 font-bold">Stage {me?.currentPhase}:</span>
+                  <span className="text-neutral-200 font-medium text-[11px] sm:text-xs">
+                    {currentPhaseDef.requirements
+                      .map(r => r.type === 'set' ? `Set of ${r.count}` : r.type === 'run' ? `Run of ${r.count}` : `${r.count} Same Color`)
+                      .join(' + ')}
+                  </span>
+                  {fullPhaseCombination ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isMyTurn && gameState.turnStage === 'play') {
+                          onLayDownPhase(fullPhaseCombination);
+                        }
+                      }}
+                      disabled={!isMyTurn || gameState.turnStage !== 'play'}
+                      className={`ml-1 px-3 py-0.5 sm:py-1 rounded-full font-extrabold text-[11px] sm:text-xs transition-all shadow-md flex items-center gap-1 ${
+                        isMyTurn && gameState.turnStage === 'play'
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black hover:scale-105 cursor-pointer shadow-[0_0_15px_rgba(52,211,153,0.8)] animate-pulse'
+                          : 'bg-neutral-800 text-neutral-400 border border-neutral-700 cursor-not-allowed'
+                      }`}
+                    >
+                      <span>✨</span>
+                      <span>{isMyTurn && gameState.turnStage === 'play' ? `Lay Down Stage ${me?.currentPhase}` : 'Draw First'}</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-neutral-400 italic ml-1">(Incomplete)</span>
+                  )}
                 </div>
-                {availableExtraMelds.length > 0 && isMyTurn && gameState.turnStage === 'play' && (
-                  <button
-                    type="button"
-                    onClick={() => onLayExtraMeld(availableExtraMelds[0].cards.map(c => c.id))}
-                    className="bg-gradient-to-r from-purple-600 to-indigo-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-full shadow hover:scale-105 cursor-pointer transition-all animate-pulse"
-                  >
-                    + Lay {availableExtraMelds[0].label}
-                  </button>
-                )}
-              </div>
+              ) : (
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold text-[11px] sm:text-xs px-3 py-1 rounded-full flex items-center gap-1 shadow">
+                    <span>✓</span>
+                    <span>Stage {me?.currentPhase} Completed</span>
+                  </div>
+                  {availableExtraMelds.length > 0 && isMyTurn && gameState.turnStage === 'play' && (
+                    <button
+                      type="button"
+                      onClick={() => onLayExtraMeld(availableExtraMelds[0].cards.map(c => c.id))}
+                      className="bg-gradient-to-r from-purple-600 to-indigo-500 text-white font-bold text-[11px] sm:text-xs px-3 py-1 rounded-full shadow hover:scale-105 cursor-pointer transition-all animate-pulse"
+                    >
+                      + Lay {availableExtraMelds[0].label}
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Sort Controls & Deselect */}
+          <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/15 shadow-lg text-xs">
+            <button
+              type="button"
+              onClick={() => setLocalHand(sortCardsByValue(localHand))}
+              className="px-2 py-0.5 rounded text-[11px] bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
+            >
+              Sort: Value
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocalHand(sortCardsByColor(localHand))}
+              className="px-2 py-0.5 rounded text-[11px] bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
+            >
+              Sort: Color
+            </button>
+            {selectedCard && (
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="text-neutral-400 hover:text-white text-[11px] underline ml-1 cursor-pointer"
+              >
+                Deselect
+              </button>
             )}
           </div>
-        )}
-
-        {/* Action Toolbar above hand */}
-        <div className="mb-2 flex flex-wrap items-center justify-center gap-2 text-xs bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/15 shadow-xl">
-          <button
-            type="button"
-            onClick={() => setLocalHand(sortCardsByValue(localHand))}
-            className="px-2.5 py-1 rounded text-xs bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
-          >
-            Sort: Value
-          </button>
-          <button
-            type="button"
-            onClick={() => setLocalHand(sortCardsByColor(localHand))}
-            className="px-2.5 py-1 rounded text-xs bg-white/10 hover:bg-white/20 text-neutral-200 cursor-pointer transition-colors font-medium"
-          >
-            Sort: Color
-          </button>
-
-          {selectedCard && (
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="text-neutral-400 hover:text-white text-xs underline ml-1 cursor-pointer"
-            >
-              Deselect
-            </button>
-          )}
-
-          {/* Discard Selected Card button */}
-          {isMyTurn && gameState.turnStage !== 'draw' && (
-            <button
-              type="button"
-              onClick={handleDiscardSelected}
-              disabled={!selectedCard}
-              className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all shadow-md ${
-                selectedCard
-                  ? 'bg-gradient-to-r from-red-600 to-rose-500 text-white hover:scale-105 cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.6)]'
-                  : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-              }`}
-            >
-              Discard Selected Card
-            </button>
-          )}
         </div>
 
-        {/* Client Hand: Curved Arc in Perspective (Scaled Up) */}
-        <div className="w-full max-w-5xl px-4 flex items-end justify-center overflow-visible pb-1 pt-4">
+        {/* Client Hand: Curved Arc in Perspective */}
+        <div className="w-full max-w-5xl px-2 sm:px-4 flex items-end justify-center overflow-x-auto sm:overflow-visible pb-1 pt-3">
           <div className="flex items-end justify-center">
             {localHand.map((c, i) => {
               const count = localHand.length;
@@ -1102,14 +1135,29 @@ export const GameTable: React.FC<GameTableProps> = ({
                   style={{
                     transform: `rotate(${rot}deg) translateY(${isSelected ? -34 : translateY}px)`,
                     zIndex: isSelected ? 40 : i + 1,
-                    marginLeft: i === 0 ? 0 : count > 12 ? '-52px' : count > 8 ? '-44px' : '-32px'
+                    marginLeft: i === 0 ? 0 : count > 12 ? '-42px' : count > 8 ? '-36px' : '-28px'
                   }}
-                  className={`transition-all duration-200 cursor-pointer shrink-0 hover:-translate-y-8 hover:z-35 ${
+                  className={`relative transition-all duration-200 cursor-pointer shrink-0 hover:-translate-y-8 hover:z-35 ${
                     isSelected ? 'scale-110 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]' : ''
                   }`}
                   onClick={() => handleCardClick(c)}
                 >
                   <CardView card={c} size="lg" isSelected={isSelected} isSelectable={true} />
+
+                  {/* Red low-opacity DISCARD button right on the selected card */}
+                  {isSelected && isMyTurn && gameState.turnStage !== 'draw' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDiscardSelected();
+                      }}
+                      className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 bg-red-600/75 hover:bg-red-600/95 active:bg-red-700 text-white font-black text-[10px] sm:text-xs py-1.5 px-2.5 rounded-lg border border-red-400/80 shadow-[0_0_15px_rgba(239,68,68,0.85)] backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none"
+                    >
+                      <span className="text-xs">🗑️</span>
+                      <span>DISCARD</span>
+                    </button>
+                  )}
                 </div>
               );
             })}

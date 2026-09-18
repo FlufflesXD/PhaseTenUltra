@@ -6,7 +6,7 @@ interface CardViewProps {
   isSelected?: boolean;
   isHighlighted?: boolean;
   isSelectable?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   onClick?: () => void;
   badge?: string;
 }
@@ -23,9 +23,10 @@ export const CardView: React.FC<CardViewProps> = ({
   const [imageError, setImageError] = React.useState(false);
 
   const sizeClasses = {
-    sm: 'w-14 h-20 text-xs',
-    md: 'w-20 h-28 sm:w-24 sm:h-34 text-sm',
-    lg: 'w-24 h-34 sm:w-28 sm:h-40 md:w-32 md:h-44 text-base'
+    xs: 'w-10 h-14 text-[9px]',
+    sm: 'w-12 h-16 sm:w-14 sm:h-20 text-xs',
+    md: 'w-20 h-28 sm:w-24 sm:h-32 text-sm',
+    lg: 'w-20 h-28 sm:w-24 sm:h-32 md:w-28 md:h-40 text-sm sm:text-base'
   }[size];
 
   // Inverted styling when selected
