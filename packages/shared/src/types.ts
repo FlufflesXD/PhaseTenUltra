@@ -60,12 +60,12 @@ export interface PlayerPrivate extends PlayerPublic {
 
 export type TurnStage = 'draw' | 'play' | 'discard';
 
-export type GameMode = 'classic' | 'masters' | 'speed' | 'chaos';
+export type GameMode = 'classic' | 'speed';
 
 export interface GameSettings {
   turnTimerSeconds: number; // 0 = unlimited, 30, 45, 60
   allowPartialAndExtraSets?: boolean; // House rule: allow laying either side of '+' and extra sets
-  gameMode?: GameMode; // 'classic' (10 stages), 'speed' (5 stages), 'masters' (flexible), 'chaos' (action cards)
+  gameMode?: GameMode; // 'classic' (10 stages), 'speed' (5 stages)
   customActionCards?: boolean;
 }
 

@@ -145,7 +145,7 @@ describe('UNO-Style Directional Skips & Game Modes Tests', () => {
   test('Reverse Card: Inverts play direction from clockwise to counter-clockwise in 3+ players', () => {
     const session = new GameSession(
       'ROOM3',
-      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      { turnTimerSeconds: 0, gameMode: 'classic' },
       () => {},
       () => {}
     );

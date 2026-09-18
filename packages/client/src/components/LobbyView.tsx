@@ -299,10 +299,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="flex flex-col">
             <span className="text-neutral-400">Game Mode:</span>
             <span className="text-[10px] text-neutral-500">
-              {roomState.settings.gameMode === 'speed' ? '5 Stages (Fast Pace)' :
-               roomState.settings.gameMode === 'masters' ? 'Masters Variant' :
-               roomState.settings.gameMode === 'chaos' ? 'Action Cards & Chaos' :
-               '10 Standard Stages'}
+              {roomState.settings.gameMode === 'speed' ? '5 Stages (Fast Pace)' : '10 Standard Stages'}
             </span>
           </div>
           {isHost ? (
@@ -313,8 +310,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             >
               <option value="classic">Classic (10 Stages)</option>
               <option value="speed">Speed (5 Stages)</option>
-              <option value="masters">Masters</option>
-              <option value="chaos">Chaos</option>
             </select>
           ) : (
             <span className="text-white uppercase font-bold text-[11px]">
