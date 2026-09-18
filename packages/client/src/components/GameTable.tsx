@@ -710,7 +710,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   return (
-    <div className="relative w-full h-screen h-[100dvh] overflow-hidden bg-black text-white font-sans select-none flex flex-col justify-between">
+    <div className="relative w-full h-screen h-[100dvh] overflow-hidden bg-black text-white font-sans select-none flex flex-col justify-end">
       {/* 1. Looping 3D Arena Video Background */}
       <video
         ref={videoRef}
@@ -988,7 +988,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       </div>
 
       {/* 7. Client Station & Hand (Bottom) */}
-      <footer ref={handRef} className="relative z-30 pb-2 sm:pb-3 pointer-events-auto flex flex-col items-center select-none w-full">
+      <footer ref={handRef} className="absolute bottom-0 inset-x-0 z-30 pb-2 sm:pb-3 pointer-events-auto flex flex-col items-center select-none w-full">
         {/* Client Nameplate & Card Count (Bottom Left) */}
         {me && (
           <div className="absolute left-2 sm:left-6 bottom-2 sm:bottom-4 flex items-center gap-1.5 sm:gap-2 z-40">
