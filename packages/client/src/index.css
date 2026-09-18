@@ -198,3 +198,147 @@ body {
   animation: jesterSwapPop 2.5s ease-in-out forwards;
 }
 
+/* JoJo's Bizarre Adventure / Dio "Za Warudo" Time Stop VFX (5 Seconds) */
+@keyframes zaWarudoInvert {
+  0% {
+    filter: none;
+    opacity: 0;
+  }
+  3% {
+    filter: invert(1) hue-rotate(180deg) contrast(2) brightness(1.4);
+    opacity: 1;
+    background-color: rgba(20, 2, 35, 0.85);
+  }
+  12% {
+    filter: invert(0.92) hue-rotate(150deg) contrast(1.8) brightness(1.2);
+    opacity: 0.95;
+    background-color: rgba(10, 30, 20, 0.9);
+  }
+  35% {
+    filter: invert(0.85) hue-rotate(120deg) contrast(1.6);
+    opacity: 0.92;
+    background-color: rgba(5, 10, 25, 0.92);
+  }
+  75% {
+    filter: invert(0.8) hue-rotate(80deg) contrast(1.4);
+    opacity: 0.9;
+  }
+  90% {
+    filter: invert(0.3) hue-rotate(30deg) contrast(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    filter: none;
+    opacity: 0;
+    background-color: transparent;
+  }
+}
+
+.animate-za-warudo {
+  animation: zaWarudoInvert 5.2s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+@keyframes zaWarudoRumble {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  3% { transform: translate(-8px, 6px) scale(1.02); }
+  6% { transform: translate(7px, -6px) scale(1.03); }
+  9% { transform: translate(-6px, 4px) scale(1.01); }
+  14% { transform: translate(5px, -3px) scale(1.02); }
+  22% { transform: translate(-3px, 2px) scale(1.01); }
+  30% { transform: translate(2px, -2px) scale(1); }
+  45% { transform: translate(0, 0) scale(1); }
+}
+
+.animate-za-warudo-rumble {
+  animation: zaWarudoRumble 3s ease-in-out;
+}
+
+@keyframes timeRouletteSpin {
+  0% {
+    transform: rotate(0deg) scale(0.6);
+    opacity: 0;
+  }
+  12% {
+    transform: rotate(360deg) scale(1.05);
+    opacity: 1;
+  }
+  45% {
+    transform: rotate(1440deg) scale(1);
+    opacity: 1;
+  }
+  75% {
+    transform: rotate(2160deg) scale(1.08);
+    opacity: 1;
+  }
+  90% {
+    transform: rotate(2400deg) scale(0.95);
+    opacity: 0.6;
+  }
+  100% {
+    transform: rotate(2520deg) scale(0.7);
+    opacity: 0;
+  }
+}
+
+.animate-time-roulette {
+  animation: timeRouletteSpin 2.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes timeOutcomeSlam {
+  0% {
+    transform: scale(3.5) rotate(-20deg);
+    opacity: 0;
+    filter: blur(12px) brightness(3);
+  }
+  30% {
+    transform: scale(0.92) rotate(4deg);
+    opacity: 1;
+    filter: blur(0px) brightness(1.6);
+  }
+  50% {
+    transform: scale(1.06) rotate(-2deg);
+    filter: brightness(1.2);
+  }
+  70% {
+    transform: scale(1) rotate(0deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.animate-time-slam {
+  animation: timeOutcomeSlam 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes menacingFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(-10deg) scale(1);
+    opacity: 0.85;
+    text-shadow: 0 0 15px rgba(234, 179, 8, 0.8);
+  }
+  50% {
+    transform: translateY(-8px) rotate(-6deg) scale(1.08);
+    opacity: 1;
+    text-shadow: 0 0 25px rgba(234, 179, 8, 1);
+  }
+}
+
+.animate-menacing {
+  animation: menacingFloat 1.8s ease-in-out infinite;
+}
+
+/* Redo Hand Refresh Pulse Animation */
+@keyframes redoPulseGlow {
+  0% { transform: scale(0.7) rotate(-15deg); opacity: 0; }
+  25% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+  45% { transform: scale(1) rotate(0deg); opacity: 1; }
+  85% { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.85) translateY(-25px); opacity: 0; }
+}
+
+.animate-redo-banner {
+  animation: redoPulseGlow 2.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

@@ -4,7 +4,9 @@ export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
   { type: 'nuke', points: 50 },
   { type: 'jester', points: 25 },
   { type: 'plus_two', points: 20 },
-  { type: 'plus_three', points: 25 }
+  { type: 'plus_three', points: 25 },
+  { type: 'redo', points: 30 },
+  { type: 'time', points: 30 }
 ];
 
 export function createStandardDeck(mode?: GameMode): Card[] {

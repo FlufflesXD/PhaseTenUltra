@@ -46,6 +46,8 @@ export const CardView: React.FC<CardViewProps> = ({
     if (card.type === 'plus_three') return '/cards/custom/plus_three.png';
     if (card.type === 'nuke') return '/cards/custom/nuke.png';
     if (card.type === 'jester') return '/cards/custom/jester.png';
+    if (card.type === 'redo') return '/cards/custom/redo.png';
+    if (card.type === 'time') return '/cards/custom/time.png';
     if (card.type === 'number') return `/cards/${card.color}_${card.value}.png`;
     return null;
   }, [card.type, card.color, card.value]);
@@ -69,6 +71,10 @@ export const CardView: React.FC<CardViewProps> = ({
       ? '☢'
       : card.type === 'jester'
       ? '🃏'
+      : card.type === 'redo'
+      ? '🔄'
+      : card.type === 'time'
+      ? '⏳'
       : card.value;
 
   const innerContent = imageSrc && !imageError ? (
@@ -104,6 +110,8 @@ export const CardView: React.FC<CardViewProps> = ({
         {card.type === 'plus_three' && <div className="text-sm sm:text-base tracking-wider">+3 DRAW</div>}
         {card.type === 'nuke' && <div className="text-sm sm:text-base tracking-wider text-red-500 font-black">☢ NUKE</div>}
         {card.type === 'jester' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">🃏 JESTER</div>}
+        {card.type === 'redo' && <div className="text-sm sm:text-base tracking-wider text-pink-400 font-black">🔄 REDO</div>}
+        {card.type === 'time' && <div className="text-sm sm:text-base tracking-wider text-emerald-400 font-black">⏳ TIME</div>}
         {card.type === 'number' && (
           <div>
             <div className="text-xl sm:text-3xl leading-none">{card.value}</div>

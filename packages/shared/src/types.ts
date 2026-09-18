@@ -9,7 +9,9 @@ export type CardType =
   | 'nuke'
   | 'jester'
   | 'plus_two'
-  | 'plus_three';
+  | 'plus_three'
+  | 'redo'
+  | 'time';
 
 export interface Card {
   id: string;
@@ -105,7 +107,9 @@ export interface GameActionEvent {
     | 'nuke'
     | 'jester'
     | 'plus_two'
-    | 'plus_three';
+    | 'plus_three'
+    | 'redo'
+    | 'time';
   playerId: string;
   playerName: string;
   source?: 'deck' | 'discard';
@@ -113,6 +117,9 @@ export interface GameActionEvent {
   targetPlayerId?: string;
   card?: Card;
   cards?: Card[];
+  timeResult?: 'green' | 'red';
+  timeOldPhase?: number;
+  timeNewPhase?: number;
   message?: string;
   timestamp: number;
 }

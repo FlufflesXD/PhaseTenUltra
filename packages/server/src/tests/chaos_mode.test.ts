@@ -4,7 +4,7 @@ import { createStandardDeck, createDeck, Card } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
 
 describe('Chaos Game Mode & Custom Card Tests', () => {
-  test('Chaos Mode Deck Composition: Exactly 108 cards with 1 copy of each special card replacing 4 colored cards', () => {
+  test('Chaos Mode Deck Composition: Exactly 108 cards with 1 copy of each of 6 special cards replacing 6 colored cards', () => {
     const deck = createStandardDeck('chaos');
     assert.strictEqual(deck.length, 108, 'Chaos deck must contain exactly 108 cards');
 
@@ -12,6 +12,8 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     const jesters = deck.filter(c => c.type === 'jester');
     const plusTwos = deck.filter(c => c.type === 'plus_two');
     const plusThrees = deck.filter(c => c.type === 'plus_three');
+    const redos = deck.filter(c => c.type === 'redo');
+    const times = deck.filter(c => c.type === 'time');
     const wilds = deck.filter(c => c.type === 'wild');
     const skips = deck.filter(c => c.type === 'skip');
     const coloredCards = deck.filter(c => c.type === 'number');
@@ -20,9 +22,11 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(jesters.length, 1, 'Exactly 1 jester card in deck');
     assert.strictEqual(plusTwos.length, 1, 'Exactly 1 plus_two card in deck');
     assert.strictEqual(plusThrees.length, 1, 'Exactly 1 plus_three card in deck');
+    assert.strictEqual(redos.length, 1, 'Exactly 1 redo card in deck');
+    assert.strictEqual(times.length, 1, 'Exactly 1 time card in deck');
     assert.strictEqual(wilds.length, 8, 'Exactly 8 wilds in deck');
     assert.strictEqual(skips.length, 4, 'Exactly 4 skips in deck');
-    assert.strictEqual(coloredCards.length, 92, '92 colored cards in deck (96 - 4 replaced)');
+    assert.strictEqual(coloredCards.length, 90, '90 colored cards in deck (96 - 6 replaced)');
   });
 
   test('Nuke Card: Detonation reduces all players hands to 2 cards', () => {
@@ -381,6 +385,212 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
         /Special cards cannot be played on hits/
       );
     }
+  });
+
+  test('Initial Discard Pile: Never starts with Wild, Skip, or Chaos Action cards', () => {
+    for (let i = 0; i < 20; i++) {
+      const session = new GameSession(
+        `ROUND_${i}`,
+        { turnTimerSeconds: 0, gameMode: 'chaos' },
+        () => {},
+        () => {},
+        () => {}
+      );
+      session.players = [
+        {
+          id: 'p1',
+          secretToken: 'p1',
+          name: 'P1',
+          isHost: true,
+          isSpectator: false,
+          connected: true,
+          score: 0,
+          currentPhase: 1,
+          phaseCompletedInRound: false,
+          cardCount: 0,
+          cards: [],
+          laidDownPhases: [],
+          isSkipped: false
+        },
+        {
+          id: 'p2',
+          secretToken: 'p2',
+          name: 'P2',
+          isHost: false,
+          isSpectator: false,
+          connected: true,
+          score: 0,
+          currentPhase: 1,
+          phaseCompletedInRound: false,
+          cardCount: 0,
+          cards: [],
+          laidDownPhases: [],
+          isSkipped: false
+        }
+      ];
+
+      session.startRound();
+      assert.strictEqual(session.discardPile.length, 1);
+      const topDiscard = session.discardPile[0];
+      assert.strictEqual(topDiscard.type, 'number', 'Initial discard must be a colored numbered card');
+    }
+  });
+
+  test('Redo Card: Replaces entire hand with 10 cards drawn from a fresh deck', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'CHAOS_REDO',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 3,
+        cards: [
+          { id: 'redo_1', type: 'redo', color: 'none', value: 0, points: 30 },
+          { id: 'old_1', type: 'number', color: 'red', value: 5, points: 5 },
+          { id: 'old_2', type: 'number', color: 'blue', value: 8, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'Player 2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 10,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    session.discardCard('p1', 'redo_1');
+
+    assert.strictEqual(lastAction?.type, 'redo');
+    assert.strictEqual(session.players[0].cards.length, 10, 'Player hand replaced with exactly 10 cards');
+    assert.strictEqual(session.players[0].cardCount, 10);
+    // Ensure fresh card ids
+    assert.ok(session.players[0].cards.every(c => c.id.startsWith('fresh_')), 'Cards must be from fresh deck');
+    // Ensure old cards are discarded
+    assert.ok(!session.players[0].cards.some(c => c.id === 'old_1' || c.id === 'old_2'));
+  });
+
+  test('Time Card: Rejects invalid targets (Stage 1 and Stage 10) and handles 60/40 roll', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'CHAOS_TIME',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'time_1', type: 'time', color: 'none', value: 0, points: 30 },
+          { id: 'c1', type: 'number', color: 'red', value: 3, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'Player 2 (Stage 1)',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 5,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p3',
+        secretToken: 'p3',
+        name: 'Player 3 (Stage 5)',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 5,
+        phaseCompletedInRound: true,
+        cardCount: 2,
+        cards: [{ id: 'rem_1', type: 'number', color: 'red', value: 4, points: 5 }],
+        laidDownPhases: [{
+          id: 'grp_p3',
+          playerId: 'p3',
+          playerName: 'Player 3 (Stage 5)',
+          requirementIndex: 0,
+          type: 'run',
+          cards: [{ id: 'm1', type: 'number', color: 'red', value: 1, points: 5 }]
+        }],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Target p2 (Stage 1) -> Must throw
+    assert.throws(
+      () => session.discardCard('p1', 'time_1', 'p2'),
+      /Cannot target a player on Stage 1 or Stage 10/
+    );
+
+    // Target p3 (Stage 5) -> Valid
+    session.discardCard('p1', 'time_1', 'p3');
+
+    assert.strictEqual(lastAction?.type, 'time');
+    assert.strictEqual(lastAction?.targetPlayerId, 'p3');
+    assert.ok(lastAction?.timeResult === 'green' || lastAction?.timeResult === 'red');
+    if (lastAction?.timeResult === 'green') {
+      assert.strictEqual(session.players[2].currentPhase, 4, 'Green rolls target back to Phase 4');
+    } else {
+      assert.strictEqual(session.players[2].currentPhase, 6, 'Red rolls target forward to Phase 6');
+    }
+    // Because p3 had completed their stage in round, it must be reset
+    assert.strictEqual(session.players[2].phaseCompletedInRound, false);
+    assert.strictEqual(session.players[2].laidDownPhases.length, 0);
+    assert.strictEqual(session.players[2].cards.length, 2, 'Meld cards returned to hand');
   });
 });
 

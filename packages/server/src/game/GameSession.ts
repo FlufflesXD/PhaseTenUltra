@@ -141,9 +141,9 @@ export class GameSession {
       player.cards = sortCardsByValue(player.cards);
     }
 
-    // Flip top card for discard pile (re-shuffle if skip)
+    // Flip top card for discard pile (re-shuffle until a regular number card is drawn - no special, wild, or skip)
     let firstDiscard = this.drawPile.pop()!;
-    while (firstDiscard.type === 'skip') {
+    while (firstDiscard.type !== 'number') {
       this.drawPile.unshift(firstDiscard);
       this.drawPile = shuffleDeck(this.drawPile);
       firstDiscard = this.drawPile.pop()!;
@@ -227,7 +227,13 @@ export class GameSession {
       this.drawCard(current.id, 'deck');
     }
     if (this.turnStage === 'play' || this.turnStage === 'discard') {
-      const eligible = current.cards.filter(c => c.type !== 'nuke' || current.phaseCompletedInRound);
+      const active = this.getActivePlayers();
+      const hasEligibleTimeTargets = active.some(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
+      const eligible = current.cards.filter(c => {
+        if (c.type === 'nuke' && !current.phaseCompletedInRound) return false;
+        if (c.type === 'time' && !hasEligibleTimeTargets) return false;
+        return true;
+      });
       const candidates = eligible.length > 0 ? eligible : current.cards;
       const highestCard = candidates.slice().sort((a, b) => b.points - a.points)[0];
       if (highestCard) {
@@ -563,6 +569,21 @@ export class GameSession {
       throw new Error('Cannot play Nuke before completing your Stage!');
     }
 
+    if (card.type === 'time') {
+      const active = this.getActivePlayers();
+      const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
+      if (eligible.length === 0) {
+        throw new Error('No eligible targets for Time card (all opponents on Stage 1 or Stage 10)');
+      }
+      if (_skipTargetPlayerId) {
+        const target = active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id);
+        if (!target) throw new Error('Target player not found');
+        if (target.currentPhase <= 1 || target.currentPhase >= 10) {
+          throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
+        }
+      }
+    }
+
     current.cards.splice(cardIndex, 1);
     current.cardCount = current.cards.length;
 
@@ -767,6 +788,95 @@ export class GameSession {
         targetPlayerId: target.id,
         card,
         message: `${current.name} played Draw Two on ${target.name}!`
+      });
+    } else if (card.type === 'redo') {
+      // Draw fresh 10 cards from a brand-new independent deck (using current game mode)
+      const freshDeck = createDeck(this.settings.gameMode);
+      const freshHand = freshDeck.slice(0, 10).map((c, idx) => ({
+        ...c,
+        id: `fresh_${c.type}_${Date.now()}_${idx}`
+      }));
+      current.cards = sortCardsByValue(freshHand);
+      current.cardCount = current.cards.length;
+
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `🔄 ${current.name} played REDO! Hand replaced with 10 cards from a fresh deck!`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'redo',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} replaced their hand with 10 cards from a fresh deck!`
+      });
+    } else if (card.type === 'time') {
+      const active = this.getActivePlayers();
+      let target = _skipTargetPlayerId
+        ? active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id)
+        : undefined;
+
+      if (!target) {
+        const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
+        eligible.sort((a, b) => b.currentPhase - a.currentPhase);
+        target = eligible[0];
+      }
+
+      if (!target) {
+        throw new Error('No eligible targets for Time card (target must be between Stage 2 and 9)');
+      }
+
+      if (target.currentPhase <= 1 || target.currentPhase >= 10) {
+        throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
+      }
+
+      // Roll 60/40 chance: 60% rewind (-1 stage, green), 40% forward (+1 stage, red)
+      const isRewind = Math.random() < 0.60;
+      const oldPhase = target.currentPhase;
+      const newPhase = isRewind ? oldPhase - 1 : oldPhase + 1;
+      target.currentPhase = newPhase;
+
+      if (target.phaseCompletedInRound) {
+        target.phaseCompletedInRound = false;
+        const returnedCards: Card[] = [];
+        for (const group of target.laidDownPhases) {
+          returnedCards.push(...group.cards);
+        }
+        this.allLaidDownPhases = this.allLaidDownPhases.filter(g => g.playerId !== target!.id);
+        target.laidDownPhases = [];
+        target.cards.push(...returnedCards);
+        target.cards = sortCardsByValue(target.cards);
+        target.cardCount = target.cards.length;
+      }
+
+      const rollResult: 'green' | 'red' = isRewind ? 'green' : 'red';
+
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: isRewind
+          ? `⏳ ${current.name} used TIME on ${target.name}! ⏪ Rewound from Stage ${oldPhase} back to Stage ${newPhase}!`
+          : `⏳ ${current.name} used TIME on ${target.name}! ⏩ Fast-forwarded from Stage ${oldPhase} to Stage ${newPhase}!`,
+        playerId: current.id,
+        timestamp: Date.now()
+      });
+
+      this.emitAction({
+        type: 'time',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        timeResult: rollResult,
+        timeOldPhase: oldPhase,
+        timeNewPhase: newPhase,
+        message: isRewind
+          ? `⏳ ${current.name} rewound ${target.name} to Stage ${newPhase}!`
+          : `⏳ ${current.name} advanced ${target.name} to Stage ${newPhase}!`
       });
     } else {
       this.notify({
@@ -1062,21 +1172,33 @@ export class GameSession {
 
     // 4. Discard
     if (this.turnStage === 'play' || this.turnStage === 'discard') {
+      const opponents = this.getActivePlayers().filter(p => p.id !== bot.id);
+      const eligibleTimeTargets = opponents.filter(p => p.currentPhase > 1 && p.currentPhase < 10);
+
       const eligibleCards = bot.cards.filter(c => {
         if (c.type === 'skip') return false;
         if (c.type === 'nuke' && !bot.phaseCompletedInRound) return false;
+        if (c.type === 'time' && eligibleTimeTargets.length === 0) return false;
         return true;
       });
       const cardToDiscard = eligibleCards.length > 0
         ? eligibleCards.sort((a, b) => b.points - a.points)[0]
-        : (bot.cards.find(c => c.type !== 'nuke' || bot.phaseCompletedInRound) || bot.cards[0]);
+        : (bot.cards.find(c => {
+            if (c.type === 'nuke' && !bot.phaseCompletedInRound) return false;
+            if (c.type === 'time' && eligibleTimeTargets.length === 0) return false;
+            return true;
+          }) || bot.cards[0]);
 
       let targetPlayerId: string | undefined;
       if (cardToDiscard && cardToDiscard.type === 'jester') {
-        const opponents = this.getActivePlayers().filter(p => p.id !== bot.id);
         if (opponents.length > 0) {
           opponents.sort((a, b) => a.cards.length - b.cards.length);
           targetPlayerId = opponents[0].id;
+        }
+      } else if (cardToDiscard && cardToDiscard.type === 'time') {
+        if (eligibleTimeTargets.length > 0) {
+          eligibleTimeTargets.sort((a, b) => b.currentPhase - a.currentPhase);
+          targetPlayerId = eligibleTimeTargets[0].id;
         }
       }
 
@@ -1085,7 +1207,11 @@ export class GameSession {
           this.discardCard(bot.id, cardToDiscard.id, targetPlayerId);
         }
       } catch (e) {
-        const fallback = bot.cards.find(c => c.type !== 'nuke' || bot.phaseCompletedInRound) || bot.cards[0];
+        const fallback = bot.cards.find(c => {
+          if (c.type === 'nuke' && !bot.phaseCompletedInRound) return false;
+          if (c.type === 'time' && eligibleTimeTargets.length === 0) return false;
+          return true;
+        }) || bot.cards[0];
         if (fallback) {
           try {
             this.discardCard(bot.id, fallback.id);
