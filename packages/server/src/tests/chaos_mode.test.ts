@@ -1,12 +1,13 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { createStandardDeck, createDeck, Card } from '@phase-ten/shared';
+import { createStandardDeck, createDeck, Card, isUltimateCard } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
+import { Room, RoomUser } from '../room/RoomManager.js';
 
 describe('Chaos Game Mode & Custom Card Tests', () => {
-  test('Full Deck Composition: Exactly 127 cards with 96 colored, 15 custom special cards (status 2x), 8 wilds, 4 skips, 4 reverses', () => {
+  test('Full Deck Composition v6.0: Exactly 275 cards with 240 colored (~1:15 ratio), 15 custom special cards (status 2x), 4 ultimates, 8 wilds, 4 skips, 4 reverses', () => {
     const deck = createStandardDeck('chaos');
-    assert.strictEqual(deck.length, 127, 'Full deck must contain exactly 127 cards');
+    assert.strictEqual(deck.length, 275, 'Full deck must contain exactly 275 cards');
 
     const nukes = deck.filter(c => c.type === 'nuke');
     const jesters = deck.filter(c => c.type === 'jester');
@@ -22,6 +23,10 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     const lucks = deck.filter(c => c.type === 'luck');
     const unluckies = deck.filter(c => c.type === 'unlucky');
     const doubles = deck.filter(c => c.type === 'double');
+    const singularities = deck.filter(c => c.type === 'singularity');
+    const voyances = deck.filter(c => c.type === 'voyance');
+    const alternates = deck.filter(c => c.type === 'alternate');
+    const avarices = deck.filter(c => c.type === 'avarice');
     const reverses = deck.filter(c => c.type === 'reverse');
     const wilds = deck.filter(c => c.type === 'wild');
     const skips = deck.filter(c => c.type === 'skip');
@@ -41,10 +46,14 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(lucks.length, 1, 'Exactly 1 luck card in deck');
     assert.strictEqual(unluckies.length, 1, 'Exactly 1 unlucky card in deck');
     assert.strictEqual(doubles.length, 1, 'Exactly 1 double card in deck');
+    assert.strictEqual(singularities.length, 1, 'Exactly 1 singularity ultimate card in deck');
+    assert.strictEqual(voyances.length, 1, 'Exactly 1 voyance ultimate card in deck');
+    assert.strictEqual(alternates.length, 1, 'Exactly 1 alternate ultimate card in deck');
+    assert.strictEqual(avarices.length, 1, 'Exactly 1 avarice ultimate card in deck');
     assert.strictEqual(reverses.length, 4, 'Exactly 4 reverse cards in deck');
     assert.strictEqual(wilds.length, 8, 'Exactly 8 wilds in deck');
     assert.strictEqual(skips.length, 4, 'Exactly 4 skips in deck');
-    assert.strictEqual(coloredCards.length, 96, 'All 96 colored cards remain in deck');
+    assert.strictEqual(coloredCards.length, 240, '240 colored cards maintain 16:1 (~1:15) ratio with 15 specials');
   });
 
   test('Nuke Card: Detonation reduces all players hands to 2 cards', () => {
@@ -1757,6 +1766,481 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     // Base probability is 1/10 = 10%. With 10x boost, probability is 100%!
     const drawn = session.drawCard('p1', 'deck');
     assert.strictEqual(drawn.type, 'status', 'P1 with 5 debuffs gets status card with 10x multiplier');
+  });
+
+  test('v6.0 Solo Lobby with Bots: Host can start game alone against 1, 2, or 3 bots', () => {
+    const hostUser: RoomUser = {
+      socketId: 'sock_host',
+      secretToken: 'tok_host',
+      name: 'SoloHost',
+      isSpectator: false
+    };
+
+    const room = new Room('SOLOBOT', hostUser, {
+      broadcastRoom: () => {},
+      broadcastGame: () => {},
+      sendNotification: () => {},
+      sendChat: () => {},
+      deleteRoom: () => {}
+    });
+
+    // 0 bots: cannot start solo (need at least 2 players)
+    assert.throws(() => room.startGame('tok_host'), /At least 2 players/);
+
+    // Set 2 bots
+    room.updateSettings('tok_host', { botCount: 2 });
+    room.startGame('tok_host');
+
+    assert.ok(room.gameSession, 'GameSession successfully started');
+    assert.strictEqual(room.gameSession.players.length, 3, '1 human host + 2 bots = 3 players total');
+    assert.strictEqual(room.gameSession.players[0].isBot, false, 'Host is not bot');
+    assert.strictEqual(room.gameSession.players[1].isBot, true, 'Bot 1 is bot');
+    assert.strictEqual(room.gameSession.players[2].isBot, true, 'Bot 2 is bot');
+    assert.strictEqual(room.gameSession.status, 'in_game');
+  });
+
+  test('v6.0 Admin Card Spawner: Keybind L prompt with password 3115 spawns cards into hand', () => {
+    const session = new GameSession(
+      'ADMIN_SPAWN',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      { id: 'admin1', secretToken: 'admin_tok', name: 'Admin', isHost: true, isSpectator: false, connected: true, score: 0, currentPhase: 1, phaseCompletedInRound: false, cardCount: 0, cards: [], laidDownPhases: [], isSkipped: false }
+    ];
+
+    // Invalid password must throw
+    assert.throws(() => session.adminSpawnCard('admin_tok', 'time', 'wrong_pass'), /Invalid admin password/);
+
+    // Valid password spawns special card
+    const timeCard = session.adminSpawnCard('admin_tok', 'time', '3115');
+    assert.strictEqual(timeCard.type, 'time');
+    assert.strictEqual(session.players[0].cards.length, 1);
+
+    // Spawns wild, skip, reverse
+    const wildCard = session.adminSpawnCard('admin_tok', 'wild', '3115');
+    assert.strictEqual(wildCard.type, 'wild');
+    const skipCard = session.adminSpawnCard('admin_tok', 'skip', '3115');
+    assert.strictEqual(skipCard.type, 'skip');
+    const revCard = session.adminSpawnCard('admin_tok', 'reverse', '3115');
+    assert.strictEqual(revCard.type, 'reverse');
+
+    // Spawns ultimate card (with 100% progress for testing)
+    const singCard = session.adminSpawnCard('admin_tok', 'singularity', '3115');
+    assert.strictEqual(singCard.type, 'singularity');
+    assert.strictEqual(singCard.ultimateProgress, 100);
+    assert.strictEqual(session.players[0].cards.length, 5);
+  });
+
+  test('v6.0 Ultimate Sacrifice Mechanic: Requires 1 special + 1 wild/skip/reverse to charge to 100%', () => {
+    const session = new GameSession(
+      'SACRIFICE_TEST',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 4,
+        cards: [
+          { id: 'ult_voy', type: 'voyance', color: 'none', value: 0, points: 50, ultimateProgress: 0 },
+          { id: 'spec_nuke', type: 'nuke', color: 'none', value: 0, points: 50 },
+          { id: 'wild_card', type: 'wild', color: 'none', value: 0, points: 25 },
+          { id: 'num_1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [{ id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    // Discarding ultimate directly must throw
+    assert.throws(() => session.discardCard('p1', 'ult_voy'), /Ultimate cards cannot be discarded directly/);
+
+    // First sacrifice: Special card (nuke)
+    session.sacrificeCard('p1', 'spec_nuke', 'ult_voy');
+    const ultCard = session.players[0].cards.find(c => c.id === 'ult_voy')!;
+    assert.strictEqual(ultCard.ultimateProgress, 50, 'Progress reaches 50% after special card');
+    assert.strictEqual(ultCard.sacrificedSpecial, true);
+    assert.strictEqual(session.currentTurnIndex, 1, 'Sacrificing acts as discard and ends turn');
+
+    // Advance back to P1
+    session.turnStage = 'discard';
+    session.currentTurnIndex = 0;
+
+    // Second sacrifice: Wild card
+    session.sacrificeCard('p1', 'wild_card', 'ult_voy');
+    assert.strictEqual(ultCard.ultimateProgress, 100, 'Progress reaches 100% after wild card');
+    assert.strictEqual(ultCard.sacrificedWildSkipReverse, true);
+  });
+
+  test('v6.0 Ultimate Protections: Nuke preserves, Jester keeps with owner, Crack avoids, Status does not clear Voyance', () => {
+    const session = new GameSession(
+      'PROTECT_TEST',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: true,
+        cardCount: 4,
+        cards: [
+          { id: 'ult_sing', type: 'singularity', color: 'none', value: 0, points: 50 },
+          { id: 'n1', type: 'number', color: 'red', value: 1, points: 5 },
+          { id: 'n2', type: 'number', color: 'red', value: 2, points: 5 },
+          { id: 'n3', type: 'number', color: 'red', value: 3, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'ult_voy', type: 'voyance', color: 'none', value: 0, points: 50 },
+          { id: 'p2_n1', type: 'number', color: 'blue', value: 5, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    // 1. Nuke protection: P1 plays nuke
+    const nukeCard: Card = { id: 'nuke_c', type: 'nuke', color: 'none', value: 0, points: 50 };
+    (session as any).applyNukeEffect(session.players[0], nukeCard);
+
+    // P1 had ult_sing + 3 numbers. Nuke preserves ult_sing and leaves up to 2 numbers = 3 cards total!
+    assert.ok(session.players[0].cards.some(c => c.id === 'ult_sing'), 'Ultimate singularity preserved from Nuke');
+    assert.ok(session.players[1].cards.some(c => c.id === 'ult_voy'), 'Ultimate voyance preserved from Nuke');
+
+    // 2. Jester protection: Swapping hands keeps ultimates with original owners
+    const jesterCard: Card = { id: 'jest_c', type: 'jester', color: 'none', value: 0, points: 25 };
+    (session as any).applyJesterEffect(session.players[0], jesterCard, 'p2');
+    assert.ok(session.players[0].cards.some(c => c.id === 'ult_sing'), 'Ult singularity remained with P1');
+    assert.ok(session.players[1].cards.some(c => c.id === 'ult_voy'), 'Ult voyance remained with P2');
+
+    // 3. Crack protection: Crack never cracks ultimate cards
+    const crackCard: Card = { id: 'crack_c', type: 'crack', color: 'none', value: 0, points: 35 };
+    (session as any).applyCrackEffect(session.players[0], crackCard);
+    const p2Ult = session.players[1].cards.find(c => c.id === 'ult_voy')!;
+    assert.strictEqual(p2Ult.isCracked, undefined, 'Ultimate card was not cracked');
+
+    // 4. Status protection: Status card does NOT purge Voyance debuff
+    session.players[0].hasVoyanceDebuff = true;
+    session.players[0].hasLuck = true;
+    const statusCard: Card = { id: 'status_c', type: 'status', color: 'none', value: 0, points: 25 };
+    (session as any).applyStatusEffect(session.players[0], statusCard);
+    assert.strictEqual(session.players[0].hasLuck, false, 'Luck was purged');
+    assert.strictEqual(session.players[0].hasVoyanceDebuff, true, 'Voyance debuff is immune to Status card');
+  });
+
+  test('v6.0 Singularity Ultimate Ability: Gives 10 fresh cards to all players and 2x luck boost to caster', () => {
+    const session = new GameSession(
+      'SINGULARITY_TEST',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'ult_sing', type: 'singularity', color: 'none', value: 0, points: 50, ultimateProgress: 100 },
+          { id: 'n1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 5,
+        cards: Array.from({ length: 5 }, (_, i) => ({ id: `p2_${i}`, type: 'number' as const, color: 'blue' as const, value: i + 1, points: 5 })),
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    session.playUltimateCard('p1', 'ult_sing');
+
+    assert.strictEqual(session.players[0].cards.length, 10, 'P1 gets 10 fresh cards from singularity');
+    assert.strictEqual(session.players[1].cards.length, 10, 'P2 gets 10 fresh cards from singularity');
+    assert.strictEqual(session.players[0].hasLuck, true, 'Singularity caster gains 2x luck boost');
+    assert.strictEqual(session.discardPile[session.discardPile.length - 1].type, 'singularity', 'Ultimate placed on discard pile');
+  });
+
+  test('v6.0 Voyance Ultimate Ability: Opponent cards visible only to caster', () => {
+    const session = new GameSession(
+      'VOYANCE_TEST',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 1,
+        cards: [{ id: 'ult_voy', type: 'voyance', color: 'none', value: 0, points: 50, ultimateProgress: 100 }],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'secret_1', type: 'number', color: 'green', value: 7, points: 5 },
+          { id: 'secret_2', type: 'wild', color: 'none', value: 0, points: 25 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    session.playUltimateCard('p1', 'ult_voy');
+
+    assert.strictEqual(session.voyanceCasterId, 'p1');
+    assert.strictEqual(session.players[1].hasVoyanceDebuff, true, 'P2 has voyance debuff');
+
+    // Check public state when viewed by P1 (caster)
+    const stateForP1 = session.getPublicState('p1');
+    const p2ForP1 = stateForP1.players.find(p => p.id === 'p2')!;
+    assert.ok(p2ForP1.visibleCards, 'P2 cards are visible to Voyance caster');
+    assert.strictEqual(p2ForP1.visibleCards!.length, 2);
+
+    // Check public state when viewed by P2 (non-caster)
+    const stateForP2 = session.getPublicState('p2');
+    const p2ForP2 = stateForP2.players.find(p => p.id === 'p2')!;
+    assert.strictEqual(p2ForP2.visibleCards, undefined, 'P2 cards are NOT visible to non-caster');
+  });
+
+  test('v6.0 Alternate Ultimate Ability: 10 pure number cards, switches every 2 turns', () => {
+    const session = new GameSession(
+      'ALT_TEST',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 1,
+        cards: [{ id: 'ult_alt', type: 'alternate', color: 'none', value: 0, points: 50, ultimateProgress: 100 }],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'main_1', type: 'wild', color: 'none', value: 0, points: 25 },
+          { id: 'main_2', type: 'nuke', color: 'none', value: 0, points: 50 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    session.playUltimateCard('p1', 'ult_alt');
+
+    assert.strictEqual(session.isAlternateWorld, true, 'Alternate dimension active');
+    assert.strictEqual(session.players[0].cards.length, 10, 'P1 gets 10 alternate cards');
+    assert.strictEqual(session.players[1].cards.length, 10, 'P2 gets 10 alternate cards');
+
+    // Verify all cards in alternate world are strictly pure number cards
+    for (const c of [...session.players[0].cards, ...session.players[1].cards, ...session.drawPile]) {
+      assert.strictEqual(c.type, 'number', 'No specials, wilds, skips, reverses, or ultimates in Alternate World');
+    }
+
+    // Turn 1 passes
+    (session as any).advanceTurn();
+    assert.strictEqual(session.isAlternateWorld, true, 'Still in alternate world after 1 turn');
+
+    // Turn 2 passes -> switches back to Main World!
+    (session as any).advanceTurn();
+    assert.strictEqual(session.isAlternateWorld, false, 'Switched back to Main World after 2 turns');
+    assert.ok(session.players[1].cards.some(c => c.id === 'main_1'), 'Original main world cards restored');
+  });
+
+  test('v6.0 Avarice Ultimate Ability: Plunders all special cards from discard pile into caster hand', () => {
+    const session = new GameSession(
+      'AVARICE_TEST',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 1,
+        cards: [{ id: 'ult_ava', type: 'avarice', color: 'none', value: 0, points: 50, ultimateProgress: 100 }],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [{ id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.discardPile = [
+      { id: 'd1', type: 'number', color: 'red', value: 5, points: 5 },
+      { id: 'd2', type: 'nuke', color: 'none', value: 0, points: 50 },
+      { id: 'd3', type: 'time', color: 'none', value: 0, points: 30 },
+      { id: 'd4', type: 'number', color: 'blue', value: 8, points: 5 },
+      { id: 'd5', type: 'crack', color: 'none', value: 0, points: 35 }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    session.playUltimateCard('p1', 'ult_ava');
+
+    // P1 plundered all 3 special cards (nuke, time, crack)
+    assert.strictEqual(session.players[0].cards.length, 3, 'P1 plundered 3 special cards');
+    assert.ok(session.players[0].cards.some(c => c.type === 'nuke'));
+    assert.ok(session.players[0].cards.some(c => c.type === 'time'));
+    assert.ok(session.players[0].cards.some(c => c.type === 'crack'));
+
+    // Discard pile no longer contains chaos specials
+    assert.ok(!session.discardPile.some(c => c.type === 'nuke'));
+    assert.ok(!session.discardPile.some(c => c.type === 'time'));
+    assert.ok(!session.discardPile.some(c => c.type === 'crack'));
   });
 });
 

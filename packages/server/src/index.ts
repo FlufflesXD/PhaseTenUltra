@@ -57,12 +57,14 @@ function broadcastRoom(room: Room): void {
 
 function broadcastGame(room: Room): void {
   if (!room.gameSession) return;
-  const publicState = room.gameSession.getPublicState();
-  publicState.waitlist = room.getWaitlist();
-  io.to(room.code).emit('game_state', publicState);
+  const waitlist = room.getWaitlist();
 
-  // Send private hands
+  // Send individualized game state for each user (so voyance caster gets visibleCards, but nobody else does)
   for (const [socketId, user] of room.users.entries()) {
+    const publicState = room.gameSession.getPublicState(user.secretToken);
+    publicState.waitlist = waitlist;
+    io.to(socketId).emit('game_state', publicState);
+
     const hand = room.gameSession.getPlayerHand(user.secretToken);
     io.to(socketId).emit('player_hand', hand);
   }
@@ -132,7 +134,7 @@ io.on('connection', (socket) => {
       socket.emit('room_state', room.getRoomState());
 
       if (room.gameSession) {
-        const publicState = room.gameSession.getPublicState();
+        const publicState = room.gameSession.getPublicState(user.secretToken);
         publicState.waitlist = room.getWaitlist();
         socket.emit('game_state', publicState);
         const hand = room.gameSession.getPlayerHand(user.secretToken);
@@ -246,6 +248,54 @@ io.on('connection', (socket) => {
           );
         } catch (err: any) {
           socket.emit('error_message', err.message);
+        }
+      }
+    }
+  );
+
+  socket.on(
+    'admin_spawn_card',
+    (data: { roomCode: string; secretToken: string; cardName: string; password: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (room && room.gameSession) {
+        try {
+          const card = room.gameSession.adminSpawnCard(data.secretToken, data.cardName, data.password);
+          if (typeof callback === 'function') callback({ success: true, card });
+        } catch (err: any) {
+          if (typeof callback === 'function') callback({ success: false, error: err.message });
+          else socket.emit('error_message', err.message);
+        }
+      }
+    }
+  );
+
+  socket.on(
+    'sacrifice_card',
+    (data: { roomCode: string; secretToken: string; cardIdToSacrifice: string; ultimateCardId: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (room && room.gameSession) {
+        try {
+          room.gameSession.sacrificeCard(data.secretToken, data.cardIdToSacrifice, data.ultimateCardId);
+          if (typeof callback === 'function') callback({ success: true });
+        } catch (err: any) {
+          if (typeof callback === 'function') callback({ success: false, error: err.message });
+          else socket.emit('error_message', err.message);
+        }
+      }
+    }
+  );
+
+  socket.on(
+    'play_ultimate_card',
+    (data: { roomCode: string; secretToken: string; ultimateCardId: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (room && room.gameSession) {
+        try {
+          room.gameSession.playUltimateCard(data.secretToken, data.ultimateCardId);
+          if (typeof callback === 'function') callback({ success: true });
+        } catch (err: any) {
+          if (typeof callback === 'function') callback({ success: false, error: err.message });
+          else socket.emit('error_message', err.message);
         }
       }
     }

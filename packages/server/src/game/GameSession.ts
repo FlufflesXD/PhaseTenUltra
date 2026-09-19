@@ -2,6 +2,8 @@ import {
   Card,
   CardColor,
   CardType,
+  UltimateCardType,
+  isUltimateCard,
   CLASSIC_PHASES,
   findExtraMeldMatch,
   findValidPhaseCombination,
@@ -22,7 +24,14 @@ import {
   validateSet,
   GameActionEvent
 } from '@phase-ten/shared';
-import { createDeck, shuffleDeck, isChaosSpecialCard } from '@phase-ten/shared';
+import {
+  createDeck,
+  shuffleDeck,
+  isChaosSpecialCard,
+  CHAOS_SPECIAL_CARDS,
+  CHAOS_ULTIMATE_CARDS,
+  createAlternateDeck
+} from '@phase-ten/shared';
 
 export interface GamePlayerInternal extends PlayerPrivate {
   secretToken: string;
@@ -43,6 +52,25 @@ export class GameSession {
   public status: 'lobby' | 'in_game' | 'round_end' | 'game_over' = 'lobby';
   public winnerId?: string;
   public roundWinnerId?: string;
+
+  public voyanceCasterId?: string;
+  public isAlternateWorld: boolean = false;
+  public alternateDimensionActive: boolean = false;
+  public alternateTurnCounter: number = 0;
+  private mainWorldState: {
+    drawPile: Card[];
+    discardPile: Card[];
+    allLaidDownPhases: LaidDownPhaseGroup[];
+    playerHands: Map<string, Card[]>;
+    playerLaidPhases: Map<string, LaidDownPhaseGroup[]>;
+  } | null = null;
+  private alternateWorldState: {
+    drawPile: Card[];
+    discardPile: Card[];
+    allLaidDownPhases: LaidDownPhaseGroup[];
+    playerHands: Map<string, Card[]>;
+    playerLaidPhases: Map<string, LaidDownPhaseGroup[]>;
+  } | null = null;
 
   private turnTimerInterval?: NodeJS.Timeout;
   public turnTimeRemaining: number = 0;
@@ -145,6 +173,12 @@ export class GameSession {
     this.status = 'in_game';
     this.allLaidDownPhases = [];
     this.roundWinnerId = undefined;
+    this.voyanceCasterId = undefined;
+    this.isAlternateWorld = false;
+    this.alternateDimensionActive = false;
+    this.alternateTurnCounter = 0;
+    this.mainWorldState = null;
+    this.alternateWorldState = null;
 
     if (this.settings.randomizePhasesPerRound) {
       this.setupPhaseDefinitions();
@@ -160,6 +194,7 @@ export class GameSession {
       player.hasLuck = false;
       player.hasUnlucky = false;
       player.hasDoubleDebuff = false;
+      player.hasVoyanceDebuff = false;
       player.crackedCardCount = 0;
       player.cards = [];
       player.cardCount = 0;
@@ -700,6 +735,10 @@ export class GameSession {
     if (cardIndex === -1) throw new Error('Card not in hand');
     const card = current.cards[cardIndex];
 
+    if (isUltimateCard(card.type)) {
+      throw new Error('Ultimate cards cannot be discarded directly. Charge them with sacrifices and activate their ultimate ability!');
+    }
+
     if (card.isCracked) {
       const isLastCardToWin = current.cards.length === 1 && Boolean(current.phaseCompletedInRound);
       if (!isLastCardToWin) {
@@ -848,21 +887,27 @@ export class GameSession {
   private applyNukeEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType): void {
     const active = this.getActivePlayers();
     for (const player of active) {
-      if (player.cards.length > 2) {
-        const excess = player.cards.splice(2);
+      // Ultimate cards cannot be erased by Nuke
+      const ultimateCards = player.cards.filter(c => isUltimateCard(c.type));
+      const nonUltimateCards = player.cards.filter(c => !isUltimateCard(c.type));
+
+      if (nonUltimateCards.length > 2) {
+        const excess = nonUltimateCards.splice(2);
         for (const extraCard of excess) {
           this.discardPile.push(extraCard);
         }
-      } else if (player.cards.length < 2) {
-        while (player.cards.length < 2) {
+      } else if (nonUltimateCards.length < 2) {
+        while (nonUltimateCards.length < 2) {
           this.ensureDrawPileHasCards();
           if (this.drawPile.length > 0) {
-            player.cards.push(this.drawPile.pop()!);
+            nonUltimateCards.push(this.drawPile.pop()!);
           } else {
             break;
           }
         }
       }
+
+      player.cards = [...ultimateCards, ...nonUltimateCards];
       player.cardCount = player.cards.length;
       player.cards = sortCardsByValue(player.cards);
     }
@@ -870,7 +915,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `💥 ${current.name} detonated a NUKE! Everyone's hand is reduced to 2 cards!`,
+      message: `💥 ${current.name} detonated a NUKE! Everyone's hand is reduced to 2 cards! (Ultimate cards preserved)`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -903,9 +948,14 @@ export class GameSession {
     }
 
     if (target) {
-      const tempCards = current.cards;
-      current.cards = target.cards;
-      target.cards = tempCards;
+      // Ultimate cards remain with their original owner when Jester swaps hands
+      const currentUltimates = current.cards.filter(c => isUltimateCard(c.type));
+      const currentOthers = current.cards.filter(c => !isUltimateCard(c.type));
+      const targetUltimates = target.cards.filter(c => isUltimateCard(c.type));
+      const targetOthers = target.cards.filter(c => !isUltimateCard(c.type));
+
+      current.cards = [...currentUltimates, ...targetOthers];
+      target.cards = [...targetUltimates, ...currentOthers];
 
       current.cardCount = current.cards.length;
       target.cardCount = target.cards.length;
@@ -916,7 +966,7 @@ export class GameSession {
       this.notify({
         id: `notif_${Date.now()}`,
         type: 'info',
-        message: `🃏 ${current.name} played Jester and swapped hands with ${target.name}!`,
+        message: `🃏 ${current.name} played Jester and swapped hands with ${target.name}! (Ultimate cards remained with owners)`,
         playerId: current.id,
         timestamp: Date.now()
       });
@@ -1212,10 +1262,10 @@ export class GameSession {
 
     for (const opp of opponents) {
       if (opp.cards.length === 0) continue;
-      const uncracked = opp.cards.filter(c => !c.isCracked);
-      const targetCard = uncracked.length > 0
-        ? uncracked[Math.floor(Math.random() * uncracked.length)]
-        : opp.cards[Math.floor(Math.random() * opp.cards.length)];
+      // Crack never targets ultimate cards
+      const uncracked = opp.cards.filter(c => !c.isCracked && !isUltimateCard(c.type));
+      if (uncracked.length === 0) continue;
+      const targetCard = uncracked[Math.floor(Math.random() * uncracked.length)];
       targetCard.isCracked = true;
       opp.crackedCardCount = opp.cards.filter(c => c.isCracked).length;
     }
@@ -1433,6 +1483,15 @@ export class GameSession {
   private advanceTurn(): void {
     const active = this.getActivePlayers();
     if (active.length === 0) return;
+
+    if (this.alternateDimensionActive) {
+      this.alternateTurnCounter++;
+      if (this.alternateTurnCounter >= 2) {
+        this.alternateTurnCounter = 0;
+        this.toggleDimension();
+      }
+    }
+
     this.currentTurnIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
     this.startTurn();
   }
@@ -1567,7 +1626,11 @@ export class GameSession {
   private ensureDrawPileHasCards(): void {
     if (this.drawPile.length === 0) {
       if (this.discardPile.length <= 1) {
-        this.drawPile = createDeck(this.settings, `r${this.roundNumber}_res_${Date.now()}_`);
+        if (this.isAlternateWorld) {
+          this.drawPile = createAlternateDeck(`alt_res_${Date.now()}_`);
+        } else {
+          this.drawPile = createDeck(this.settings, `r${this.roundNumber}_res_${Date.now()}_`);
+        }
       } else {
         const top = this.discardPile.pop()!;
         this.drawPile = shuffleDeck(this.discardPile);
@@ -1580,9 +1643,16 @@ export class GameSession {
     this.onNotification(notif);
   }
 
-  public getPublicState(): PublicGameState {
+  public getPublicState(requestingPlayerId?: string): PublicGameState {
     const active = this.getActivePlayers();
     const current = active.length > 0 ? active[this.currentTurnIndex % active.length] : null;
+
+    const isVoyanceCaster = Boolean(
+      requestingPlayerId &&
+      this.voyanceCasterId &&
+      (this.voyanceCasterId === requestingPlayerId ||
+        this.players.some(p => p.id === requestingPlayerId && p.secretToken === this.voyanceCasterId))
+    );
 
     return {
       roomCode: this.roomCode,
@@ -1615,13 +1685,18 @@ export class GameSession {
         hasLuck: p.hasLuck,
         hasUnlucky: p.hasUnlucky,
         hasDoubleDebuff: p.hasDoubleDebuff,
-        crackedCardCount: p.cards.filter(c => c.isCracked).length
+        hasVoyanceDebuff: p.hasVoyanceDebuff,
+        crackedCardCount: p.cards.filter(c => c.isCracked).length,
+        visibleCards: (isVoyanceCaster && p.id !== requestingPlayerId && p.hasVoyanceDebuff) ? p.cards : undefined
       })),
       allLaidDownPhases: this.allLaidDownPhases,
       winnerId: this.winnerId,
       roundWinnerId: this.roundWinnerId,
       phaseDefinitions: this.phaseDefinitions,
-      settings: this.settings
+      settings: this.settings,
+      isAlternateWorld: this.isAlternateWorld,
+      voyanceActive: Boolean(this.voyanceCasterId),
+      alternateTurnCounter: this.alternateTurnCounter
     };
   }
 
@@ -1909,6 +1984,406 @@ export class GameSession {
       }, 1000);
       this.turnTimerInterval.unref?.();
     }
+  }
+
+  public adminSpawnCard(playerId: string, cardName: string, password: string): Card {
+    if (password !== '3115') {
+      throw new Error('Invalid admin password');
+    }
+
+    const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
+    if (!player) {
+      throw new Error('Player not found');
+    }
+
+    const cleanName = cardName.trim().toLowerCase().replace(/\.(png|webp)$/i, '');
+    let spawnedCard: Card | null = null;
+    const id = `card_admin_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    if (cleanName === 'wild') {
+      spawnedCard = { id, type: 'wild', color: 'none', value: 0, points: 25 };
+    } else if (cleanName === 'skip') {
+      spawnedCard = { id, type: 'skip', color: 'none', value: 0, points: 15 };
+    } else if (cleanName === 'reverse') {
+      spawnedCard = { id, type: 'reverse', color: 'none', value: 0, points: 15 };
+    } else {
+      const special = CHAOS_SPECIAL_CARDS.find(s => s.type === cleanName);
+      if (special) {
+        spawnedCard = { id, type: special.type, color: 'none', value: 0, points: special.points };
+      } else {
+        const ultimate = CHAOS_ULTIMATE_CARDS.find(u => u.type === cleanName);
+        if (ultimate) {
+          spawnedCard = {
+            id,
+            type: ultimate.type,
+            color: 'none',
+            value: 0,
+            points: ultimate.points,
+            ultimateProgress: 100
+          };
+        } else {
+          const numMatch = cleanName.match(/^(red|blue|green|yellow)_(\d+)$/i);
+          if (numMatch) {
+            const color = numMatch[1].toLowerCase() as CardColor;
+            const val = parseInt(numMatch[2], 10);
+            if (val >= 1 && val <= 12) {
+              spawnedCard = {
+                id,
+                type: 'number',
+                color,
+                value: val,
+                points: val <= 9 ? 5 : 10
+              };
+            }
+          }
+        }
+      }
+    }
+
+    if (!spawnedCard) {
+      throw new Error(
+        `Unknown card name: "${cleanName}". Allowed: wild, skip, reverse, nuke, jester, plus_two, plus_three, redo, time, number_eye, color_eye, random, crack, status, luck, unlucky, double, singularity, voyance, alternate, avarice, or <color>_<1-12>`
+      );
+    }
+
+    player.cards.push(spawnedCard);
+    player.cardCount = player.cards.length;
+    player.cards = sortCardsByValue(player.cards);
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `⚡ Admin spawned a ${spawnedCard.type.toUpperCase()} card into ${player.name}'s hand.`,
+      playerId: player.id,
+      timestamp: Date.now()
+    });
+
+    this.onStateChange();
+    return spawnedCard;
+  }
+
+  public sacrificeCard(playerId: string, cardIdToSacrifice: string, ultimateCardId: string): void {
+    const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
+    if (player?.isResigned) throw new Error('Player has resigned this round');
+    const current = this.getCurrentPlayer();
+    if (current.id !== playerId && current.secretToken !== playerId) throw new Error('Not your turn');
+    if (this.turnStage !== 'play' && this.turnStage !== 'discard') {
+      throw new Error('Can only sacrifice when discarding at the end of your turn');
+    }
+
+    const ultIndex = current.cards.findIndex(c => c.id === ultimateCardId);
+    if (ultIndex === -1) throw new Error('Ultimate card not found in hand');
+    const ultimateCard = current.cards[ultIndex];
+    if (!isUltimateCard(ultimateCard.type)) throw new Error('Target card is not an ultimate card');
+    if ((ultimateCard.ultimateProgress ?? 0) >= 100) throw new Error('Ultimate card is already fully charged');
+
+    const sacIndex = current.cards.findIndex(c => c.id === cardIdToSacrifice);
+    if (sacIndex === -1) throw new Error('Card to sacrifice not found in hand');
+    const sacCard = current.cards[sacIndex];
+
+    const isSpecial = isChaosSpecialCard(sacCard.type);
+    const isWildSkipRev = sacCard.type === 'wild' || sacCard.type === 'skip' || sacCard.type === 'reverse';
+
+    if (!isSpecial && !isWildSkipRev) {
+      throw new Error('Can only sacrifice a Special card or a Wild/Skip/Reverse card');
+    }
+
+    if (isSpecial) {
+      if (ultimateCard.sacrificedSpecial) {
+        throw new Error('This ultimate card has already absorbed a Special card');
+      }
+      ultimateCard.sacrificedSpecial = true;
+    } else if (isWildSkipRev) {
+      if (ultimateCard.sacrificedWildSkipReverse) {
+        throw new Error('This ultimate card has already absorbed a Wild/Skip/Reverse card');
+      }
+      ultimateCard.sacrificedWildSkipReverse = true;
+    }
+
+    if (ultimateCard.sacrificedSpecial && ultimateCard.sacrificedWildSkipReverse) {
+      ultimateCard.ultimateProgress = 100;
+    } else {
+      ultimateCard.ultimateProgress = 50;
+    }
+
+    // Remove sacrificed card from hand and move to discard pile
+    current.cards.splice(sacIndex, 1);
+    current.cardCount = current.cards.length;
+    this.discardPile.push(sacCard);
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `🔥 ${current.name} sacrificed ${sacCard.type.toUpperCase()} to charge ${ultimateCard.type.toUpperCase()} (${ultimateCard.ultimateProgress}%)!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'sacrifice',
+      playerId: current.id,
+      playerName: current.name,
+      sacrificedCard: sacCard,
+      targetUltimateCard: ultimateCard,
+      message: `${current.name} sacrificed ${sacCard.type} to charge ${ultimateCard.type} (${ultimateCard.ultimateProgress}%)!`
+    });
+
+    if (current.cards.length === 0) {
+      this.endRound(current);
+      return;
+    }
+
+    this.advanceTurn();
+  }
+
+  public playUltimateCard(playerId: string, ultimateCardId: string): void {
+    const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
+    if (player?.isResigned) throw new Error('Player has resigned this round');
+    const current = this.getCurrentPlayer();
+    if (current.id !== playerId && current.secretToken !== playerId) throw new Error('Not your turn');
+
+    const ultIndex = current.cards.findIndex(c => c.id === ultimateCardId);
+    if (ultIndex === -1) throw new Error('Ultimate card not in hand');
+    const ultimateCard = current.cards[ultIndex];
+    if (!isUltimateCard(ultimateCard.type)) throw new Error('Card is not an ultimate card');
+    if ((ultimateCard.ultimateProgress ?? 0) < 100) {
+      throw new Error('Ultimate card is not fully charged (requires 100% charge)');
+    }
+
+    // Remove ultimate card from hand and place on discard pile
+    current.cards.splice(ultIndex, 1);
+    current.cardCount = current.cards.length;
+    this.discardPile.push(ultimateCard);
+
+    // Universal divine descent action event
+    this.emitAction({
+      type: 'ultimate_descend',
+      playerId: current.id,
+      playerName: current.name,
+      card: ultimateCard,
+      ultimateCardType: ultimateCard.type as UltimateCardType,
+      message: `✨ ${current.name} invoked ${ultimateCard.type.toUpperCase()}! God rays illuminate the heavens as the ultimate card descends!`
+    });
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `🌟 ${current.name} activated ULTIMATE: ${ultimateCard.type.toUpperCase()}!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    // Execute unique ability
+    if (ultimateCard.type === 'singularity') {
+      this.applySingularityEffect(current, ultimateCard);
+    } else if (ultimateCard.type === 'voyance') {
+      this.applyVoyanceEffect(current, ultimateCard);
+    } else if (ultimateCard.type === 'alternate') {
+      this.applyAlternateEffect(current, ultimateCard);
+    } else if (ultimateCard.type === 'avarice') {
+      this.applyAvariceEffect(current, ultimateCard);
+    }
+
+    if (current.cards.length === 0) {
+      this.endRound(current);
+      return;
+    }
+
+    this.advanceTurn();
+  }
+
+  private applySingularityEffect(current: GamePlayerInternal, card: Card): void {
+    const active = this.getActivePlayers();
+    const freshDeck = createDeck(this.settings, 'sing_');
+
+    // Caster gets 2x luck boost on wilds, special cards, reverses, skips, and ultimates
+    current.hasLuck = true;
+
+    for (const player of active) {
+      player.cards = [];
+      const isCaster = player.id === current.id;
+      for (let i = 0; i < 10; i++) {
+        if (freshDeck.length === 0) break;
+        let drawn = freshDeck.pop()!;
+        if (isCaster && drawn.type === 'number' && Math.random() < 0.50) {
+          const luckyIdx = freshDeck.findIndex(c => c.type !== 'number');
+          if (luckyIdx !== -1) {
+            const lucky = freshDeck[luckyIdx];
+            freshDeck[luckyIdx] = drawn;
+            drawn = lucky;
+          }
+        }
+        player.cards.push(drawn);
+      }
+      player.cardCount = player.cards.length;
+      player.cards = sortCardsByValue(player.cards);
+    }
+
+    this.emitAction({
+      type: 'ultimate_singularity',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      ultimateCardType: 'singularity',
+      message: `🌀 Singularity erupted! All cards were consumed by the black hole and 10 fresh cards were spit out!`
+    });
+  }
+
+  private applyVoyanceEffect(current: GamePlayerInternal, card: Card): void {
+    this.voyanceCasterId = current.id;
+    const active = this.getActivePlayers();
+    for (const opp of active) {
+      if (opp.id !== current.id) {
+        opp.hasVoyanceDebuff = true;
+      }
+    }
+
+    this.emitAction({
+      type: 'ultimate_voyance',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      ultimateCardType: 'voyance',
+      message: `👁️ Voyance activated! All opponent cards are permanently revealed to ${current.name}!`
+    });
+  }
+
+  private applyAlternateEffect(current: GamePlayerInternal, card: Card): void {
+    const active = this.getActivePlayers();
+
+    // Save main world state
+    this.mainWorldState = {
+      drawPile: [...this.drawPile],
+      discardPile: [...this.discardPile],
+      allLaidDownPhases: [...this.allLaidDownPhases],
+      playerHands: new Map(active.map(p => [p.id, [...p.cards]])),
+      playerLaidPhases: new Map(active.map(p => [p.id, [...p.laidDownPhases]]))
+    };
+
+    // Setup alternate dimension
+    const altDeck = createAlternateDeck('alt_');
+    this.drawPile = altDeck;
+    this.discardPile = [this.drawPile.pop()!];
+    this.allLaidDownPhases = [];
+
+    for (const p of active) {
+      p.cards = [];
+      for (let i = 0; i < 10; i++) {
+        if (this.drawPile.length > 0) {
+          p.cards.push(this.drawPile.pop()!);
+        }
+      }
+      p.cardCount = p.cards.length;
+      p.cards = sortCardsByValue(p.cards);
+      p.laidDownPhases = [];
+      // Buffs & debuffs carry over!
+    }
+
+    this.isAlternateWorld = true;
+    this.alternateDimensionActive = true;
+    this.alternateTurnCounter = -1;
+
+    this.emitAction({
+      type: 'ultimate_alternate',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      ultimateCardType: 'alternate',
+      isAlternateWorld: true,
+      message: `🌌 Reality cracked! Entered the Alternate World with 10 pure number cards!`
+    });
+  }
+
+  public toggleDimension(): void {
+    const active = this.getActivePlayers();
+    if (this.isAlternateWorld) {
+      // Save Alternate World
+      this.alternateWorldState = {
+        drawPile: [...this.drawPile],
+        discardPile: [...this.discardPile],
+        allLaidDownPhases: [...this.allLaidDownPhases],
+        playerHands: new Map(active.map(p => [p.id, [...p.cards]])),
+        playerLaidPhases: new Map(active.map(p => [p.id, [...p.laidDownPhases]]))
+      };
+
+      // Restore Main World
+      if (this.mainWorldState) {
+        this.drawPile = [...this.mainWorldState.drawPile];
+        this.discardPile = [...this.mainWorldState.discardPile];
+        this.allLaidDownPhases = [...this.mainWorldState.allLaidDownPhases];
+        for (const p of active) {
+          p.cards = [...(this.mainWorldState.playerHands.get(p.id) || [])];
+          p.cardCount = p.cards.length;
+          p.laidDownPhases = [...(this.mainWorldState.playerLaidPhases.get(p.id) || [])];
+        }
+      }
+      this.isAlternateWorld = false;
+    } else {
+      // Save Main World
+      this.mainWorldState = {
+        drawPile: [...this.drawPile],
+        discardPile: [...this.discardPile],
+        allLaidDownPhases: [...this.allLaidDownPhases],
+        playerHands: new Map(active.map(p => [p.id, [...p.cards]])),
+        playerLaidPhases: new Map(active.map(p => [p.id, [...p.laidDownPhases]]))
+      };
+
+      // Restore Alternate World
+      if (this.alternateWorldState) {
+        this.drawPile = [...this.alternateWorldState.drawPile];
+        this.discardPile = [...this.alternateWorldState.discardPile];
+        this.allLaidDownPhases = [...this.alternateWorldState.allLaidDownPhases];
+        for (const p of active) {
+          p.cards = [...(this.alternateWorldState.playerHands.get(p.id) || [])];
+          p.cardCount = p.cards.length;
+          p.laidDownPhases = [...(this.alternateWorldState.playerLaidPhases.get(p.id) || [])];
+        }
+      }
+      this.isAlternateWorld = true;
+    }
+
+    this.emitAction({
+      type: 'alternate_shift',
+      playerId: 'system',
+      playerName: 'Dimension Rift',
+      isAlternateWorld: this.isAlternateWorld,
+      message: `🌀 Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`
+    });
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `🌀 Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`,
+      timestamp: Date.now()
+    });
+  }
+
+  private applyAvariceEffect(current: GamePlayerInternal, card: Card): void {
+    // Collect all special cards from the discard pile
+    const specialCards = this.discardPile.filter(c => isChaosSpecialCard(c.type));
+    this.discardPile = this.discardPile.filter(c => !isChaosSpecialCard(c.type));
+
+    // Ensure discard pile is not empty
+    if (this.discardPile.length === 0) {
+      this.ensureDrawPileHasCards();
+      if (this.drawPile.length > 0) {
+        this.discardPile.push(this.drawPile.pop()!);
+      }
+    }
+
+    current.cards.push(...specialCards);
+    current.cards = sortCardsByValue(current.cards);
+    current.cardCount = current.cards.length;
+
+    this.emitAction({
+      type: 'ultimate_avarice',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      ultimateCardType: 'avarice',
+      stolenCards: specialCards,
+      message: `💰 Avarice activated! ${current.name} plundered ${specialCards.length} special cards from the discard pile!`
+    });
   }
 
   public cleanup(): void {

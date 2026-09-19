@@ -5,7 +5,8 @@ import {
   PlayerPublic,
   RoomState,
   GameActionEvent,
-  DEFAULT_SPECIAL_CARDS
+  DEFAULT_SPECIAL_CARDS,
+  DEFAULT_ULTIMATE_CARDS
 } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
 
@@ -51,7 +52,9 @@ export class Room {
       allowPartialAndExtraSets: true,
       totalPhases: 10,
       randomizePhasesPerRound: false,
-      enabledSpecialCards: { ...DEFAULT_SPECIAL_CARDS }
+      botCount: 0,
+      enabledSpecialCards: { ...DEFAULT_SPECIAL_CARDS },
+      enabledUltimateCards: { ...DEFAULT_ULTIMATE_CARDS }
     };
     this.users.set(hostUser.socketId, hostUser);
     this.onBroadcastRoom = callbacks.broadcastRoom;
@@ -271,10 +274,12 @@ export class Room {
     }
 
     const activeUsers = Array.from(this.users.values()).filter(u => !u.isSpectator);
-    if (activeUsers.length < 2) {
-      throw new Error('At least 2 players are required to start the game');
+    const botCount = Math.min(3, Math.max(0, this.settings.botCount || 0));
+    const totalPlayers = activeUsers.length + botCount;
+    if (totalPlayers < 2) {
+      throw new Error('At least 2 players (including bots) are required to start the game');
     }
-    if (activeUsers.length > 4) {
+    if (totalPlayers > 4) {
       throw new Error('A maximum of 4 players are allowed per game');
     }
 
@@ -292,12 +297,13 @@ export class Room {
       }
     );
 
-    this.gameSession.players = activeUsers.map(u => ({
+    const humanPlayers = activeUsers.map(u => ({
       id: u.secretToken,
       secretToken: u.secretToken,
       name: u.name,
       isHost: u.secretToken === this.hostSecretToken,
       isSpectator: false,
+      isBot: false,
       connected: true,
       score: 0,
       currentPhase: 1,
@@ -307,6 +313,30 @@ export class Room {
       laidDownPhases: [],
       isSkipped: false
     }));
+
+    const botNames = ['Bot Sparky', 'Bot Luna', 'Bot Nova'];
+    const botPlayers = [];
+    for (let i = 0; i < botCount; i++) {
+      const botToken = `bot_${this.code}_${i + 1}`;
+      botPlayers.push({
+        id: botToken,
+        secretToken: botToken,
+        name: botNames[i] || `Bot ${i + 1}`,
+        isHost: false,
+        isSpectator: false,
+        isBot: true,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 0,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      });
+    }
+
+    this.gameSession.players = [...humanPlayers, ...botPlayers];
 
     this.gameSession.startGame();
     this.onBroadcastGame(this);

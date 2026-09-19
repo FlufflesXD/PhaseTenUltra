@@ -12,7 +12,9 @@ import {
   validateHit,
   findValidPhaseCombination,
   findSingleRequirementMatch,
-  isChaosSpecialCard
+  isChaosSpecialCard,
+  isUltimateCard,
+  UltimateCardType
 } from '@phase-ten/shared';
 import { CardView } from './CardView.js';
 import { playSpecialSound } from '../utils/audio.js';
@@ -29,6 +31,9 @@ interface GameTableProps {
   onLayExtraMeld: (cardIds: string[]) => void;
   onHitCard: (cardId: string | string[], targetGroupId: string, targetEnd?: 'low' | 'high') => void;
   onDiscardCard: (cardId: string, targetPlayerId?: string, activateAbility?: boolean) => void;
+  onAdminSpawnCard?: (cardName: string, password: string, callback?: (res: any) => void) => void;
+  onSacrificeCard?: (cardIdToSacrifice: string, ultimateCardId: string, callback?: (res: any) => void) => void;
+  onPlayUltimateCard?: (ultimateCardId: string, callback?: (res: any) => void) => void;
   onResign: () => void;
   onClaimSeat?: (targetPlayerId: string) => void;
   onOpenRules: () => void;
@@ -46,6 +51,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   onLayExtraMeld,
   onHitCard,
   onDiscardCard,
+  onAdminSpawnCard,
+  onSacrificeCard,
+  onPlayUltimateCard,
   onResign,
   onClaimSeat,
   onOpenRules
@@ -89,6 +97,34 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [isInfoTabOpen, setIsInfoTabOpen] = useState(false);
   const [isInfoPinned, setIsInfoPinned] = useState(false);
 
+  // Admin spawner state
+  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminPasswordError, setAdminPasswordError] = useState(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [showAdminSpawner, setShowAdminSpawner] = useState(false);
+  const [adminCardInput, setAdminCardInput] = useState('');
+  const [adminSpawnFeedback, setAdminSpawnFeedback] = useState<{ msg: string; isError: boolean } | null>(null);
+
+  // Ultimate Animations state
+  const [divineDescentEvent, setDivineDescentEvent] = useState<{
+    card: Card;
+    playerName: string;
+    ultType: string;
+  } | null>(null);
+  const [singularityEvent, setSingularityEvent] = useState<{
+    playerName: string;
+    stage: 'suction' | 'rumble' | 'eruption';
+  } | null>(null);
+  const [voyanceEvent, setVoyanceEvent] = useState<{ playerName: string } | null>(null);
+  const [dimensionFadeActive, setDimensionFadeActive] = useState(false);
+  const [dimensionFadeMessage, setDimensionFadeMessage] = useState<string>('');
+  const [avariceEvent, setAvariceEvent] = useState<{
+    playerName: string;
+    cards: Card[];
+    currentIndex: number;
+  } | null>(null);
+
   const lastSoundActionIdRef = useRef<string | null>(null);
 
   const totemTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -96,6 +132,13 @@ export const GameTable: React.FC<GameTableProps> = ({
   const timeWarpTimerRef = useRef<NodeJS.Timeout | null>(null);
   const crackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyingCardTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const divineDescentTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const singularityTimerRef1 = useRef<NodeJS.Timeout | null>(null);
+  const singularityTimerRef2 = useRef<NodeJS.Timeout | null>(null);
+  const singularityTimerRef3 = useRef<NodeJS.Timeout | null>(null);
+  const voyanceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const dimensionFadeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const avariceIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
@@ -104,8 +147,35 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
       if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
       if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
+      if (divineDescentTimerRef.current) clearTimeout(divineDescentTimerRef.current);
+      if (singularityTimerRef1.current) clearTimeout(singularityTimerRef1.current);
+      if (singularityTimerRef2.current) clearTimeout(singularityTimerRef2.current);
+      if (singularityTimerRef3.current) clearTimeout(singularityTimerRef3.current);
+      if (voyanceTimerRef.current) clearTimeout(voyanceTimerRef.current);
+      if (dimensionFadeTimerRef.current) clearTimeout(dimensionFadeTimerRef.current);
+      if (avariceIntervalRef.current) clearInterval(avariceIntervalRef.current);
     };
   }, []);
+
+  // Global Shift + L key listener for Admin Spawner
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+        e.preventDefault();
+        if (!isAdminAuthenticated) {
+          setShowAdminPasswordModal(true);
+        } else {
+          setShowAdminSpawner(prev => !prev);
+        }
+      } else if (e.key === 'Escape') {
+        setShowAdminPasswordModal(false);
+        setShowAdminSpawner(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAdminAuthenticated]);
 
   const isDiscardOrSpecialAction = (type?: string) => {
     return (
@@ -126,7 +196,9 @@ export const GameTable: React.FC<GameTableProps> = ({
       type === 'status' ||
       type === 'luck' ||
       type === 'unlucky' ||
-      type === 'double'
+      type === 'double' ||
+      type === 'sacrifice' ||
+      type === 'ultimate_descend'
     );
   };
 
@@ -421,7 +493,6 @@ export const GameTable: React.FC<GameTableProps> = ({
       luck: { image: '/cards/custom/luck.png', title: 'Luck' },
       unlucky: { image: '/cards/custom/unlucky.png', title: 'Unlucky' },
       double: { image: '/cards/custom/double.png', title: 'Double' },
-      reverse: { image: '/cards/reverse.png', title: 'Reverse' },
       jester: { image: '/cards/custom/jester.png', title: 'Jester' },
       redo: { image: '/cards/custom/redo.png', title: 'Redo' },
       number_eye: { image: '/cards/custom/number_eye.png', title: 'Number Eye' },
@@ -482,6 +553,93 @@ export const GameTable: React.FC<GameTableProps> = ({
           }, 5200);
         }
       }, 2000);
+    }
+
+    // Universal Divine Descent (5.5s)
+    if (latestAction.type === 'ultimate_descend') {
+      if (divineDescentTimerRef.current) clearTimeout(divineDescentTimerRef.current);
+      setDivineDescentEvent({
+        card: latestAction.card || { id: 'ult_card', type: (latestAction.ultimateCardType || 'singularity') as any, color: 'none', value: 0, points: 50 },
+        playerName: latestAction.playerName,
+        ultType: latestAction.ultimateCardType || 'singularity'
+      });
+      divineDescentTimerRef.current = setTimeout(() => {
+        setDivineDescentEvent(null);
+        divineDescentTimerRef.current = null;
+      }, 5500);
+    }
+
+    // Singularity Ability: 5s suction -> 2s rumble -> 6s eruption
+    if (latestAction.type === 'ultimate_singularity') {
+      if (singularityTimerRef1.current) clearTimeout(singularityTimerRef1.current);
+      if (singularityTimerRef2.current) clearTimeout(singularityTimerRef2.current);
+      if (singularityTimerRef3.current) clearTimeout(singularityTimerRef3.current);
+
+      setSingularityEvent({ playerName: latestAction.playerName, stage: 'suction' });
+
+      singularityTimerRef1.current = setTimeout(() => {
+        setSingularityEvent({ playerName: latestAction.playerName, stage: 'rumble' });
+        setIsScreenShaking(true);
+
+        singularityTimerRef2.current = setTimeout(() => {
+          setIsScreenShaking(false);
+          setSingularityEvent({ playerName: latestAction.playerName, stage: 'eruption' });
+
+          singularityTimerRef3.current = setTimeout(() => {
+            setSingularityEvent(null);
+            singularityTimerRef1.current = null;
+            singularityTimerRef2.current = null;
+            singularityTimerRef3.current = null;
+          }, 6000);
+        }, 2000);
+      }, 5000);
+    }
+
+    // Voyance Ability
+    if (latestAction.type === 'ultimate_voyance') {
+      if (voyanceTimerRef.current) clearTimeout(voyanceTimerRef.current);
+      setVoyanceEvent({ playerName: latestAction.playerName });
+      voyanceTimerRef.current = setTimeout(() => {
+        setVoyanceEvent(null);
+        voyanceTimerRef.current = null;
+      }, 4000);
+    }
+
+    // Alternate Dimension Entry or Shift (2s dark fade)
+    if (latestAction.type === 'ultimate_alternate' || latestAction.type === 'alternate_shift') {
+      if (dimensionFadeTimerRef.current) clearTimeout(dimensionFadeTimerRef.current);
+      const isAlt = latestAction.type === 'ultimate_alternate' ? true : Boolean(latestAction.isAlternateWorld);
+      setDimensionFadeMessage(isAlt ? '🌌 ENTERING THE ALTERNATE REALITY 🌌' : '🌀 RETURNING TO THE MAIN REALITY 🌀');
+      setDimensionFadeActive(true);
+      dimensionFadeTimerRef.current = setTimeout(() => {
+        setDimensionFadeActive(false);
+        dimensionFadeTimerRef.current = null;
+      }, 2000);
+    }
+
+    // Avarice Ability: 1s per card sequential plunder
+    if (latestAction.type === 'ultimate_avarice') {
+      if (avariceIntervalRef.current) clearInterval(avariceIntervalRef.current);
+      const stolen = (latestAction.stolenCards && latestAction.stolenCards.length > 0)
+        ? latestAction.stolenCards
+        : (latestAction.card ? [latestAction.card] : []);
+
+      if (stolen.length > 0) {
+        setAvariceEvent({ playerName: latestAction.playerName, cards: stolen, currentIndex: 0 });
+        let currentIdx = 0;
+        avariceIntervalRef.current = setInterval(() => {
+          currentIdx += 1;
+          if (currentIdx >= stolen.length) {
+            if (avariceIntervalRef.current) {
+              clearInterval(avariceIntervalRef.current);
+              avariceIntervalRef.current = null;
+            }
+            setTimeout(() => setAvariceEvent(null), 1200);
+          } else {
+            setAvariceEvent(prev => prev ? { ...prev, currentIndex: currentIdx } : null);
+          }
+        }, 1000);
+      }
     }
   }, [latestAction, isMuted]);
 
@@ -573,6 +731,25 @@ export const GameTable: React.FC<GameTableProps> = ({
     (selectedCard?.type === 'plus_two' || selectedCard?.type === 'draw_two' || selectedCard?.type === 'plus_three') &&
     isMyTurn &&
     (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+
+  const unchargedUlt = useMemo(() => {
+    return localHand.find(c => isUltimateCard(c.type) && (c.ultimateProgress ?? 0) < 100);
+  }, [localHand]);
+
+  const canSacrificeSelected = useMemo(() => {
+    if (!selectedCard || !unchargedUlt) return false;
+    if (!isMyTurn || (gameState.turnStage !== 'play' && gameState.turnStage !== 'discard')) return false;
+    const isSpecial = isChaosSpecialCard(selectedCard.type) && !unchargedUlt.sacrificedSpecial;
+    const isWildSkipRev =
+      (selectedCard.type === 'wild' || selectedCard.type === 'skip' || selectedCard.type === 'reverse') &&
+      !unchargedUlt.sacrificedWildSkipReverse;
+    return isSpecial || isWildSkipRev;
+  }, [selectedCard, unchargedUlt, isMyTurn, gameState.turnStage]);
+
+  const isChargedUltimateSelected = useMemo(() => {
+    if (!selectedCard || !isUltimateCard(selectedCard.type)) return false;
+    return (selectedCard.ultimateProgress ?? 0) >= 100 && isMyTurn && (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+  }, [selectedCard, isMyTurn, gameState.turnStage]);
 
   const opponents = useMemo(() => {
     return gameState.players.filter(p => p.id !== me?.id && !p.isSpectator);
@@ -1021,6 +1198,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
+                {player.hasVoyanceDebuff && (
+                  <span className="text-[10px] text-cyan-300 font-black flex items-center gap-0.5 bg-cyan-950/80 border border-cyan-400/60 px-1.5 py-0.5 rounded shadow">
+                    <span>👁️</span>
+                    <span>EXPOSED</span>
+                  </span>
+                )}
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
                   <span className="text-xs font-black text-black">({gameState.turnTimeRemaining}s)</span>
                 )}
@@ -1053,6 +1236,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
               const rot = (i - (visibleCardsCount - 1) / 2) * 2.2;
+              const exposedCard = player.visibleCards && player.visibleCards[i];
               return (
                 <div
                   key={i}
@@ -1061,9 +1245,15 @@ export const GameTable: React.FC<GameTableProps> = ({
                     marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-46px' : '-40px',
                     zIndex: i + 1
                   }}
-                  className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass}`}
+                  className={`w-[84px] h-[118px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass} ${
+                    exposedCard ? 'ring-2 ring-cyan-400/80 shadow-[0_0_12px_rgba(6,182,212,0.6)]' : ''
+                  }`}
                 >
-                  <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                  {exposedCard ? (
+                    <CardView card={exposedCard} size="sm" isSelectable={false} />
+                  ) : (
+                    <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                  )}
                 </div>
               );
             })}
@@ -1120,6 +1310,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
+                {player.hasVoyanceDebuff && (
+                  <span className="text-[10px] text-cyan-300 font-black flex items-center gap-0.5 bg-cyan-950/80 border border-cyan-400/60 px-1.5 py-0.5 rounded shadow">
+                    <span>👁️</span>
+                    <span>EXPOSED</span>
+                  </span>
+                )}
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
                   <span className="text-xs font-black text-black">({gameState.turnTimeRemaining}s)</span>
                 )}
@@ -1151,6 +1347,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             >
               {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
                 const rot = (i - (visibleCardsCount - 1) / 2) * 2.2;
+                const exposedCard = player.visibleCards && player.visibleCards[i];
                 return (
                   <div
                     key={i}
@@ -1159,9 +1356,15 @@ export const GameTable: React.FC<GameTableProps> = ({
                       marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-42px' : '-36px',
                       zIndex: i + 1
                     }}
-                    className={`w-[56px] h-[78px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass}`}
+                    className={`w-[56px] h-[78px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass} ${
+                      exposedCard ? 'ring-2 ring-cyan-400/80 shadow-[0_0_10px_rgba(6,182,212,0.6)]' : ''
+                    }`}
                   >
-                    <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                    {exposedCard ? (
+                      <CardView card={exposedCard} size="xs" isSelectable={false} />
+                    ) : (
+                      <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                    )}
                   </div>
                 );
               })}
@@ -1228,6 +1431,12 @@ export const GameTable: React.FC<GameTableProps> = ({
               {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
               {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
               {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
+              {player.hasVoyanceDebuff && (
+                <span className="text-[10px] text-cyan-300 font-black flex items-center gap-0.5 bg-cyan-950/80 border border-cyan-400/60 px-1.5 py-0.5 rounded shadow">
+                  <span>👁️</span>
+                  <span>EXPOSED</span>
+                </span>
+              )}
               {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
                 <span className="text-xs font-black text-black">({gameState.turnTimeRemaining}s)</span>
               )}
@@ -1266,6 +1475,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           >
             {Array.from({ length: Math.max(1, visibleCardsCount) }).map((_, i) => {
               const rot = (i - (visibleCardsCount - 1) / 2) * -2.2;
+              const exposedCard = player.visibleCards && player.visibleCards[i];
               return (
                 <div
                   key={i}
@@ -1274,9 +1484,15 @@ export const GameTable: React.FC<GameTableProps> = ({
                     marginLeft: i === 0 ? 0 : visibleCardsCount > 8 ? '-42px' : '-36px',
                     zIndex: i + 1
                   }}
-                  className={`w-[56px] h-[78px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass}`}
+                  className={`w-[56px] h-[78px] aspect-[5/7] rounded-lg border overflow-hidden bg-neutral-900 shadow-2xl shrink-0 ${targetCardBorderClass} ${
+                    exposedCard ? 'ring-2 ring-cyan-400/80 shadow-[0_0_10px_rgba(6,182,212,0.6)]' : ''
+                  }`}
                 >
-                  <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                  {exposedCard ? (
+                    <CardView card={exposedCard} size="xs" isSelectable={false} />
+                  ) : (
+                    <img src="/cards/back.png" alt="Card" className="w-full h-full object-cover" />
+                  )}
                 </div>
               );
             })}
@@ -1293,11 +1509,19 @@ export const GameTable: React.FC<GameTableProps> = ({
     >
       {/* 0. Ambient Looping Background Video filling pillarbox / letterbox borders */}
       <video
-        src="/cards/background.mp4"
+        src={gameState.isAlternateWorld ? "/cards/alternate_background.mp4" : "/cards/background.mp4"}
+        onError={(e) => {
+          if (e.currentTarget.src.includes('alternate_background')) {
+            e.currentTarget.src = "/cards/background.mp4";
+          }
+        }}
         autoPlay
         loop
         muted={isMuted}
         playsInline
+        style={{
+          filter: gameState.isAlternateWorld ? 'hue-rotate(180deg) invert(0.2) contrast(1.3)' : undefined
+        }}
         className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-30 blur-md z-0"
       />
 
@@ -1316,11 +1540,19 @@ export const GameTable: React.FC<GameTableProps> = ({
         {/* 1. Main 3D Arena Video Background */}
         <video
           ref={videoRef}
-          src="/cards/background.mp4"
+          src={gameState.isAlternateWorld ? "/cards/alternate_background.mp4" : "/cards/background.mp4"}
+          onError={(e) => {
+            if (e.currentTarget.src.includes('alternate_background')) {
+              e.currentTarget.src = "/cards/background.mp4";
+            }
+          }}
           autoPlay
           loop
           muted={isMuted}
           playsInline
+          style={{
+            filter: gameState.isAlternateWorld ? 'hue-rotate(180deg) invert(0.2) contrast(1.3)' : undefined
+          }}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
         />
 
@@ -1339,7 +1571,14 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>🔗</span>
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.9</span>
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.0</span>
+            {gameState.isAlternateWorld && (
+              <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
+                <span>🌌</span>
+                <span>Alternate World</span>
+                <span className="text-[10px] text-purple-300 font-mono">({(gameState.alternateTurnCounter ?? 0) % 2 + 1}/2 turns)</span>
+              </span>
+            )}
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             <span
               title={`Play Direction: ${gameState.playDirection === 1 ? 'Clockwise' : 'Counter-Clockwise'}`}
@@ -1854,6 +2093,40 @@ export const GameTable: React.FC<GameTableProps> = ({
                 >
                   Sort: Color
                 </button>
+                {/* 1. Charged Ultimate Button */}
+                {isChargedUltimateSelected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedCard && onPlayUltimateCard) {
+                        onPlayUltimateCard(selectedCard.id);
+                        setSelectedCardId(null);
+                      }
+                    }}
+                    className="px-3.5 py-0.5 rounded text-xs bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 hover:brightness-125 text-black cursor-pointer transition-all font-black flex items-center gap-1 shadow-[0_0_20px_rgba(251,191,36,0.9)] animate-bounce ml-1 uppercase"
+                  >
+                    <span>🌟</span>
+                    <span>Activate Ultimate: {selectedCard?.type.toUpperCase()}</span>
+                  </button>
+                )}
+
+                {/* 2. Sacrifice Button */}
+                {canSacrificeSelected && unchargedUlt && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedCard && unchargedUlt && onSacrificeCard) {
+                        onSacrificeCard(selectedCard.id, unchargedUlt.id);
+                        setSelectedCardId(null);
+                      }
+                    }}
+                    className="px-3 py-0.5 rounded text-xs bg-gradient-to-r from-orange-600 to-amber-500 hover:brightness-125 text-black cursor-pointer transition-all font-extrabold flex items-center gap-1 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse ml-1"
+                  >
+                    <span>🔥</span>
+                    <span>Sacrifice into {unchargedUlt.type.toUpperCase()} (+50%)</span>
+                  </button>
+                )}
+
                 {selectedCard && isMyTurn && gameState.turnStage !== 'draw' && (
                   <button
                     type="button"
@@ -1933,7 +2206,59 @@ export const GameTable: React.FC<GameTableProps> = ({
 
                     {/* Action buttons right on the selected card */}
                     {isSelected && isMyTurn && gameState.turnStage !== 'draw' && (
-                      isChaosSpecialCard(c.type) ? (
+                      isUltimateCard(c.type) ? (
+                        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-2 bg-black/95 backdrop-blur-md p-3 rounded-2xl border-2 border-amber-400/90 shadow-[0_0_30px_rgba(251,191,36,0.8)] select-none min-w-[150px]">
+                          <div className="text-[11px] font-black text-amber-300 tracking-wider uppercase drop-shadow flex items-center gap-1">
+                            <span>🌟</span>
+                            <span>{c.type}</span>
+                          </div>
+                          <div className="w-28 bg-neutral-800 rounded-full h-2.5 overflow-hidden border border-white/20">
+                            <div
+                              className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 h-full transition-all duration-300 shadow-[0_0_10px_rgba(251,191,36,0.8)]"
+                              style={{ width: `${c.ultimateProgress ?? 0}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-amber-200 font-extrabold">
+                            {c.ultimateProgress ?? 0}% Charged
+                          </span>
+
+                          {(c.ultimateProgress ?? 0) >= 100 ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onPlayUltimateCard?.(c.id);
+                                setSelectedCardId(null);
+                              }}
+                              className="py-1.5 px-3 rounded-xl border border-yellow-300 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-black font-black text-xs flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(251,191,36,1)] animate-bounce whitespace-nowrap"
+                            >
+                              <span>🌟</span>
+                              <span>ACTIVATE ULTIMATE</span>
+                            </button>
+                          ) : (
+                            <div className="text-[9px] text-neutral-300 text-center font-medium max-w-[130px] leading-tight">
+                              {!c.sacrificedSpecial && !c.sacrificedWildSkipReverse
+                                ? 'Sacrifice 1 Special + 1 Wild/Skip/Reverse'
+                                : !c.sacrificedSpecial
+                                ? 'Sacrifice 1 Special Card'
+                                : 'Sacrifice 1 Wild/Skip/Reverse'}
+                            </div>
+                          )}
+
+                          {/* Regular Discard */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNormalDiscard();
+                            }}
+                            className="py-1 px-3 rounded-lg border border-red-500/80 bg-red-600/85 hover:bg-red-600 active:scale-95 text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow whitespace-nowrap"
+                          >
+                            <span>🗑️</span>
+                            <span>DISCARD</span>
+                          </button>
+                        </div>
+                      ) : isChaosSpecialCard(c.type) ? (
                         <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-1.5 bg-black/85 backdrop-blur-md p-2 rounded-xl border border-white/20 shadow-2xl select-none">
                           {/* Ability Option or Lock Indicator */}
                           {c.type === 'nuke' && !me?.phaseCompletedInRound ? (
@@ -2096,6 +2421,22 @@ export const GameTable: React.FC<GameTableProps> = ({
                             </button>
                           )}
 
+                          {/* Sacrifice Option into uncharged ultimate */}
+                          {canSacrificeSelected && unchargedUlt && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSacrificeCard?.(c.id, unchargedUlt.id);
+                                setSelectedCardId(null);
+                              }}
+                              className="py-1 px-2.5 rounded-lg border border-orange-400 bg-gradient-to-r from-orange-600 to-amber-500 hover:brightness-110 active:scale-95 text-black font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[0_0_12px_rgba(249,115,22,0.8)] whitespace-nowrap"
+                            >
+                              <span>🔥</span>
+                              <span>SACRIFICE (+50%)</span>
+                            </button>
+                          )}
+
                           {/* Regular Discard Button - ALWAYS available on special cards */}
                           <button
                             type="button"
@@ -2111,23 +2452,39 @@ export const GameTable: React.FC<GameTableProps> = ({
                         </div>
                       ) : (
                         /* Standard Card */
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNormalDiscard();
-                          }}
-                          className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 border shadow-[0_0_15px_rgba(239,68,68,0.85)] active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none ${
-                            c.type === 'reverse'
-                              ? 'bg-sky-600/85 hover:bg-sky-600 border-sky-400'
-                              : c.type === 'skip'
-                              ? 'bg-blue-600/85 hover:bg-blue-600 border-blue-400'
-                              : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80'
-                          }`}
-                        >
-                          <span className="text-xs">{c.type === 'reverse' ? '⇄' : c.type === 'skip' ? '🚫' : '🗑️'}</span>
-                          <span>{c.type === 'reverse' ? 'PLAY REVERSE' : c.type === 'skip' ? 'PLAY SKIP' : 'DISCARD'}</span>
-                        </button>
+                        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-1.5 select-none">
+                          {canSacrificeSelected && unchargedUlt && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSacrificeCard?.(c.id, unchargedUlt.id);
+                                setSelectedCardId(null);
+                              }}
+                              className="border border-orange-400 bg-gradient-to-r from-orange-600 to-amber-500 text-black font-black text-xs py-1.5 px-3 rounded-lg shadow-[0_0_15px_rgba(249,115,22,0.85)] active:scale-95 flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 whitespace-nowrap"
+                            >
+                              <span>🔥</span>
+                              <span>SACRIFICE (+50%)</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNormalDiscard();
+                            }}
+                            className={`border shadow-[0_0_15px_rgba(239,68,68,0.85)] active:scale-95 text-white font-black text-xs py-1.5 px-3 rounded-lg backdrop-blur-sm flex items-center justify-center gap-1 cursor-pointer transition-all animate-fade-in hover:scale-105 whitespace-nowrap select-none ${
+                              c.type === 'reverse'
+                                ? 'bg-sky-600/85 hover:bg-sky-600 border-sky-400'
+                                : c.type === 'skip'
+                                ? 'bg-blue-600/85 hover:bg-blue-600 border-blue-400'
+                                : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80'
+                            }`}
+                          >
+                            <span className="text-xs">{c.type === 'reverse' ? '⇄' : c.type === 'skip' ? '🚫' : '🗑️'}</span>
+                            <span>{c.type === 'reverse' ? 'PLAY REVERSE' : c.type === 'skip' ? 'PLAY SKIP' : 'DISCARD'}</span>
+                          </button>
+                        </div>
                       )
                     )}
                   </div>
@@ -2496,6 +2853,359 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       </div>
 
+      {/* Universal Divine Descent (5.5s) */}
+      {divineDescentEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+          {/* Rotating Divine God Rays */}
+          <div
+            className="absolute inset-0 pointer-events-none opacity-80 animate-spin"
+            style={{
+              animationDuration: '30s',
+              background: `conic-gradient(from 0deg at 50% 40%, 
+                rgba(251,191,36,0.35) 0deg, transparent 12deg, 
+                rgba(251,191,36,0.35) 24deg, transparent 36deg, 
+                rgba(251,191,36,0.35) 48deg, transparent 60deg, 
+                rgba(251,191,36,0.35) 72deg, transparent 84deg, 
+                rgba(251,191,36,0.35) 96deg, transparent 108deg, 
+                rgba(251,191,36,0.35) 120deg, transparent 132deg, 
+                rgba(251,191,36,0.35) 144deg, transparent 156deg, 
+                rgba(251,191,36,0.35) 168deg, transparent 180deg, 
+                rgba(251,191,36,0.35) 192deg, transparent 204deg, 
+                rgba(251,191,36,0.35) 216deg, transparent 228deg, 
+                rgba(251,191,36,0.35) 240deg, transparent 252deg, 
+                rgba(251,191,36,0.35) 264deg, transparent 276deg, 
+                rgba(251,191,36,0.35) 288deg, transparent 300deg, 
+                rgba(251,191,36,0.35) 312deg, transparent 324deg, 
+                rgba(251,191,36,0.35) 336deg, transparent 348deg, 
+                rgba(251,191,36,0.35) 360deg)`
+            }}
+          />
+
+          {/* Heavenly Glow Pillar */}
+          <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-amber-400/30 via-yellow-300/10 to-transparent pointer-events-none" />
+
+          {/* Descending Card & Banner */}
+          <div
+            className="relative z-10 flex flex-col items-center gap-5"
+            style={{
+              animation: 'divineDescend 5.5s cubic-bezier(0.25, 1, 0.5, 1) forwards'
+            }}
+          >
+            <div className="flex flex-col items-center gap-2 select-none text-center">
+              <span className="text-4xl md:text-5xl animate-pulse">⚡ 🌟 ⚡</span>
+              <h2 className="text-3xl md:text-5xl font-black text-amber-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(251,191,36,0.9)]">
+                DIVINE DESCENT
+              </h2>
+              <p className="text-base md:text-xl font-extrabold text-white tracking-wider drop-shadow-[0_0_15px_rgba(0,0,0,0.9)]">
+                {divineDescentEvent.playerName} INVOKED {divineDescentEvent.ultType.toUpperCase()}!
+              </p>
+            </div>
+
+            <div className="relative rounded-2xl p-2 bg-gradient-to-b from-amber-300 via-yellow-400 to-amber-600 shadow-[0_0_80px_rgba(251,191,36,1)] scale-125">
+              <CardView card={divineDescentEvent.card} size="lg" isSelectable={false} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Singularity Ultimate VFX (Suction -> Rumble -> Eruption) */}
+      {singularityEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+          {singularityEvent.stage === 'suction' && (
+            <div className="relative flex flex-col items-center justify-center">
+              {/* Black hole vortex */}
+              <div
+                className="w-[500px] h-[500px] rounded-full animate-spin border-8 border-purple-500/80 shadow-[0_0_120px_rgba(147,51,234,1),inset_0_0_80px_black] bg-black flex items-center justify-center"
+                style={{ animationDuration: '4s' }}
+              >
+                <div className="w-[300px] h-[300px] rounded-full bg-gradient-to-r from-purple-900 to-black animate-pulse opacity-90" />
+              </div>
+              {/* Swirling suction cards */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                {Array.from({ length: 8 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="absolute w-12 h-16 rounded bg-purple-600/60 border border-purple-300/80"
+                    style={{
+                      transform: `rotate(${idx * 45}deg) translateY(-180px) scale(0.6)`,
+                      animation: 'suctionCard 2s linear infinite',
+                      animationDelay: `${idx * 0.25}s`
+                    }}
+                  />
+                ))}
+              </div>
+              <div className="absolute z-20 text-center select-none mt-72">
+                <div className="text-3xl md:text-5xl font-black text-purple-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(147,51,234,1)] animate-pulse">
+                  🌀 SINGULARITY CONSUMPTION
+                </div>
+                <p className="text-sm md:text-base text-purple-200 font-bold mt-2">
+                  All player cards are being drawn into the event horizon...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {singularityEvent.stage === 'rumble' && (
+            <div className="relative flex flex-col items-center justify-center">
+              {/* Dense critical mass spark */}
+              <div className="w-20 h-20 rounded-full bg-white shadow-[0_0_160px_rgba(255,255,255,1)] animate-ping" />
+              <div className="absolute z-20 text-center select-none">
+                <div className="text-4xl md:text-6xl font-black text-white tracking-widest uppercase drop-shadow-[0_0_40px_rgba(255,255,255,1)]">
+                  ⚡ CRITICAL MASS ⚡
+                </div>
+                <p className="text-base md:text-lg text-purple-200 font-bold mt-2">
+                  Dimensional equilibrium destabilizing...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {singularityEvent.stage === 'eruption' && (
+            <div className="relative flex flex-col items-center justify-center">
+              <div className="w-[800px] h-[800px] rounded-full border-4 border-cyan-400/80 animate-ping absolute opacity-60" />
+              <div className="relative z-20 text-center select-none flex flex-col items-center gap-3">
+                <span className="text-6xl md:text-8xl animate-bounce">✨ 🌀 ✨</span>
+                <div className="text-4xl md:text-6xl font-black text-cyan-300 tracking-widest uppercase drop-shadow-[0_0_40px_rgba(6,182,212,1)]">
+                  COSMIC ERUPTION!
+                </div>
+                <p className="text-lg md:text-xl text-yellow-300 font-extrabold drop-shadow">
+                  10 Fresh Cards Dealt from a New Reality!
+                </p>
+                <div className="bg-emerald-950/90 border border-emerald-400/80 text-emerald-300 px-5 py-1.5 rounded-full font-black text-sm shadow-[0_0_20px_rgba(52,211,153,0.8)]">
+                  🍀 2X LUCK BESTOWED ON {singularityEvent.playerName.toUpperCase()}!
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Voyance Ultimate VFX */}
+      {voyanceEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center animate-fade-in">
+          <div className="bg-neutral-950/90 border-2 border-cyan-400 rounded-3xl p-8 shadow-[0_0_80px_rgba(6,182,212,0.9)] flex flex-col items-center gap-4 text-center select-none max-w-lg">
+            <span className="text-7xl animate-pulse">👁️</span>
+            <div className="text-3xl md:text-4xl font-black text-cyan-300 tracking-widest uppercase drop-shadow-[0_0_20px_rgba(6,182,212,0.8)]">
+              ALL-SEEING VOYANCE
+            </div>
+            <p className="text-sm md:text-base text-neutral-200 font-bold">
+              {voyanceEvent.playerName} has shattered the veil! All opponent decks are now double-sided and visible to the caster!
+            </p>
+            <span className="text-xs text-cyan-400 font-mono tracking-widest uppercase">
+              Permanent Debuff • Cannot be cleansed by Status
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Alternate World 2-Second Dark Fade */}
+      {dimensionFadeActive && (
+        <div className="fixed inset-0 z-[100] pointer-events-none flex flex-col items-center justify-center bg-black animate-dimension-fade select-none">
+          <div className="relative z-10 flex flex-col items-center gap-3 text-center px-4">
+            <span className="text-6xl md:text-7xl animate-pulse">🌌</span>
+            <h2 className="text-3xl md:text-5xl font-black text-purple-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(168,85,247,0.9)]">
+              {dimensionFadeMessage}
+            </h2>
+            <p className="text-sm md:text-base text-neutral-400 font-mono">
+              Shifting reality matrices...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Avarice Sequential Plunder VFX */}
+      {avariceEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center animate-fade-in">
+          <div className="relative z-10 flex flex-col items-center gap-4 text-center select-none">
+            <div className="text-4xl md:text-5xl font-black text-amber-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(251,191,36,1)] flex items-center gap-3">
+              <span>💰</span>
+              <span>AVARICE PLUNDER</span>
+              <span>💰</span>
+            </div>
+            <p className="text-base text-amber-100 font-bold">
+              {avariceEvent.playerName} is seizing special cards from the discard pile! ({avariceEvent.currentIndex + 1}/{avariceEvent.cards.length})
+            </p>
+            {avariceEvent.cards[avariceEvent.currentIndex] && (
+              <div className="scale-125 animate-bounce shadow-[0_0_40px_rgba(251,191,36,0.9)] rounded-xl">
+                <CardView card={avariceEvent.cards[avariceEvent.currentIndex]} size="lg" isSelectable={false} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Admin Password Prompt Modal */}
+      {showAdminPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md">
+          <div className="bg-neutral-950 border-2 border-amber-500/80 rounded-2xl p-6 w-[340px] shadow-[0_0_40px_rgba(245,158,11,0.5)] flex flex-col gap-4 text-white select-none">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔐</span>
+                <h3 className="text-base font-black tracking-wider text-amber-400 uppercase">Admin Access</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAdminPasswordModal(false);
+                  setAdminPasswordInput('');
+                  setAdminPasswordError(false);
+                }}
+                className="text-neutral-400 hover:text-white text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-neutral-400">Enter server admin password to unlock developer card spawner.</p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (adminPasswordInput === '3115') {
+                  setIsAdminAuthenticated(true);
+                  setShowAdminPasswordModal(false);
+                  setShowAdminSpawner(true);
+                  setAdminPasswordError(false);
+                  setAdminPasswordInput('');
+                } else {
+                  setAdminPasswordError(true);
+                }
+              }}
+              className="flex flex-col gap-3"
+            >
+              <input
+                type="password"
+                autoFocus
+                placeholder="Password..."
+                value={adminPasswordInput}
+                onChange={(e) => {
+                  setAdminPasswordInput(e.target.value);
+                  setAdminPasswordError(false);
+                }}
+                className="bg-neutral-900 border border-neutral-700 focus:border-amber-400 px-3 py-2 rounded-lg text-sm text-white font-mono outline-none"
+              />
+              {adminPasswordError && (
+                <span className="text-xs text-red-400 font-bold">Incorrect password. Access denied.</span>
+              )}
+              <div className="flex items-center justify-end gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdminPasswordModal(false);
+                    setAdminPasswordInput('');
+                    setAdminPasswordError(false);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs text-neutral-400 hover:text-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black cursor-pointer shadow-lg transition-colors"
+                >
+                  Unlock
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Admin Spawner Bar */}
+      {showAdminSpawner && (
+        <div className="fixed top-16 right-6 z-[95] bg-neutral-950/95 border border-amber-500/60 rounded-2xl p-4 w-[380px] shadow-[0_0_35px_rgba(245,158,11,0.4)] backdrop-blur-xl text-white select-none animate-fade-in flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚡</span>
+              <span className="text-xs font-black tracking-wider text-amber-400 uppercase">Admin Card Spawner</span>
+              <span className="text-[10px] text-neutral-500 font-mono">(Shift+L)</span>
+            </div>
+            <button
+              onClick={() => setShowAdminSpawner(false)}
+              className="text-neutral-400 hover:text-white text-xs cursor-pointer p-1"
+              title="Close Spawner"
+            >
+              ✕
+            </button>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const trimmed = adminCardInput.trim().toLowerCase().replace(/\.(png|webp)$/i, '');
+              if (!trimmed) return;
+              onAdminSpawnCard?.(trimmed, '3115', (res) => {
+                if (res && res.success) {
+                  setAdminSpawnFeedback({ msg: `Spawned ${trimmed}!`, isError: false });
+                  setAdminCardInput('');
+                } else {
+                  setAdminSpawnFeedback({ msg: res?.error || 'Spawn failed', isError: true });
+                }
+                setTimeout(() => setAdminSpawnFeedback(null), 3000);
+              });
+            }}
+            className="flex gap-2"
+          >
+            <input
+              type="text"
+              autoFocus
+              placeholder="Card name (e.g. time, singularity, red_10)..."
+              value={adminCardInput}
+              onChange={(e) => setAdminCardInput(e.target.value)}
+              className="flex-1 bg-neutral-900 border border-neutral-700 focus:border-amber-400 px-3 py-1.5 rounded-lg text-xs text-white font-mono outline-none placeholder:text-neutral-500"
+            />
+            <button
+              type="submit"
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-lg cursor-pointer transition-colors shadow"
+            >
+              Spawn
+            </button>
+          </form>
+
+          {adminSpawnFeedback && (
+            <div
+              className={`text-xs px-2.5 py-1 rounded font-bold ${
+                adminSpawnFeedback.isError
+                  ? 'bg-red-950/80 text-red-300 border border-red-500/50'
+                  : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50'
+              }`}
+            >
+              {adminSpawnFeedback.isError ? '✕ ' : '✓ '}
+              {adminSpawnFeedback.msg}
+            </div>
+          )}
+
+          {/* Quick Spawn Chips */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Quick Spawn:</span>
+            <div className="flex flex-wrap gap-1 max-h-[140px] overflow-y-auto pr-1">
+              {[
+                'singularity', 'voyance', 'alternate', 'avarice',
+                'nuke', 'jester', 'time', 'crack', 'status', 'luck',
+                'unlucky', 'double', 'redo', 'number_eye', 'color_eye',
+                'plus_two', 'plus_three', 'wild', 'skip', 'reverse',
+                'red_10', 'blue_7', 'yellow_1', 'green_12'
+              ].map((cardName) => (
+                <button
+                  key={cardName}
+                  type="button"
+                  onClick={() => {
+                    onAdminSpawnCard?.(cardName, '3115', (res) => {
+                      if (res && res.success) {
+                        setAdminSpawnFeedback({ msg: `Spawned ${cardName}!`, isError: false });
+                      } else {
+                        setAdminSpawnFeedback({ msg: res?.error || 'Spawn failed', isError: true });
+                      }
+                      setTimeout(() => setAdminSpawnFeedback(null), 3000);
+                    });
+                  }}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-amber-300 border border-neutral-700/80 hover:border-amber-400/80 cursor-pointer transition-all"
+                >
+                  {cardName}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes screenShake {
           0% { transform: scale(${scale}) translate(0, 0) rotate(0deg); }
@@ -2504,6 +3214,40 @@ export const GameTable: React.FC<GameTableProps> = ({
           60% { transform: scale(${scale}) translate(-7px, -4px) rotate(-0.3deg); }
           80% { transform: scale(${scale}) translate(7px, 5px) rotate(0.4deg); }
           100% { transform: scale(${scale}) translate(0, 0) rotate(0deg); }
+        }
+        @keyframes divineDescend {
+          0% {
+            transform: translateY(-260px) scale(1.4);
+            opacity: 0;
+          }
+          18% {
+            transform: translateY(0px) scale(1.1);
+            opacity: 1;
+          }
+          80% {
+            transform: translateY(0px) scale(1.1);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(160px) scale(0.6);
+            opacity: 0;
+          }
+        }
+        @keyframes suctionCard {
+          0% {
+            transform: rotate(0deg) translateY(-220px) scale(0.9);
+            opacity: 1;
+          }
+          100% {
+            transform: rotate(720deg) translateY(0px) scale(0.1);
+            opacity: 0;
+          }
+        }
+        @keyframes dimension-fade {
+          0% { opacity: 0; }
+          25% { opacity: 1; }
+          75% { opacity: 1; }
+          100% { opacity: 0; }
         }
       `}</style>
     </div>

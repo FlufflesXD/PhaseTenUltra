@@ -85,7 +85,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 <span className="text-amber-400">🔗</span>
                 <h1 className="text-sm font-bold uppercase tracking-wider text-amber-200">Room Invitation</h1>
               </div>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.9</span>
+              <span className="text-[10px] text-amber-400 font-bold border border-amber-500/40 px-1 py-0.5 rounded">v6.0</span>
             </div>
 
             <div className="text-center py-2.5 bg-neutral-900/60 border border-neutral-800 rounded">
@@ -152,7 +152,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold uppercase tracking-wider">TenStages Online</h1>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.9</span>
+              <span className="text-[10px] text-amber-400 font-bold border border-amber-500/40 px-1 py-0.5 rounded">v6.0</span>
             </div>
             <button
               onClick={onOpenRules}
@@ -446,32 +446,62 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           );
         })()}
 
-
-
-        {/* Start Button */}
-        <div>
+        {/* Play With Bots Setting */}
+        <div className="border border-neutral-800 p-2.5 rounded flex justify-between items-center text-xs">
+          <div className="flex flex-col">
+            <span className="text-neutral-400 font-medium">Play With Bots:</span>
+            <span className="text-[10px] text-neutral-500">Play solo or fill empty spots with AI (Max 3)</span>
+          </div>
           {isHost ? (
-            <button
-              onClick={onStartGame}
-              disabled={roomState.players.length < 2 || roomState.players.length > 4}
-              className={`w-full py-2.5 uppercase font-bold text-xs rounded border transition-colors ${
-                roomState.players.length >= 2 && roomState.players.length <= 4
-                  ? 'bg-white text-black border-white hover:bg-neutral-200 cursor-pointer'
-                  : 'bg-neutral-900 text-neutral-600 border-neutral-800 cursor-not-allowed'
-              }`}
+            <select
+              value={roomState.settings.botCount ?? 0}
+              onChange={e => onUpdateSettings({ botCount: parseInt(e.target.value, 10) })}
+              className="bg-black border border-neutral-700 rounded px-2.5 py-1 text-white focus:outline-none cursor-pointer font-bold"
             >
-              {roomState.players.length >= 2
-                ? roomState.players.length > 4
-                  ? 'Too many players (Max 4)'
-                  : 'Start Game'
-                : 'Waiting for 2nd player...'}
-            </button>
+              <option value="0">0 Bots (Humans Only)</option>
+              <option value="1">1 Bot</option>
+              <option value="2">2 Bots</option>
+              <option value="3">3 Bots</option>
+            </select>
           ) : (
-            <div className="text-center text-xs text-neutral-500 italic py-1">
-              Waiting for host to start the game...
-            </div>
+            <span className="text-white font-bold text-xs">
+              {roomState.settings.botCount ? `${roomState.settings.botCount} Bot${roomState.settings.botCount > 1 ? 's' : ''}` : '0 Bots'}
+            </span>
           )}
         </div>
+
+        {/* Start Button */}
+        {(() => {
+          const botCount = roomState.settings.botCount ?? 0;
+          const totalCount = roomState.players.length + botCount;
+          const canStart = totalCount >= 2 && totalCount <= 4;
+
+          return (
+            <div>
+              {isHost ? (
+                <button
+                  onClick={onStartGame}
+                  disabled={!canStart}
+                  className={`w-full py-2.5 uppercase font-bold text-xs rounded border transition-colors ${
+                    canStart
+                      ? 'bg-white text-black border-white hover:bg-neutral-200 cursor-pointer shadow-lg shadow-white/10'
+                      : 'bg-neutral-900 text-neutral-600 border-neutral-800 cursor-not-allowed'
+                  }`}
+                >
+                  {totalCount > 4
+                    ? `Too many players (${totalCount}/4 max)`
+                    : totalCount >= 2
+                    ? `Start Game (${totalCount} Players${botCount > 0 ? ` incl. ${botCount} Bot${botCount > 1 ? 's' : ''}` : ''})`
+                    : 'Waiting for 2nd player (or select Bots)...'}
+                </button>
+              ) : (
+                <div className="text-center text-xs text-neutral-500 italic py-1">
+                  Waiting for host to start the game...
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

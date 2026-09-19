@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card } from '@phase-ten/shared';
+import { Card, isUltimateCard } from '@phase-ten/shared';
 
 interface CardViewProps {
   card: Card;
@@ -43,10 +43,18 @@ export const CardView: React.FC<CardViewProps> = ({
     : 'bg-black text-white border border-neutral-600 hover:border-white';
 
   const highlightStyle = isHighlighted && !isSelected ? 'ring-2 ring-white' : '';
+  const ultimateGlow = isUltimateCard(card.type)
+    ? (card.ultimateProgress === 100
+        ? 'ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]'
+        : 'border-purple-500/70 shadow-[0_0_8px_rgba(168,85,247,0.3)]')
+    : '';
 
   const colorLabel = isColorEyeActive && card.type === 'number' ? 'GREY' : (card.color !== 'none' ? card.color.toUpperCase() : '');
 
   const imageSrc = React.useMemo(() => {
+    if (isUltimateCard(card.type)) {
+      return `/cards/custom_ultimates/${card.type}.webp`;
+    }
     if (card.type === 'wild') return '/cards/wild.png';
     if (card.type === 'skip') return '/cards/skip.png';
     if (card.type === 'reverse') return '/cards/reverse.png';
@@ -81,7 +89,7 @@ export const CardView: React.FC<CardViewProps> = ({
 
   React.useEffect(() => {
     setImageError(false);
-  }, [card.id, card.type, card.color, card.value, card.isCracked, isNumberEyeActive, isColorEyeActive]);
+  }, [card.id, card.type, card.color, card.value, card.isCracked, card.ultimateProgress, isNumberEyeActive, isColorEyeActive]);
 
   const symbol =
     card.type === 'wild'
@@ -122,6 +130,8 @@ export const CardView: React.FC<CardViewProps> = ({
       ? '?'
       : card.value;
 
+  const isUlt = isUltimateCard(card.type);
+
   const innerContent = imageSrc && !imageError ? (
     <>
       <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded">
@@ -129,7 +139,9 @@ export const CardView: React.FC<CardViewProps> = ({
           src={imageSrc}
           alt={`${card.color} ${card.value || card.type}`}
           onError={() => setImageError(true)}
-          className="w-full h-full object-contain pointer-events-none rounded transition-all"
+          className={`w-full h-full pointer-events-none rounded transition-all ${
+            isUlt ? 'object-cover' : 'object-contain'
+          }`}
         />
       </div>
       {badge && (
@@ -165,6 +177,10 @@ export const CardView: React.FC<CardViewProps> = ({
         {card.type === 'luck' && <div className="text-sm sm:text-base tracking-wider text-green-400 font-black">🍀 LUCK</div>}
         {card.type === 'unlucky' && <div className="text-sm sm:text-base tracking-wider text-red-500 font-black">💀 UNLUCKY</div>}
         {card.type === 'double' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">✖️2 DOUBLE</div>}
+        {card.type === 'singularity' && <div className="text-xs sm:text-sm tracking-wider text-purple-400 font-black">🌀 SINGULARITY</div>}
+        {card.type === 'voyance' && <div className="text-xs sm:text-sm tracking-wider text-indigo-400 font-black">👁️ VOYANCE</div>}
+        {card.type === 'alternate' && <div className="text-xs sm:text-sm tracking-wider text-cyan-400 font-black">🌌 ALTERNATE</div>}
+        {card.type === 'avarice' && <div className="text-xs sm:text-sm tracking-wider text-amber-400 font-black">💰 AVARICE</div>}
         {card.type === 'number' && (
           <div>
             <div className="text-xl sm:text-3xl leading-none">{isNumberEyeActive ? '?' : card.value}</div>
@@ -187,6 +203,31 @@ export const CardView: React.FC<CardViewProps> = ({
     </>
   );
 
+  const ultimateProgressBar = isUlt ? (
+    <div className="absolute bottom-1 left-1 right-1 z-30 flex flex-col items-center pointer-events-none">
+      <div className="w-full bg-black/85 backdrop-blur-sm border border-amber-500/60 rounded px-1 py-0.5 shadow-lg">
+        <div className="flex justify-between items-center text-[8px] font-black tracking-wider uppercase leading-tight mb-0.5">
+          <span className={card.ultimateProgress === 100 ? 'text-amber-300 animate-pulse font-bold' : 'text-neutral-300'}>
+            {card.ultimateProgress === 100 ? '🌟 READY' : `${card.ultimateProgress ?? 0}%`}
+          </span>
+          <span className="text-[7px] text-neutral-400">ULT</span>
+        </div>
+        <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-700">
+          <div
+            className={`h-full transition-all duration-300 ${
+              card.ultimateProgress === 100
+                ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.9)]'
+                : card.ultimateProgress === 50
+                ? 'bg-gradient-to-r from-blue-400 to-cyan-300'
+                : 'bg-neutral-600'
+            }`}
+            style={{ width: `${card.ultimateProgress ?? 0}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const crackedOverlay = card.isCracked ? (
     <div className="absolute inset-0 pointer-events-none rounded z-20 flex items-center justify-center overflow-hidden">
       <img
@@ -204,10 +245,11 @@ export const CardView: React.FC<CardViewProps> = ({
   if (!isSelectable) {
     return (
       <div
-        className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none pointer-events-none ${baseStyle} ${highlightStyle}`}
+        className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none pointer-events-none ${baseStyle} ${highlightStyle} ${ultimateGlow}`}
       >
         {innerContent}
         {crackedOverlay}
+        {ultimateProgressBar}
       </div>
     );
   }
@@ -216,10 +258,11 @@ export const CardView: React.FC<CardViewProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none transition-all duration-150 transform cursor-pointer ${baseStyle} ${highlightStyle} ${motionStyle}`}
+      className={`relative ${sizeClasses} rounded p-1 flex flex-col justify-between select-none transition-all duration-150 transform cursor-pointer ${baseStyle} ${highlightStyle} ${ultimateGlow} ${motionStyle}`}
     >
       {innerContent}
       {crackedOverlay}
+      {ultimateProgressBar}
     </button>
   );
 };

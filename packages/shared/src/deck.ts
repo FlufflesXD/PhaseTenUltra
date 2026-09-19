@@ -5,7 +5,9 @@ import {
   GameMode,
   GameSettings,
   SpecialCardType,
-  DEFAULT_SPECIAL_CARDS
+  UltimateCardType,
+  DEFAULT_SPECIAL_CARDS,
+  DEFAULT_ULTIMATE_CARDS
 } from './types.js';
 
 export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
@@ -25,6 +27,13 @@ export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
   { type: 'double', points: 35 }
 ];
 
+export const CHAOS_ULTIMATE_CARDS: { type: UltimateCardType; points: number }[] = [
+  { type: 'singularity', points: 50 },
+  { type: 'voyance', points: 50 },
+  { type: 'alternate', points: 50 },
+  { type: 'avarice', points: 50 }
+];
+
 export function isChaosSpecialCard(type: CardType): boolean {
   return CHAOS_SPECIAL_CARDS.some(c => c.type === type);
 }
@@ -33,22 +42,6 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
   const cards: Card[] = [];
   const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];
   let idCounter = 1;
-
-  // 2 sets of 1-12 in 4 colors = 96 cards
-  for (let set = 0; set < 2; set++) {
-    for (const color of colors) {
-      for (let val = 1; val <= 12; val++) {
-        const points = val <= 9 ? 5 : 10;
-        cards.push({
-          id: `card_${idPrefix}${idCounter++}`,
-          type: 'number',
-          color,
-          value: val,
-          points
-        });
-      }
-    }
-  }
 
   // Determine enabled special cards
   let enabled: Record<SpecialCardType, boolean> = {
@@ -72,8 +65,42 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
 
   if (typeof settingsOrMode === 'object' && settingsOrMode?.enabledSpecialCards) {
     enabled = { ...settingsOrMode.enabledSpecialCards };
-  } else if (settingsOrMode === 'chaos') {
+  } else if (
+    settingsOrMode === 'chaos' ||
+    (typeof settingsOrMode === 'object' && (settingsOrMode?.gameMode === 'chaos' || settingsOrMode?.customActionCards))
+  ) {
     enabled = { ...DEFAULT_SPECIAL_CARDS };
+  }
+
+  // Count special cards to maintain ~1:15 ratio with colored cards
+  let specialCardsCount = 0;
+  for (const special of CHAOS_SPECIAL_CARDS) {
+    if (enabled[special.type as SpecialCardType]) {
+      const count = special.type === 'status' ? 2 : 1;
+      specialCardsCount += count;
+    }
+  }
+
+  // Ratio balancing: ~1 special card per 15 colored cards
+  // Colored cards must be full sets of 48 (1-12 in 4 colors)
+  // If special cards are off, base of 96 colored cards (2 sets)
+  const setsCount = specialCardsCount === 0
+    ? 2
+    : Math.max(2, Math.round((specialCardsCount * 15) / 48));
+
+  for (let set = 0; set < setsCount; set++) {
+    for (const color of colors) {
+      for (let val = 1; val <= 12; val++) {
+        const points = val <= 9 ? 5 : 10;
+        cards.push({
+          id: `card_${idPrefix}${idCounter++}`,
+          type: 'number',
+          color,
+          value: val,
+          points
+        });
+      }
+    }
   }
 
   // Add custom special cards based on host toggles
@@ -89,6 +116,40 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
           points: special.points
         });
       }
+    }
+  }
+
+  // Determine enabled ultimate cards
+  let enabledUltimates: Record<UltimateCardType, boolean> = {
+    singularity: false,
+    voyance: false,
+    alternate: false,
+    avarice: false
+  };
+
+  if (typeof settingsOrMode === 'object' && settingsOrMode?.enabledUltimateCards) {
+    enabledUltimates = { ...settingsOrMode.enabledUltimateCards };
+  } else if (
+    settingsOrMode === 'chaos' ||
+    (typeof settingsOrMode === 'object' && (
+      settingsOrMode?.gameMode === 'chaos' ||
+      settingsOrMode?.customActionCards
+    ))
+  ) {
+    enabledUltimates = { ...DEFAULT_ULTIMATE_CARDS };
+  }
+
+  // Add 1 copy of each enabled ultimate card
+  for (const ultimate of CHAOS_ULTIMATE_CARDS) {
+    if (enabledUltimates[ultimate.type]) {
+      cards.push({
+        id: `card_${idPrefix}${idCounter++}`,
+        type: ultimate.type,
+        color: 'none',
+        value: 0,
+        points: ultimate.points,
+        ultimateProgress: 0
+      });
     }
   }
 
@@ -130,6 +191,31 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
   }
 
   return cards;
+}
+
+export function createAlternateDeck(idPrefix = ''): Card[] {
+  const cards: Card[] = [];
+  const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];
+  let idCounter = 1;
+
+  // STRICTLY 2 sets of 1-12 in 4 colors = 96 cards
+  // No wilds, no specials, no reverses, no skips, no ultimates
+  for (let set = 0; set < 2; set++) {
+    for (const color of colors) {
+      for (let val = 1; val <= 12; val++) {
+        const points = val <= 9 ? 5 : 10;
+        cards.push({
+          id: `card_alt_${idPrefix}${idCounter++}`,
+          type: 'number',
+          color,
+          value: val,
+          points
+        });
+      }
+    }
+  }
+
+  return shuffleDeck(cards);
 }
 
 export function createDeck(settingsOrMode?: GameSettings | GameMode, idPrefix = ''): Card[] {

@@ -230,6 +230,60 @@ export function useSocket() {
     });
   }, [gameState, roomState, secretToken]);
 
+  const adminSpawnCard = useCallback(
+    (cardName: string, password: string, callback?: (res: any) => void) => {
+      const code = gameState?.roomCode || roomState?.code;
+      if (!socketRef.current || !code) return;
+      socketRef.current.emit(
+        'admin_spawn_card',
+        { roomCode: code, secretToken, cardName, password },
+        (res: any) => {
+          if (callback) callback(res);
+          if (res && !res.success && res.error) {
+            showError(res.error);
+          }
+        }
+      );
+    },
+    [gameState, roomState, secretToken, showError]
+  );
+
+  const sacrificeCard = useCallback(
+    (cardIdToSacrifice: string, ultimateCardId: string, callback?: (res: any) => void) => {
+      const code = gameState?.roomCode || roomState?.code;
+      if (!socketRef.current || !code) return;
+      socketRef.current.emit(
+        'sacrifice_card',
+        { roomCode: code, secretToken, cardIdToSacrifice, ultimateCardId },
+        (res: any) => {
+          if (callback) callback(res);
+          if (res && !res.success && res.error) {
+            showError(res.error);
+          }
+        }
+      );
+    },
+    [gameState, roomState, secretToken, showError]
+  );
+
+  const playUltimateCard = useCallback(
+    (ultimateCardId: string, callback?: (res: any) => void) => {
+      const code = gameState?.roomCode || roomState?.code;
+      if (!socketRef.current || !code) return;
+      socketRef.current.emit(
+        'play_ultimate_card',
+        { roomCode: code, secretToken, ultimateCardId },
+        (res: any) => {
+          if (callback) callback(res);
+          if (res && !res.success && res.error) {
+            showError(res.error);
+          }
+        }
+      );
+    },
+    [gameState, roomState, secretToken, showError]
+  );
+
   const resign = useCallback(() => {
     const code = gameState?.roomCode || roomState?.code;
     if (!socketRef.current || !code) return;
@@ -262,6 +316,9 @@ export function useSocket() {
     layExtraMeld,
     hitCard,
     discardCard,
+    adminSpawnCard,
+    sacrificeCard,
+    playUltimateCard,
     resign,
     nextRound,
     startNewMatch,

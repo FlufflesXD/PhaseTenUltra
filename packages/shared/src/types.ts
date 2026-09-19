@@ -19,7 +19,31 @@ export type CardType =
   | 'status'
   | 'luck'
   | 'unlucky'
-  | 'double';
+  | 'double'
+  | 'singularity'
+  | 'voyance'
+  | 'alternate'
+  | 'avarice';
+
+export type UltimateCardType = 'singularity' | 'voyance' | 'alternate' | 'avarice';
+
+export const ALL_ULTIMATE_CARD_TYPES: UltimateCardType[] = [
+  'singularity',
+  'voyance',
+  'alternate',
+  'avarice'
+];
+
+export const DEFAULT_ULTIMATE_CARDS: Record<UltimateCardType, boolean> = {
+  singularity: true,
+  voyance: true,
+  alternate: true,
+  avarice: true
+};
+
+export function isUltimateCard(type: CardType): boolean {
+  return type === 'singularity' || type === 'voyance' || type === 'alternate' || type === 'avarice';
+}
 
 export type SpecialCardType =
   | 'nuke'
@@ -84,6 +108,9 @@ export interface Card {
   value: number; // 1-12 for number, 0 for special
   points: number; // 1-9: 5pts, 10-12: 10pts, Skip/Reverse: 15pts, Wild: 25pts, Specials: 20-50pts
   isCracked?: boolean;
+  ultimateProgress?: number; // 0, 50, 100
+  sacrificedSpecial?: boolean;
+  sacrificedWildSkipReverse?: boolean;
 }
 
 export type RequirementType = 'set' | 'run' | 'color';
@@ -134,7 +161,9 @@ export interface PlayerPublic {
   hasLuck?: boolean;
   hasUnlucky?: boolean;
   hasDoubleDebuff?: boolean;
+  hasVoyanceDebuff?: boolean;
   crackedCardCount?: number;
+  visibleCards?: Card[];
 }
 
 export interface PlayerPrivate extends PlayerPublic {
@@ -150,7 +179,9 @@ export interface GameSettings {
   allowPartialAndExtraSets?: boolean; // House rule: allow laying either side of '+' and extra sets
   totalPhases?: number; // 1-10 (default 10)
   randomizePhasesPerRound?: boolean; // House rule: randomize/shuffle stages each round
+  botCount?: number; // 0 to 3 bots
   enabledSpecialCards?: Record<SpecialCardType, boolean>;
+  enabledUltimateCards?: Record<UltimateCardType, boolean>;
   gameMode?: GameMode; // Optional legacy fallback
   customActionCards?: boolean;
 }
@@ -192,7 +223,14 @@ export interface GameActionEvent {
     | 'status'
     | 'luck'
     | 'unlucky'
-    | 'double';
+    | 'double'
+    | 'ultimate_descend'
+    | 'ultimate_singularity'
+    | 'ultimate_voyance'
+    | 'ultimate_alternate'
+    | 'alternate_shift'
+    | 'ultimate_avarice'
+    | 'sacrifice';
   playerId: string;
   playerName: string;
   source?: 'deck' | 'discard';
@@ -204,6 +242,11 @@ export interface GameActionEvent {
   timeOldPhase?: number;
   timeNewPhase?: number;
   randomChosenType?: CardType;
+  ultimateCardType?: UltimateCardType;
+  sacrificedCard?: Card;
+  targetUltimateCard?: Card;
+  stolenCards?: Card[];
+  isAlternateWorld?: boolean;
   message?: string;
   timestamp: number;
 }
@@ -226,6 +269,9 @@ export interface PublicGameState {
   roundWinnerId?: string;
   phaseDefinitions: PhaseDefinition[];
   settings?: GameSettings;
+  isAlternateWorld?: boolean;
+  voyanceActive?: boolean;
+  alternateTurnCounter?: number;
 }
 
 export interface RoomState {
