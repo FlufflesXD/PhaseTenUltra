@@ -1622,5 +1622,142 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(allCardsInGame.filter(c => c.type === 'nuke').length, 0, 'Disabled nuke not present');
     assert.strictEqual(allCardsInGame.filter(c => c.type === 'reverse').length, 0, 'Disabled reverse not present');
   });
+
+  test('Randomize Stages per round: Shuffles stages per round for all players', () => {
+    const session = new GameSession(
+      'RANDOM_STAGES',
+      {
+        turnTimerSeconds: 0,
+        totalPhases: 10,
+        randomizePhasesPerRound: true
+      },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      { id: 'p1', secretToken: 'p1', name: 'P1', isHost: true, isSpectator: false, connected: true, score: 0, currentPhase: 1, phaseCompletedInRound: false, cardCount: 0, cards: [], laidDownPhases: [], isSkipped: false },
+      { id: 'p2', secretToken: 'p2', name: 'P2', isHost: false, isSpectator: false, connected: true, score: 0, currentPhase: 1, phaseCompletedInRound: false, cardCount: 0, cards: [], laidDownPhases: [], isSkipped: false }
+    ];
+
+    session.startGame();
+    const round1Stages = session.phaseDefinitions.map(p => p.description);
+    assert.strictEqual(session.phaseDefinitions.length, 10);
+    // All players have phaseNumber 1..10
+    session.phaseDefinitions.forEach((p, idx) => {
+      assert.strictEqual(p.phaseNumber, idx + 1);
+      assert.strictEqual(p.name, `Stage ${idx + 1}`);
+    });
+
+    // Advance to next round - should re-shuffle
+    session.players[0].phaseCompletedInRound = true;
+    session.nextRound();
+
+    assert.strictEqual(session.phaseDefinitions.length, 10);
+    session.phaseDefinitions.forEach((p, idx) => {
+      assert.strictEqual(p.phaseNumber, idx + 1);
+      assert.strictEqual(p.name, `Stage ${idx + 1}`);
+    });
+  });
+
+  test('Custom totalPhases winner message says completed all X stages', () => {
+    let gameOverMessage = '';
+    const session = new GameSession(
+      'CUSTOM_TOTAL_PHASES',
+      {
+        turnTimerSeconds: 0,
+        totalPhases: 6
+      },
+      () => {},
+      (notif) => {
+        if (notif.type === 'game_over') {
+          gameOverMessage = notif.message;
+        }
+      }
+    );
+
+    session.players = [
+      { id: 'p1', secretToken: 'p1', name: 'Alice', isHost: true, isSpectator: false, connected: true, score: 0, currentPhase: 6, phaseCompletedInRound: true, cardCount: 0, cards: [], laidDownPhases: [], isSkipped: false },
+      { id: 'p2', secretToken: 'p2', name: 'Bob', isHost: false, isSpectator: false, connected: true, score: 50, currentPhase: 3, phaseCompletedInRound: false, cardCount: 0, cards: [], laidDownPhases: [], isSkipped: false }
+    ];
+
+    session.status = 'in_game';
+    session.phaseDefinitions = session.phaseDefinitions.slice(0, 6);
+    (session as any).endRound(session.players[0]);
+
+    assert.strictEqual(session.status, 'game_over');
+    assert.strictEqual(session.winnerId, 'p1');
+    assert.strictEqual(gameOverMessage, 'Alice has completed all 6 stages and won the game!');
+  });
+
+  test('Debuff Status Card Boost: 5 debuffs gives 10x chance to pick up status card', () => {
+    const session = new GameSession(
+      'STATUS_BOOST_TEST',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5, isCracked: true }
+        ],
+        laidDownPhases: [],
+        isSkipped: false,
+        hasNumberEyeEffect: true,
+        hasColorEyeEffect: true,
+        hasUnlucky: true,
+        hasDoubleDebuff: true
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 1,
+        cards: [{ id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'draw';
+
+    // Deck with 1 status card and 9 non-status cards
+    session.drawPile = [
+      { id: 'status_card', type: 'status', color: 'none', value: 0, points: 30 },
+      ...Array.from({ length: 9 }, (_, i) => ({
+        id: `num_${i}`,
+        type: 'number' as const,
+        color: 'red' as const,
+        value: i + 1,
+        points: 5
+      }))
+    ];
+
+    // With 5 debuffs and status card at bottom, multiplier is 10x.
+    // Base probability is 1/10 = 10%. With 10x boost, probability is 100%!
+    const drawn = session.drawCard('p1', 'deck');
+    assert.strictEqual(drawn.type, 'status', 'P1 with 5 debuffs gets status card with 10x multiplier');
+  });
 });
+
 

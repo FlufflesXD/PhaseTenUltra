@@ -50,6 +50,7 @@ export class Room {
       turnTimerSeconds: 45,
       allowPartialAndExtraSets: true,
       totalPhases: 10,
+      randomizePhasesPerRound: false,
       enabledSpecialCards: { ...DEFAULT_SPECIAL_CARDS }
     };
     this.users.set(hostUser.socketId, hostUser);

@@ -149,6 +149,7 @@ export interface GameSettings {
   turnTimerSeconds: number; // 0 = unlimited, 30, 45, 60
   allowPartialAndExtraSets?: boolean; // House rule: allow laying either side of '+' and extra sets
   totalPhases?: number; // 1-10 (default 10)
+  randomizePhasesPerRound?: boolean; // House rule: randomize/shuffle stages each round
   enabledSpecialCards?: Record<SpecialCardType, boolean>;
   gameMode?: GameMode; // Optional legacy fallback
   customActionCards?: boolean;

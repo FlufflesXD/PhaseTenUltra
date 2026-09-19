@@ -85,7 +85,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 <span className="text-amber-400">🔗</span>
                 <h1 className="text-sm font-bold uppercase tracking-wider text-amber-200">Room Invitation</h1>
               </div>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.5</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.9</span>
             </div>
 
             <div className="text-center py-2.5 bg-neutral-900/60 border border-neutral-800 rounded">
@@ -152,7 +152,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold uppercase tracking-wider">TenStages Online</h1>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.5</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.9</span>
             </div>
             <button
               onClick={onOpenRules}
@@ -334,6 +334,31 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           ) : (
             <span className="text-white font-bold text-xs">
               {roomState.settings.totalPhases ?? 10} Phases
+            </span>
+          )}
+        </div>
+
+        {/* Randomize Stages Setting */}
+        <div className="border border-neutral-800 p-2.5 rounded flex justify-between items-center text-xs">
+          <div className="flex flex-col mr-2">
+            <span className="text-neutral-400 font-medium">Randomize Stages:</span>
+            <span className="text-[10px] text-neutral-500">Shuffles the phases each round for all players</span>
+          </div>
+          {isHost ? (
+            <button
+              type="button"
+              onClick={() => onUpdateSettings({ randomizePhasesPerRound: !roomState.settings.randomizePhasesPerRound })}
+              className={`px-3 py-1 text-xs font-bold rounded border cursor-pointer transition-colors ${
+                roomState.settings.randomizePhasesPerRound
+                  ? 'bg-amber-400 text-black border-amber-300'
+                  : 'bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white'
+              }`}
+            >
+              {roomState.settings.randomizePhasesPerRound ? 'ON' : 'OFF'}
+            </button>
+          ) : (
+            <span className={`font-bold text-xs ${roomState.settings.randomizePhasesPerRound ? 'text-amber-400' : 'text-neutral-500'}`}>
+              {roomState.settings.randomizePhasesPerRound ? 'ON' : 'OFF'}
             </span>
           )}
         </div>

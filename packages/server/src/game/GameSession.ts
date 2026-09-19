@@ -77,15 +77,7 @@ export class GameSession {
     }
   }
 
-  public startGame(): void {
-    if (this.players.length < 2) {
-      throw new Error('At least 2 players are required to start the game');
-    }
-    if (this.players.length > 4) {
-      throw new Error('A maximum of 4 players are allowed per game');
-    }
-
-    this.playDirection = 1;
+  public setupPhaseDefinitions(): void {
     let totalPhases = this.settings.totalPhases;
     if (!totalPhases) {
       if (this.settings.gameMode === 'speed') {
@@ -95,7 +87,36 @@ export class GameSession {
       }
     }
     const count = Math.max(1, Math.min(10, totalPhases));
-    this.phaseDefinitions = CLASSIC_PHASES.slice(0, count);
+    let basePhases = CLASSIC_PHASES.map(p => ({
+      ...p,
+      requirements: p.requirements.map(r => ({ ...r }))
+    }));
+
+    if (this.settings.randomizePhasesPerRound) {
+      // Fisher-Yates shuffle
+      for (let i = basePhases.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [basePhases[i], basePhases[j]] = [basePhases[j], basePhases[i]];
+      }
+    }
+
+    this.phaseDefinitions = basePhases.slice(0, count).map((p, idx) => ({
+      ...p,
+      phaseNumber: idx + 1,
+      name: `Stage ${idx + 1}`
+    }));
+  }
+
+  public startGame(): void {
+    if (this.players.length < 2) {
+      throw new Error('At least 2 players are required to start the game');
+    }
+    if (this.players.length > 4) {
+      throw new Error('A maximum of 4 players are allowed per game');
+    }
+
+    this.playDirection = 1;
+    this.setupPhaseDefinitions();
 
     this.status = 'in_game';
     this.roundNumber = 1;
@@ -124,6 +145,10 @@ export class GameSession {
     this.status = 'in_game';
     this.allLaidDownPhases = [];
     this.roundWinnerId = undefined;
+
+    if (this.settings.randomizePhasesPerRound) {
+      this.setupPhaseDefinitions();
+    }
 
     for (const player of this.players) {
       player.phaseCompletedInRound = false;
@@ -257,7 +282,8 @@ export class GameSession {
     }
     if (this.turnStage === 'play' || this.turnStage === 'discard') {
       const active = this.getActivePlayers();
-      const hasEligibleTimeTargets = active.some(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
+      const maxPhase = this.phaseDefinitions.length;
+      const hasEligibleTimeTargets = active.some(p => p.currentPhase > 1 && p.currentPhase < maxPhase);
       const eligible = current.cards.filter(c => {
         if (c.type === 'nuke' && !current.phaseCompletedInRound) return false;
         if (c.type === 'time' && !hasEligibleTimeTargets) return false;
@@ -313,6 +339,35 @@ export class GameSession {
             const numberCard = this.drawPile[numberIdx];
             this.drawPile[numberIdx] = drawnCard;
             drawnCard = numberCard;
+          }
+        }
+      }
+
+      // Debuff-based status clearing card pickup boost:
+      // Per each active debuff, adds a 2x chance to pick up the status special card from the deck.
+      // Up to a max of 5 debuffs at once (10x chance).
+      if (drawnCard.type !== 'status') {
+        let debuffCount = 0;
+        if (current.hasNumberEyeEffect) debuffCount++;
+        if (current.hasColorEyeEffect) debuffCount++;
+        if (current.hasUnlucky) debuffCount++;
+        if (current.hasDoubleDebuff) debuffCount++;
+        if (current.cards.some(c => c.isCracked) || (current.crackedCardCount ?? 0) > 0) debuffCount++;
+
+        if (debuffCount > 0) {
+          const statusCount = this.drawPile.filter(c => c.type === 'status').length;
+          const nonStatusCount = this.drawPile.length - statusCount;
+          if (statusCount > 0 && nonStatusCount > 0) {
+            const multiplier = Math.min(10, debuffCount * 2);
+            const swapProb = Math.min(1.0, ((multiplier - 1) * statusCount) / nonStatusCount);
+            if (Math.random() < swapProb) {
+              const statusIdx = this.drawPile.findIndex(c => c.type === 'status');
+              if (statusIdx !== -1) {
+                const statusCard = this.drawPile[statusIdx];
+                this.drawPile[statusIdx] = drawnCard;
+                drawnCard = statusCard;
+              }
+            }
           }
         }
       }

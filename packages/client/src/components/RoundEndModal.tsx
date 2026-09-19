@@ -19,13 +19,15 @@ export const RoundEndModal: React.FC<RoundEndModalProps> = ({
   const isGameOver = gameState.status === 'game_over';
   const winner = gameState.players.find(p => p.id === (isGameOver ? gameState.winnerId : gameState.roundWinnerId));
 
+  const totalStages = gameState.phaseDefinitions?.length || gameState.settings?.totalPhases || 10;
+
   const getPhaseStatusText = (p: typeof gameState.players[0]) => {
     if (p.completedAllPhases) {
-      return 'Completed All 10 Stages (Winner!)';
+      return `Completed All ${totalStages} Stages (Winner!)`;
     }
     if (p.phaseCompletedInRound) {
-      if (p.currentPhase >= 10) {
-        return 'Completed Stage 10!';
+      if (p.currentPhase >= totalStages) {
+        return `Completed Stage ${totalStages}!`;
       }
       return `Advanced to Stage ${p.currentPhase}`;
     }
@@ -75,7 +77,7 @@ export const RoundEndModal: React.FC<RoundEndModalProps> = ({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">Stage {Math.min(10, p.currentPhase)}</div>
+                    <div className="font-semibold">Stage {Math.min(totalStages, p.currentPhase)}</div>
                     <div className="text-neutral-400">{p.score} pts</div>
                   </div>
                 </div>
