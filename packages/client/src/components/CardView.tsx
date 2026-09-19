@@ -188,14 +188,12 @@ export const CardView: React.FC<CardViewProps> = ({
   );
 
   const crackedOverlay = card.isCracked ? (
-    <div className="absolute inset-0 pointer-events-none rounded z-20 flex items-center justify-center overflow-hidden bg-black/40 border-2 border-stone-400/80 backdrop-blur-[0.5px]">
-      <svg className="absolute inset-0 w-full h-full opacity-85 stroke-white" viewBox="0 0 100 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M50 0 L48 35 L30 55 L10 65 M48 35 L65 50 L85 45 M65 50 L52 75 L70 95 L95 100 M52 75 L35 90 L20 115 L25 140 M35 90 L45 110 L50 140 M52 75 L55 105 L60 140 M30 55 L15 40 L0 42" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M48 35 L45 20 L38 10 M65 50 L80 60 L100 58 M35 90 L10 95 L0 105" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
-      </svg>
-      <span className="absolute bottom-1 bg-stone-950/95 text-stone-200 border border-stone-500 text-[8px] sm:text-[9px] font-black tracking-widest px-1 py-0.5 rounded shadow">
-        CRACKED
-      </span>
+    <div className="absolute inset-0 pointer-events-none rounded z-20 flex items-center justify-center overflow-hidden">
+      <img
+        src="/cards/custom/crack/cracks.png"
+        alt="Cracked"
+        className="w-full h-full object-cover pointer-events-none select-none"
+      />
     </div>
   ) : null;
 

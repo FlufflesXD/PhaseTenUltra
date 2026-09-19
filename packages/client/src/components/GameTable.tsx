@@ -72,9 +72,12 @@ export const GameTable: React.FC<GameTableProps> = ({
   } | null>(null);
   const [discardKey, setDiscardKey] = useState(0);
   const [nukeActive, setNukeActive] = useState(false);
-  const [reverseEvent, setReverseEvent] = useState<{ playerName: string; direction: 1 | -1 } | null>(null);
-  const [jesterSwapEvent, setJesterSwapEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
-  const [redoEvent, setRedoEvent] = useState<{ playerName: string } | null>(null);
+  const [activeTotem, setActiveTotem] = useState<{
+    type: string;
+    image: string;
+    title: string;
+    playerName: string;
+  } | null>(null);
   const [timeWarpEvent, setTimeWarpEvent] = useState<{
     sourceName: string;
     targetName: string;
@@ -82,45 +85,24 @@ export const GameTable: React.FC<GameTableProps> = ({
     oldPhase: number;
     newPhase: number;
   } | null>(null);
-  const [numberEyeEvent, setNumberEyeEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
-  const [colorEyeEvent, setColorEyeEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
-  const [crackEvent, setCrackEvent] = useState<{ playerName: string } | null>(null);
-  const [statusEvent, setStatusEvent] = useState<{ playerName: string } | null>(null);
-  const [luckEvent, setLuckEvent] = useState<{ playerName: string } | null>(null);
-  const [unluckyEvent, setUnluckyEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
-  const [doubleEvent, setDoubleEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
   const [isScreenShaking, setIsScreenShaking] = useState(false);
+  const [isInfoTabOpen, setIsInfoTabOpen] = useState(false);
+  const [isInfoPinned, setIsInfoPinned] = useState(false);
 
   const lastSoundActionIdRef = useRef<string | null>(null);
 
+  const totemTimerRef = useRef<NodeJS.Timeout | null>(null);
   const nukeTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const jesterTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const redoTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const reverseTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeWarpTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const numberEyeTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const colorEyeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const crackTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const luckTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const unluckyTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const doubleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyingCardTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
+      if (totemTimerRef.current) clearTimeout(totemTimerRef.current);
       if (nukeTimerRef.current) clearTimeout(nukeTimerRef.current);
-      if (jesterTimerRef.current) clearTimeout(jesterTimerRef.current);
-      if (redoTimerRef.current) clearTimeout(redoTimerRef.current);
-      if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current);
       if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
-      if (numberEyeTimerRef.current) clearTimeout(numberEyeTimerRef.current);
-      if (colorEyeTimerRef.current) clearTimeout(colorEyeTimerRef.current);
       if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
-      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
-      if (luckTimerRef.current) clearTimeout(luckTimerRef.current);
-      if (unluckyTimerRef.current) clearTimeout(unluckyTimerRef.current);
-      if (doubleTimerRef.current) clearTimeout(doubleTimerRef.current);
       if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
     };
   }, []);
@@ -433,131 +415,91 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
     }
 
-    const currentPlayers = gameStateRef.current.players;
-    const currentPlayDirection = gameStateRef.current.playDirection;
+    const SPECIAL_CARDS_MAP: Record<string, { image: string; title: string }> = {
+      crack: { image: '/cards/custom/crack.png', title: 'Crack' },
+      status: { image: '/cards/custom/status.png', title: 'Status' },
+      luck: { image: '/cards/custom/luck.png', title: 'Luck' },
+      unlucky: { image: '/cards/custom/unlucky.png', title: 'Unlucky' },
+      double: { image: '/cards/custom/double.png', title: 'Double' },
+      reverse: { image: '/cards/reverse.png', title: 'Reverse' },
+      jester: { image: '/cards/custom/jester.png', title: 'Jester' },
+      redo: { image: '/cards/custom/redo.png', title: 'Redo' },
+      number_eye: { image: '/cards/custom/number_eye.png', title: 'Number Eye' },
+      color_eye: { image: '/cards/custom/color_eye.png', title: 'Color Eye' },
+      nuke: { image: '/cards/custom/nuke.png', title: 'Nuke' },
+      time: { image: '/cards/custom/time.png', title: 'Time' },
+      plus_two: { image: '/cards/custom/plus_two.png', title: '+2' },
+      plus_three: { image: '/cards/custom/plus_three.png', title: '+3' },
+      random: { image: '/cards/custom/random.png', title: 'Random' }
+    };
 
-    if (latestAction.type === 'nuke') {
-      if (nukeTimerRef.current) clearTimeout(nukeTimerRef.current);
-      setNukeActive(true);
-      nukeTimerRef.current = setTimeout(() => {
-        setNukeActive(false);
-        nukeTimerRef.current = null;
-      }, 5000);
-    } else if (latestAction.type === 'jester') {
-      if (jesterTimerRef.current) clearTimeout(jesterTimerRef.current);
-      const targetName =
-        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
-      setJesterSwapEvent({ sourceName: latestAction.playerName, targetName });
-      jesterTimerRef.current = setTimeout(() => {
-        setJesterSwapEvent(null);
-        jesterTimerRef.current = null;
-      }, 2800);
-    } else if (latestAction.type === 'redo') {
-      if (redoTimerRef.current) clearTimeout(redoTimerRef.current);
-      setRedoEvent({ playerName: latestAction.playerName });
-      redoTimerRef.current = setTimeout(() => {
-        setRedoEvent(null);
-        redoTimerRef.current = null;
-      }, 2800);
-    } else if (latestAction.type === 'reverse') {
-      if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current);
-      setReverseEvent({
-        playerName: latestAction.playerName,
-        direction: currentPlayDirection
+    const specialInfo = SPECIAL_CARDS_MAP[latestAction.type];
+    if (specialInfo) {
+      if (totemTimerRef.current) clearTimeout(totemTimerRef.current);
+      setActiveTotem({
+        type: latestAction.type,
+        image: specialInfo.image,
+        title: specialInfo.title,
+        playerName: latestAction.playerName
       });
-      reverseTimerRef.current = setTimeout(() => {
-        setReverseEvent(null);
-        reverseTimerRef.current = null;
-      }, 3000);
-    } else if (latestAction.type === 'time') {
-      if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
-      const targetName =
-        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
-      setTimeWarpEvent({
-        sourceName: latestAction.playerName,
-        targetName,
-        result: latestAction.timeResult || 'green',
-        oldPhase: latestAction.timeOldPhase ?? 2,
-        newPhase: latestAction.timeNewPhase ?? (latestAction.timeResult === 'green' ? 1 : 3)
-      });
-      timeWarpTimerRef.current = setTimeout(() => {
-        setTimeWarpEvent(null);
-        timeWarpTimerRef.current = null;
-      }, 5200);
-    } else if (latestAction.type === 'number_eye') {
-      if (numberEyeTimerRef.current) clearTimeout(numberEyeTimerRef.current);
-      const targetName =
-        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
-      setNumberEyeEvent({ sourceName: latestAction.playerName, targetName });
-      numberEyeTimerRef.current = setTimeout(() => {
-        setNumberEyeEvent(null);
-        numberEyeTimerRef.current = null;
-      }, 3000);
-    } else if (latestAction.type === 'color_eye') {
-      if (colorEyeTimerRef.current) clearTimeout(colorEyeTimerRef.current);
-      const targetName =
-        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
-      setColorEyeEvent({ sourceName: latestAction.playerName, targetName });
-      colorEyeTimerRef.current = setTimeout(() => {
-        setColorEyeEvent(null);
-        colorEyeTimerRef.current = null;
-      }, 3000);
-    } else if (latestAction.type === 'crack') {
-      if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
-      setIsScreenShaking(true);
-      setCrackEvent({ playerName: latestAction.playerName });
-      crackTimerRef.current = setTimeout(() => {
-        setIsScreenShaking(false);
-        setCrackEvent(null);
-        crackTimerRef.current = null;
+
+      // Special card floats like a Totem of Undying in Minecraft for 2 seconds,
+      // then the follow-up special animation executes:
+      totemTimerRef.current = setTimeout(() => {
+        setActiveTotem(null);
+        totemTimerRef.current = null;
+
+        const currentPlayers = gameStateRef.current.players;
+
+        if (latestAction.type === 'crack') {
+          if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
+          setIsScreenShaking(true);
+          crackTimerRef.current = setTimeout(() => {
+            setIsScreenShaking(false);
+            crackTimerRef.current = null;
+          }, 2000);
+        } else if (latestAction.type === 'nuke') {
+          if (nukeTimerRef.current) clearTimeout(nukeTimerRef.current);
+          setNukeActive(true);
+          nukeTimerRef.current = setTimeout(() => {
+            setNukeActive(false);
+            nukeTimerRef.current = null;
+          }, 5000);
+        } else if (latestAction.type === 'time') {
+          if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
+          const targetName =
+            currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+          setTimeWarpEvent({
+            sourceName: latestAction.playerName,
+            targetName,
+            result: latestAction.timeResult || 'green',
+            oldPhase: latestAction.timeOldPhase ?? 2,
+            newPhase: latestAction.timeNewPhase ?? (latestAction.timeResult === 'green' ? 1 : 3)
+          });
+          timeWarpTimerRef.current = setTimeout(() => {
+            setTimeWarpEvent(null);
+            timeWarpTimerRef.current = null;
+          }, 5200);
+        }
       }, 2000);
-    } else if (latestAction.type === 'status') {
-      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
-      setStatusEvent({ playerName: latestAction.playerName });
-      statusTimerRef.current = setTimeout(() => {
-        setStatusEvent(null);
-        statusTimerRef.current = null;
-      }, 2800);
-    } else if (latestAction.type === 'luck') {
-      if (luckTimerRef.current) clearTimeout(luckTimerRef.current);
-      setLuckEvent({ playerName: latestAction.playerName });
-      luckTimerRef.current = setTimeout(() => {
-        setLuckEvent(null);
-        luckTimerRef.current = null;
-      }, 2800);
-    } else if (latestAction.type === 'unlucky') {
-      if (unluckyTimerRef.current) clearTimeout(unluckyTimerRef.current);
-      const targetName =
-        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
-      setUnluckyEvent({ sourceName: latestAction.playerName, targetName });
-      unluckyTimerRef.current = setTimeout(() => {
-        setUnluckyEvent(null);
-        unluckyTimerRef.current = null;
-      }, 3000);
-    } else if (latestAction.type === 'double') {
-      if (doubleTimerRef.current) clearTimeout(doubleTimerRef.current);
-      const targetName =
-        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
-      setDoubleEvent({ sourceName: latestAction.playerName, targetName });
-      doubleTimerRef.current = setTimeout(() => {
-        setDoubleEvent(null);
-        doubleTimerRef.current = null;
-      }, 3000);
     }
   }, [latestAction, isMuted]);
 
   useEffect(() => {
     setLocalHand(prev => {
-      const currentIds = new Set(hand.map(c => c.id));
-      const retained = prev.filter(c => currentIds.has(c.id));
+      const handMap = new Map(hand.map(c => [c.id, c]));
+      const retained = prev.filter(c => handMap.has(c.id)).map(c => ({ ...c, ...handMap.get(c.id)! }));
       const added = hand.filter(c => !prev.some(p => p.id === c.id));
       return [...retained, ...added];
     });
     setSelectedCardId(prev => {
       if (!prev) return null;
-      return hand.some(c => c.id === prev) ? prev : null;
+      const matching = hand.find(c => c.id === prev);
+      if (!matching) return null;
+      if (matching.isCracked && !(hand.length === 1 && me?.phaseCompletedInRound)) return null;
+      return prev;
     });
-  }, [hand]);
+  }, [hand, me?.phaseCompletedInRound]);
 
   const isSpectator = !me || me.isSpectator;
   const isMyTurn = gameState.currentTurnPlayerId === secretToken;
@@ -1036,7 +978,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <div
               data-station-header={player.id}
               onClick={handleStationClick}
-              className={`flex flex-col rounded-lg overflow-hidden border transition-all shrink-0 ${targetRingClass} ${
+              className={`flex rounded-lg overflow-hidden border transition-all shrink-0 ${targetRingClass} ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                   : 'border-white/20 shadow-lg'
@@ -1053,12 +995,8 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
-                {renderPlayerStatusBadges(player)}
-              </div>
-              <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
-                <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
-                  <span className="text-amber-400 font-bold">({gameState.turnTimeRemaining}s)</span>
+                  <span className="text-xs font-black text-black">({gameState.turnTimeRemaining}s)</span>
                 )}
               </div>
             </div>
@@ -1139,7 +1077,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <div
               data-station-header={player.id}
               onClick={handleStationClick}
-              className={`flex flex-col rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
+              className={`flex rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
                 isPlayerTurn
                   ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                   : 'border-white/20'
@@ -1156,12 +1094,8 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
-                {renderPlayerStatusBadges(player)}
-              </div>
-              <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
-                <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
-                  <span className="text-amber-400 font-bold">({gameState.turnTimeRemaining}s)</span>
+                  <span className="text-xs font-black text-black">({gameState.turnTimeRemaining}s)</span>
                 )}
               </div>
             </div>
@@ -1251,7 +1185,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div
             data-station-header={player.id}
             onClick={handleStationClick}
-            className={`flex flex-col items-end rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
+            className={`flex rounded-lg overflow-hidden border transition-all ${targetRingClass} ${
               isPlayerTurn
                 ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                 : 'border-white/20'
@@ -1268,12 +1202,8 @@ export const GameTable: React.FC<GameTableProps> = ({
               {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
               {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
               {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
-              {renderPlayerStatusBadges(player)}
-            </div>
-            <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
-              <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
               {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
-                <span className="text-amber-400 font-bold">({gameState.turnTimeRemaining}s)</span>
+                <span className="text-xs font-black text-black">({gameState.turnTimeRemaining}s)</span>
               )}
             </div>
           </div>
@@ -1692,14 +1622,14 @@ export const GameTable: React.FC<GameTableProps> = ({
               <div className="absolute left-6 bottom-4 flex items-center gap-2.5 z-40">
                 <div
                   onClick={isMySelfTargetable ? handleSelfTargetClick : undefined}
-                  className={`flex flex-col rounded-lg overflow-hidden border transition-all ${myTargetRingClass} ${
+                  className={`flex rounded-lg overflow-hidden border transition-all ${myTargetRingClass} ${
                     isMyTurn
                       ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
                       : 'border-white/20'
                   }`}
                 >
                   <div
-                    className={`px-3 py-1 font-bold text-xs flex items-center gap-1.5 shadow ${
+                    className={`px-3.5 py-1 font-bold text-xs flex items-center gap-1.5 shadow ${
                       isMyTurn
                         ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-extrabold'
                         : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white'
@@ -1708,10 +1638,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                     <span>{me.name} (You)</span>
                     {me.isSkipped && <span className="text-[10px] text-red-300 font-bold">[SKIPPED]</span>}
                     {me.isResigned && <span className="text-[10px] text-rose-400 font-extrabold">[RESIGNED]</span>}
-                    {renderPlayerStatusBadges(me)}
-                  </div>
-                  <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-2">
-                    <span className="font-semibold">Stage {me.currentPhase} {me.phaseCompletedInRound ? '✓' : ''}</span>
                   </div>
                 </div>
 
@@ -1940,6 +1866,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 const rot = Math.max(-14, Math.min(14, offset * (count > 12 ? 1.6 : 2.2)));
                 const translateY = Math.abs(offset) * (count > 12 ? 1.2 : 1.8);
                 const isSelected = selectedCardId === c.id;
+                const isCardDisabled = Boolean(c.isCracked && !isWinningSoftlockExemption(c));
 
                 return (
                   <div
@@ -1950,10 +1877,15 @@ export const GameTable: React.FC<GameTableProps> = ({
                       zIndex: isSelected ? 40 : i + 1,
                       marginLeft: i === 0 ? 0 : count > 12 ? '-42px' : count > 8 ? '-36px' : '-28px'
                     }}
-                    className={`relative transition-all duration-200 cursor-pointer shrink-0 hover:-translate-y-7 hover:z-35 ${
-                      isSelected ? 'scale-105 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]' : ''
-                    }`}
-                    onClick={() => handleCardClick(c)}
+                    className={`relative transition-all duration-200 shrink-0 ${
+                      isCardDisabled
+                        ? 'cursor-not-allowed opacity-85 pointer-events-none'
+                        : 'cursor-pointer hover:-translate-y-7 hover:z-35'
+                    } ${isSelected ? 'scale-105 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]' : ''}`}
+                    onClick={() => {
+                      if (isCardDisabled) return;
+                      handleCardClick(c);
+                    }}
                   >
                     <CardView
                       card={c}
@@ -2189,68 +2121,6 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Reverse Turn Direction Banner Animation */}
-      {reverseEvent && (
-        <div className="fixed top-24 inset-x-0 z-50 pointer-events-none flex items-center justify-center animate-bounce">
-          <div className="flex items-center gap-3 bg-gradient-to-r from-sky-950/95 via-blue-950/95 to-indigo-950/95 border-2 border-sky-400/85 px-7 py-3 rounded-full shadow-[0_0_40px_rgba(56,189,248,0.9)] backdrop-blur-md">
-            <span className="text-3xl font-black text-sky-400">
-              {reverseEvent.direction === 1 ? '↻' : '↺'}
-            </span>
-            <div className="flex flex-col">
-              <span className="text-sm font-black text-sky-200 uppercase tracking-wider">
-                Turn Direction Reversed!
-              </span>
-              <span className="text-xs text-neutral-300 font-semibold">
-                <strong className="text-white">{reverseEvent.playerName}</strong> switched order to {reverseEvent.direction === 1 ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Jester Hand Swap Banner Animation */}
-      {jesterSwapEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-purple-950/95 via-indigo-950/95 to-purple-950/95 border-2 border-purple-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(168,85,247,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-bounce">🃏</span>
-              <span className="text-amber-400 animate-pulse">⇄</span>
-              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>🃏</span>
-            </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              HANDS SWAPPED!
-            </div>
-            <div className="text-lg font-bold text-purple-200 text-center">
-              <span className="text-amber-300">{jesterSwapEvent.sourceName}</span> swapped decks with{' '}
-              <span className="text-pink-300">{jesterSwapEvent.targetName}</span>!
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Redo Hand Refresh Banner Animation */}
-      {redoEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-redo-banner flex flex-col items-center gap-4 bg-gradient-to-r from-cyan-950/95 via-blue-950/95 to-teal-950/95 border-2 border-cyan-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(6,182,212,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-spin">🔄</span>
-              <img
-                src="/cards/custom/redo.png"
-                alt="Redo"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(6,182,212,0.8)]"
-              />
-              <span className="animate-spin" style={{ animationDirection: 'reverse' }}>🔄</span>
-            </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              HAND REFRESHED!
-            </div>
-            <div className="text-lg font-bold text-cyan-200 text-center">
-              <span className="text-yellow-300 font-extrabold">{redoEvent.playerName}</span> drew 10 fresh cards from a new deck!
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* JoJo Dio "Za Warudo" Time Warp Cinematic Overlay */}
       {timeWarpEvent && (
         <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden animate-za-warudo">
@@ -2364,170 +2234,232 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Number Eye Obscure Banner Animation */}
-      {numberEyeEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-amber-950/95 via-yellow-950/95 to-amber-950/95 border-2 border-amber-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(245,158,11,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-bounce">👁️</span>
-              <img
-                src="/cards/custom/number_eye.png"
-                alt="Number Eye"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(245,158,11,0.8)]"
+      {/* Minecraft Totem of Undying Popping Animation (2.0s) */}
+      {activeTotem && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+          {/* Golden Radiance Aura Glow */}
+          <div className="absolute w-[520px] h-[520px] rounded-full bg-gradient-to-r from-amber-400/40 via-yellow-300/30 to-emerald-400/20 blur-3xl animate-totem-radiance" />
+
+          {/* Radiating Sparkle Particles */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {[
+              { x: -140, y: -160, color: 'bg-amber-300', delay: '0ms', size: 12 },
+              { x: 160, y: -130, color: 'bg-yellow-200', delay: '100ms', size: 14 },
+              { x: -190, y: 40, color: 'bg-emerald-400', delay: '150ms', size: 12 },
+              { x: 180, y: 70, color: 'bg-amber-400', delay: '50ms', size: 16 },
+              { x: -90, y: -220, color: 'bg-yellow-300', delay: '200ms', size: 14 },
+              { x: 100, y: -210, color: 'bg-emerald-300', delay: '120ms', size: 12 },
+              { x: -160, y: 160, color: 'bg-amber-200', delay: '80ms', size: 10 },
+              { x: 150, y: 180, color: 'bg-yellow-400', delay: '220ms', size: 12 },
+              { x: 0, y: -240, color: 'bg-amber-300', delay: '60ms', size: 18 },
+              { x: 0, y: 220, color: 'bg-emerald-400', delay: '140ms', size: 14 },
+              { x: -220, y: -60, color: 'bg-yellow-100', delay: '180ms', size: 12 },
+              { x: 230, y: -40, color: 'bg-amber-300', delay: '90ms', size: 14 }
+            ].map((p, idx) => (
+              <span
+                key={idx}
+                className={`absolute rounded-full ${p.color} shadow-[0_0_15px_rgba(251,191,36,0.9)] animate-totem-sparkle`}
+                style={{
+                  width: `${p.size}px`,
+                  height: `${p.size}px`,
+                  '--tx': `${p.x}px`,
+                  '--ty': `${p.y}px`,
+                  animationDelay: p.delay
+                } as React.CSSProperties}
               />
-              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>❓</span>
+            ))}
+          </div>
+
+          {/* Floating Card Item */}
+          <div className="relative animate-totem-card flex flex-col items-center">
+            <div className="relative p-2.5 rounded-2xl bg-gradient-to-b from-amber-300/60 via-yellow-500/40 to-amber-600/60 border-2 border-amber-300 shadow-[0_0_60px_rgba(251,191,36,1)]">
+              <img
+                src={activeTotem.image}
+                alt={activeTotem.title}
+                className="w-36 h-52 sm:w-44 sm:h-64 object-contain rounded-xl shadow-2xl drop-shadow-[0_0_25px_rgba(255,255,255,0.9)]"
+              />
             </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              NUMBERS OBSCURED!
-            </div>
-            <div className="text-lg font-bold text-amber-200 text-center">
-              <span className="text-yellow-300">{numberEyeEvent.sourceName}</span> turned{' '}
-              <span className="text-pink-300">{numberEyeEvent.targetName}</span>'s card numbers into question marks!
+            <div className="mt-3 px-4 py-1 rounded-full bg-black/85 border border-amber-400/80 text-amber-300 font-extrabold text-sm tracking-wider uppercase shadow-[0_0_20px_rgba(251,191,36,0.8)] backdrop-blur-md flex items-center gap-2">
+              <span>{activeTotem.playerName}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Color Eye Greyscale Banner Animation */}
-      {colorEyeEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-neutral-900/95 via-stone-900/95 to-zinc-900/95 border-2 border-neutral-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(163,163,163,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-pulse">👁️</span>
-              <img
-                src="/cards/custom/color_eye.png"
-                alt="Color Eye"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(255,255,255,0.8)] grayscale"
-              />
-              <span className="animate-pulse" style={{ animationDelay: '150ms' }}>🌫️</span>
+      {/* Left-Edge Game Standings & Information Slide-Out Tab */}
+      <div
+        onMouseEnter={() => setIsInfoTabOpen(true)}
+        onMouseLeave={() => {
+          if (!isInfoPinned) setIsInfoTabOpen(false);
+        }}
+        className={`fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-stretch transition-transform duration-300 ease-out select-none ${
+          isInfoTabOpen || isInfoPinned ? 'translate-x-0' : '-translate-x-[calc(100%-40px)]'
+        }`}
+      >
+        {/* Expanded Standings Modal Panel */}
+        <div className="bg-neutral-950/95 backdrop-blur-2xl border-y border-r border-cyan-500/40 shadow-[0_0_50px_rgba(0,0,0,0.95)] rounded-r-2xl p-5 text-white w-[540px] max-w-[90vw] flex flex-col gap-3.5">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📊</span>
+              <span className="font-extrabold text-base tracking-wide bg-gradient-to-r from-cyan-400 to-sky-200 bg-clip-text text-transparent">
+                GAME STANDINGS
+              </span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/30 text-cyan-300">
+                Round {gameState.roundNumber}
+              </span>
             </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              VISION GREYSCALED!
-            </div>
-            <div className="text-lg font-bold text-neutral-300 text-center">
-              <span className="text-yellow-300">{colorEyeEvent.sourceName}</span> stripped all color from{' '}
-              <span className="text-pink-300">{colorEyeEvent.targetName}</span>'s cards!
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsInfoPinned(prev => !prev)}
+              className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+                isInfoPinned
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold shadow-[0_0_10px_rgba(6,182,212,0.5)]'
+                  : 'bg-white/5 border-white/15 text-neutral-400 hover:text-white'
+              }`}
+              title={isInfoPinned ? 'Unpin Standings Tab' : 'Pin Standings Tab Open'}
+            >
+              <span>📌</span>
+              <span>{isInfoPinned ? 'Pinned' : 'Pin'}</span>
+            </button>
           </div>
-        </div>
-      )}
 
-      {/* Crack Earthquake Banner Animation */}
-      {crackEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-stone-950/95 via-neutral-900/95 to-stone-950/95 border-2 border-stone-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(168,162,158,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-bounce">💥</span>
-              <img
-                src="/cards/custom/crack.png"
-                alt="Crack Card"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(168,162,158,0.8)]"
-              />
-              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>⚡</span>
-            </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              SHATTERED DECKS!
-            </div>
-            <div className="text-lg font-bold text-stone-200 text-center">
-              <span className="text-yellow-300">{crackEvent.playerName}</span> triggered an earthquake and cracked a card in everyone else's hand!
-            </div>
-          </div>
-        </div>
-      )}
+          {/* Standings Table */}
+          <div className="overflow-x-auto max-h-[60vh] overflow-y-auto pr-1">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-white/10 text-neutral-400 uppercase text-[10px] tracking-wider">
+                  <th className="py-2 px-2.5">Player</th>
+                  <th className="py-2 px-2 text-center">Phase</th>
+                  <th className="py-2 px-2 text-center">Points</th>
+                  <th className="py-2 px-2 text-center">Cards</th>
+                  <th className="py-2 px-2.5">Status Effects</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 font-medium">
+                {[...gameState.players]
+                  .sort((a, b) => b.currentPhase - a.currentPhase || a.score - b.score)
+                  .map((player, idx) => {
+                    const isMe = player.id === secretToken;
+                    const isCurrentTurn = player.id === gameState.currentTurnPlayerId;
+                    const hasStatus = Boolean(
+                      player.hasNumberEyeEffect ||
+                      player.hasColorEyeEffect ||
+                      player.hasLuck ||
+                      player.hasUnlucky ||
+                      player.hasDoubleDebuff ||
+                      (player.crackedCardCount && player.crackedCardCount > 0)
+                    );
 
-      {/* Status Clear Banner Animation */}
-      {statusEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-teal-950/95 via-cyan-950/95 to-teal-950/95 border-2 border-teal-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(45,212,191,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-pulse">✨</span>
-              <img
-                src="/cards/custom/status.png"
-                alt="Status Card"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(45,212,191,0.8)]"
-              />
-              <span className="animate-pulse" style={{ animationDelay: '150ms' }}>🌟</span>
-            </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              STATUS PURGED!
-            </div>
-            <div className="text-lg font-bold text-teal-200 text-center">
-              <span className="text-yellow-300">{statusEvent.playerName}</span> wiped away all active status effects and cracked cards!
-            </div>
-          </div>
-        </div>
-      )}
+                    return (
+                      <tr
+                        key={player.id}
+                        className={`transition-colors ${
+                          isMe
+                            ? 'bg-cyan-950/35 hover:bg-cyan-950/50'
+                            : 'hover:bg-white/5'
+                        }`}
+                      >
+                        {/* Player Column */}
+                        <td className="py-2.5 px-2.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-neutral-400 text-[10px] w-4">
+                              #{idx + 1}
+                            </span>
+                            <span className={`font-bold ${isMe ? 'text-cyan-300' : 'text-white'}`}>
+                              {player.name}
+                            </span>
+                            {isMe && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-900/60 border border-cyan-500/40 text-cyan-200 font-extrabold">
+                                YOU
+                              </span>
+                            )}
+                            {player.isHost && <span title="Host">👑</span>}
+                            {player.isBot && (
+                              <span className="text-[9px] text-neutral-400 font-bold">[BOT]</span>
+                            )}
+                            {isCurrentTurn && (
+                              <span
+                                className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block"
+                                title="Current Turn"
+                              />
+                            )}
+                            {player.isResigned && (
+                              <span className="text-[9px] text-rose-400 font-extrabold">[RESIGNED]</span>
+                            )}
+                            {player.isSkipped && (
+                              <span className="text-[9px] text-red-300 font-bold">[SKIPPED]</span>
+                            )}
+                          </div>
+                        </td>
 
-      {/* Luck Blessing Banner Animation */}
-      {luckEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-green-950/95 via-emerald-950/95 to-green-950/95 border-2 border-green-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(74,222,128,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-bounce">🍀</span>
-              <img
-                src="/cards/custom/luck.png"
-                alt="Luck Card"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(74,222,128,0.8)]"
-              />
-              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>✨</span>
-            </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              FORTUNE BLESSED!
-            </div>
-            <div className="text-lg font-bold text-green-200 text-center">
-              <span className="text-yellow-300">{luckEvent.playerName}</span> gained 2x chance to draw Special cards, Wilds, and Reverses!
-            </div>
-          </div>
-        </div>
-      )}
+                        {/* Phase Column */}
+                        <td className="py-2.5 px-2 text-center">
+                          <div className="inline-flex items-center gap-1 font-bold text-neutral-200">
+                            <span>Phase {player.currentPhase}</span>
+                            {player.phaseCompletedInRound && (
+                              <span
+                                className="text-emerald-400 font-black text-sm"
+                                title="Completed in current round"
+                              >
+                                ✓
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-      {/* Unlucky Curse Banner Animation */}
-      {unluckyEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-rose-950/95 via-red-950/95 to-rose-950/95 border-2 border-rose-500/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(244,63,94,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-pulse">💀</span>
-              <img
-                src="/cards/custom/unlucky.png"
-                alt="Unlucky Card"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(244,63,94,0.8)]"
-              />
-              <span className="animate-pulse" style={{ animationDelay: '150ms' }}>🥀</span>
-            </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              UNLUCKY CURSE!
-            </div>
-            <div className="text-lg font-bold text-rose-200 text-center">
-              <span className="text-yellow-300">{unluckyEvent.sourceName}</span> cursed{' '}
-              <span className="text-pink-300">{unluckyEvent.targetName}</span> with halved special card draws!
-            </div>
-          </div>
-        </div>
-      )}
+                        {/* Points Column */}
+                        <td className="py-2.5 px-2 text-center">
+                          <span className="font-black text-amber-300 text-sm">
+                            {player.score}
+                          </span>
+                        </td>
 
-      {/* Double Stage Trap Banner Animation */}
-      {doubleEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-purple-950/95 via-fuchsia-950/95 to-purple-950/95 border-2 border-purple-500/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(168,85,247,0.9)] backdrop-blur-md">
-            <div className="flex items-center gap-6 text-6xl">
-              <span className="animate-bounce">✖️2</span>
-              <img
-                src="/cards/custom/double.png"
-                alt="Double Card"
-                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(168,85,247,0.8)]"
-              />
-              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>🔁</span>
-            </div>
-            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
-              DOUBLE STAGE TRAP!
-            </div>
-            <div className="text-lg font-bold text-purple-200 text-center">
-              <span className="text-yellow-300">{doubleEvent.sourceName}</span> trapped{' '}
-              <span className="text-pink-300">{doubleEvent.targetName}</span> to repeat their current stage next round!
-            </div>
+                        {/* Cards In Hand Column */}
+                        <td className="py-2.5 px-2 text-center">
+                          <span className="font-bold text-neutral-300">
+                            {player.cardCount}
+                          </span>
+                        </td>
+
+                        {/* Status Effects Column */}
+                        <td className="py-2.5 px-2.5">
+                          {hasStatus ? (
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {renderPlayerStatusBadges(player)}
+                            </div>
+                          ) : (
+                            <span className="text-neutral-500 text-xs">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer Info */}
+          <div className="text-[10px] text-neutral-400 border-t border-white/10 pt-2 flex items-center justify-between">
+            <span>Target: {gameState.settings?.totalPhases ?? 10} Phases</span>
+            <span>Direction: {gameState.playDirection === 1 ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}</span>
           </div>
         </div>
-      )}
+
+        {/* The Sleek Handle Tab */}
+        <div
+          onClick={() => setIsInfoPinned(prev => !prev)}
+          className="w-10 bg-gradient-to-b from-cyan-600 via-sky-700 to-blue-800 border-y border-r border-cyan-400 rounded-r-xl cursor-pointer flex flex-col items-center justify-center py-5 gap-3 shadow-[0_0_25px_rgba(6,182,212,0.6)] hover:brightness-125 transition-all"
+        >
+          <span className="text-lg">📊</span>
+          <span
+            className="text-[10px] font-black tracking-widest text-cyan-100 uppercase"
+            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+          >
+            STANDINGS
+          </span>
+        </div>
+      </div>
 
       <style>{`
         @keyframes screenShake {
