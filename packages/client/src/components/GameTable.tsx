@@ -485,11 +485,35 @@ export const GameTable: React.FC<GameTableProps> = ({
     }
   }, [latestAction, isMuted]);
 
+  const prevRoundRef = useRef<number>(gameState.roundNumber);
+
   useEffect(() => {
+    // When a new round starts, completely reset local hand with fresh dealt cards
+    if (prevRoundRef.current !== gameState.roundNumber) {
+      prevRoundRef.current = gameState.roundNumber;
+      setLocalHand(hand.map(c => ({ ...c, isCracked: Boolean(c.isCracked) })));
+      setSelectedCardId(null);
+      return;
+    }
+
     setLocalHand(prev => {
       const handMap = new Map(hand.map(c => [c.id, c]));
-      const retained = prev.filter(c => handMap.has(c.id)).map(c => ({ ...c, ...handMap.get(c.id)! }));
-      const added = hand.filter(c => !prev.some(p => p.id === c.id));
+      const retained = prev
+        .filter(c => handMap.has(c.id))
+        .map(c => {
+          const serverCard = handMap.get(c.id)!;
+          return {
+            ...c,
+            ...serverCard,
+            isCracked: Boolean(serverCard.isCracked)
+          };
+        });
+      const added = hand
+        .filter(c => !prev.some(p => p.id === c.id))
+        .map(c => ({
+          ...c,
+          isCracked: Boolean(c.isCracked)
+        }));
       return [...retained, ...added];
     });
     setSelectedCardId(prev => {
@@ -499,7 +523,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (matching.isCracked && !(hand.length === 1 && me?.phaseCompletedInRound)) return null;
       return prev;
     });
-  }, [hand, me?.phaseCompletedInRound]);
+  }, [hand, gameState.roundNumber, me?.phaseCompletedInRound]);
 
   const isSpectator = !me || me.isSpectator;
   const isMyTurn = gameState.currentTurnPlayerId === secretToken;

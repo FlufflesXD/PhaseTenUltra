@@ -29,7 +29,7 @@ export function isChaosSpecialCard(type: CardType): boolean {
   return CHAOS_SPECIAL_CARDS.some(c => c.type === type);
 }
 
-export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Card[] {
+export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idPrefix = ''): Card[] {
   const cards: Card[] = [];
   const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];
   let idCounter = 1;
@@ -40,7 +40,7 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Ca
       for (let val = 1; val <= 12; val++) {
         const points = val <= 9 ? 5 : 10;
         cards.push({
-          id: `card_${idCounter++}`,
+          id: `card_${idPrefix}${idCounter++}`,
           type: 'number',
           color,
           value: val,
@@ -82,7 +82,7 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Ca
       const count = special.type === 'status' ? 2 : 1;
       for (let i = 0; i < count; i++) {
         cards.push({
-          id: `card_${idCounter++}`,
+          id: `card_${idPrefix}${idCounter++}`,
           type: special.type,
           color: 'none',
           value: 0,
@@ -95,7 +95,7 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Ca
   // 8 Wild cards = 25 points each (always present)
   for (let i = 0; i < 8; i++) {
     cards.push({
-      id: `card_${idCounter++}`,
+      id: `card_${idPrefix}${idCounter++}`,
       type: 'wild',
       color: 'none',
       value: 0,
@@ -107,7 +107,7 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Ca
   if (enabled.skip !== false) {
     for (let i = 0; i < 4; i++) {
       cards.push({
-        id: `card_${idCounter++}`,
+        id: `card_${idPrefix}${idCounter++}`,
         type: 'skip',
         color: 'none',
         value: 0,
@@ -120,7 +120,7 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Ca
   if (enabled.reverse !== false) {
     for (let i = 0; i < 4; i++) {
       cards.push({
-        id: `card_${idCounter++}`,
+        id: `card_${idPrefix}${idCounter++}`,
         type: 'reverse',
         color: 'none',
         value: 0,
@@ -132,8 +132,8 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Ca
   return cards;
 }
 
-export function createDeck(settingsOrMode?: GameSettings | GameMode): Card[] {
-  return shuffleDeck(createStandardDeck(settingsOrMode));
+export function createDeck(settingsOrMode?: GameSettings | GameMode, idPrefix = ''): Card[] {
+  return shuffleDeck(createStandardDeck(settingsOrMode, idPrefix));
 }
 
 function secureRandomInt(maxExclusive: number): number {

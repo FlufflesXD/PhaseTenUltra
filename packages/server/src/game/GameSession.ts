@@ -140,7 +140,7 @@ export class GameSession {
       player.cardCount = 0;
     }
 
-    this.drawPile = createDeck(this.settings);
+    this.drawPile = createDeck(this.settings, `r${this.roundNumber}_${Date.now()}_`);
     this.discardPile = [];
 
     // Deal 10 cards to each player
@@ -1512,7 +1512,7 @@ export class GameSession {
   private ensureDrawPileHasCards(): void {
     if (this.drawPile.length === 0) {
       if (this.discardPile.length <= 1) {
-        this.drawPile = createDeck(this.settings);
+        this.drawPile = createDeck(this.settings, `r${this.roundNumber}_res_${Date.now()}_`);
       } else {
         const top = this.discardPile.pop()!;
         this.drawPile = shuffleDeck(this.discardPile);
