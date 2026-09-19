@@ -88,6 +88,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [isScreenShaking, setIsScreenShaking] = useState(false);
   const [isInfoTabOpen, setIsInfoTabOpen] = useState(false);
   const [isInfoPinned, setIsInfoPinned] = useState(false);
+  const [turnActionTip, setTurnActionTip] = useState<string | null>(null);
 
   const lastSoundActionIdRef = useRef<string | null>(null);
 
@@ -96,6 +97,16 @@ export const GameTable: React.FC<GameTableProps> = ({
   const timeWarpTimerRef = useRef<NodeJS.Timeout | null>(null);
   const crackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyingCardTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const turnActionTipTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showTurnActionTip = (message: string) => {
+    setTurnActionTip(message);
+    if (turnActionTipTimerRef.current) clearTimeout(turnActionTipTimerRef.current);
+    turnActionTipTimerRef.current = setTimeout(() => {
+      setTurnActionTip(null);
+      turnActionTipTimerRef.current = null;
+    }, 4000);
+  };
 
   useEffect(() => {
     return () => {
@@ -104,6 +115,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
       if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
       if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
+      if (turnActionTipTimerRef.current) clearTimeout(turnActionTipTimerRef.current);
     };
   }, []);
 
@@ -664,7 +676,11 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleNormalDiscard = () => {
-    if (me?.isResigned || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    if (me?.isResigned || !selectedCard || !isMyTurn) return;
+    if (gameState.turnStage === 'draw') {
+      showTurnActionTip("Draw a card first! You must draw before discarding.");
+      return;
+    }
     if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
     const isSpecial = isChaosSpecialCard(selectedCard.type);
     onDiscardCard(selectedCard.id, undefined, isSpecial ? false : true);
@@ -672,7 +688,11 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleDiscardSelected = (explicitTargetId?: string) => {
-    if (!selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    if (!selectedCard || !isMyTurn) return;
+    if (gameState.turnStage === 'draw') {
+      showTurnActionTip("Draw a card first! You must draw before playing or discarding.");
+      return;
+    }
     if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
     if (selectedCard.type === 'nuke' && !me?.phaseCompletedInRound) return;
     if (selectedCard.type === 'time') {
@@ -703,11 +723,29 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleTableGroupClick = (group: LaidDownPhaseGroup, targetEnd?: 'low' | 'high') => {
-    if (!isMyTurn || gameState.turnStage !== 'play' || !me?.phaseCompletedInRound) return;
+    if (!isMyTurn) {
+      showTurnActionTip("Wait for your turn to hit cards!");
+      return;
+    }
+
+    if (gameState.turnStage === 'draw') {
+      showTurnActionTip("Draw a card first! You must draw from the Draw Pile or Discard Pile before hitting onto groups.");
+      return;
+    }
+
+    if (!me?.phaseCompletedInRound) {
+      showTurnActionTip("Complete and lay down your own Stage first before hitting onto other groups!");
+      return;
+    }
 
     if (selectedCard && !selectedCard.isCracked && validateHit(selectedCard, group, targetEnd)) {
       onHitCard(selectedCard.id, group.id, targetEnd);
       clearSelection();
+      return;
+    }
+
+    if (selectedCard && !selectedCard.isCracked && !validateHit(selectedCard, group, targetEnd)) {
+      showTurnActionTip("Selected card cannot hit on this group.");
       return;
     }
 
@@ -765,6 +803,16 @@ export const GameTable: React.FC<GameTableProps> = ({
         ? `Run ${min}-${max}`
         : `${group.targetColor?.toUpperCase()} Group`;
 
+    const isDrawStageHitMatch = Boolean(
+      !canHit &&
+      isMyTurn &&
+      gameState.turnStage === 'draw' &&
+      me?.phaseCompletedInRound &&
+      selectedCard &&
+      !selectedCard.isCracked &&
+      validateHit(selectedCard, group)
+    );
+
     return (
       <div
         key={group.id}
@@ -773,6 +821,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         className={`relative border p-2 rounded-xl flex flex-col gap-1 transition-all pointer-events-auto shadow-2xl backdrop-blur-md shrink-0 select-none ${
           canHit
             ? 'border-amber-400 bg-amber-950/85 shadow-[0_0_18px_rgba(251,191,36,0.85)] cursor-pointer ring-2 ring-amber-300 animate-pulse'
+            : isDrawStageHitMatch
+            ? 'border-amber-400/80 border-dashed bg-amber-950/50 hover:bg-amber-950/70 cursor-pointer shadow-[0_0_12px_rgba(251,191,36,0.5)]'
             : 'border-white/20 bg-black/85 hover:border-white/40 cursor-pointer'
         }`}
       >
@@ -790,6 +840,11 @@ export const GameTable: React.FC<GameTableProps> = ({
         {canHit && (
           <div className="bg-gradient-to-r from-amber-400 to-yellow-300 text-black text-xs font-black py-1 px-1.5 rounded shadow text-center">
             HIT HERE
+          </div>
+        )}
+        {isDrawStageHitMatch && (
+          <div className="bg-amber-950/90 border border-amber-400/80 text-amber-300 text-[10px] font-black py-0.5 px-1.5 rounded shadow text-center animate-pulse">
+            DRAW FIRST TO HIT
           </div>
         )}
       </div>
@@ -1705,6 +1760,26 @@ export const GameTable: React.FC<GameTableProps> = ({
               })}
             </div>
           )}
+
+          {/* Turn Action Guidance Banner or Tip */}
+          {turnActionTip ? (
+            <div className="mb-2 flex items-center gap-2 bg-amber-400 text-black px-4 py-1.5 rounded-full text-xs font-black shadow-[0_0_18px_rgba(251,191,36,0.9)] animate-pulse pointer-events-auto">
+              <span>⚠️</span>
+              <span>{turnActionTip}</span>
+              <button
+                type="button"
+                onClick={() => setTurnActionTip(null)}
+                className="ml-1 opacity-70 hover:opacity-100 font-normal cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          ) : isMyTurn && gameState.turnStage === 'draw' ? (
+            <div className="mb-2 flex items-center gap-2 bg-amber-950/90 border border-amber-500/70 text-amber-300 px-4 py-1 rounded-full text-xs font-bold shadow-lg animate-pulse pointer-events-auto">
+              <span>👉</span>
+              <span>Draw a card from the Draw Pile or Discard Pile to begin your turn</span>
+            </div>
+          ) : null}
 
           {/* Unified Stage Action Zone & Hand Toolbar */}
           <div className="mb-2 flex flex-wrap items-center justify-center gap-2.5 pointer-events-auto px-4">
