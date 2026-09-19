@@ -86,12 +86,16 @@ export class GameSession {
     }
 
     this.playDirection = 1;
-    const mode = this.settings.gameMode || 'classic';
-    if (mode === 'speed') {
-      this.phaseDefinitions = CLASSIC_PHASES.slice(0, 5);
-    } else {
-      this.phaseDefinitions = CLASSIC_PHASES;
+    let totalPhases = this.settings.totalPhases;
+    if (!totalPhases) {
+      if (this.settings.gameMode === 'speed') {
+        totalPhases = 5;
+      } else {
+        totalPhases = 10;
+      }
     }
+    const count = Math.max(1, Math.min(10, totalPhases));
+    this.phaseDefinitions = CLASSIC_PHASES.slice(0, count);
 
     this.status = 'in_game';
     this.roundNumber = 1;
@@ -107,6 +111,10 @@ export class GameSession {
       player.cardCount = 0;
       player.laidDownPhases = [];
       player.isSkipped = false;
+      player.hasLuck = false;
+      player.hasUnlucky = false;
+      player.hasDoubleDebuff = false;
+      player.crackedCardCount = 0;
     }
 
     this.startRound();
@@ -124,11 +132,15 @@ export class GameSession {
       player.isResigned = false;
       player.hasNumberEyeEffect = false;
       player.hasColorEyeEffect = false;
+      player.hasLuck = false;
+      player.hasUnlucky = false;
+      player.hasDoubleDebuff = false;
+      player.crackedCardCount = 0;
       player.cards = [];
       player.cardCount = 0;
     }
 
-    this.drawPile = createDeck(this.settings.gameMode);
+    this.drawPile = createDeck(this.settings);
     this.discardPile = [];
 
     // Deal 10 cards to each player
@@ -281,6 +293,29 @@ export class GameSession {
       drawnCard = this.discardPile.pop()!;
     } else {
       drawnCard = this.drawPile.pop()!;
+      if (current.hasLuck && drawnCard.type === 'number') {
+        // Luck: 2x chance of obtaining wilds, reverses, skips, and special cards
+        // 50% chance to swap drawn number card with a lucky non-number card from the draw pile
+        if (Math.random() < 0.50) {
+          const luckyIdx = this.drawPile.findIndex(c => c.type !== 'number');
+          if (luckyIdx !== -1) {
+            const luckyCard = this.drawPile[luckyIdx];
+            this.drawPile[luckyIdx] = drawnCard;
+            drawnCard = luckyCard;
+          }
+        }
+      } else if (current.hasUnlucky && drawnCard.type !== 'number') {
+        // Unlucky: 2x decrease (halved chance) of getting wilds, skips, reverse, and special cards
+        // 50% chance to swap drawn lucky card with a regular number card from the draw pile
+        if (Math.random() < 0.50) {
+          const numberIdx = this.drawPile.findIndex(c => c.type === 'number');
+          if (numberIdx !== -1) {
+            const numberCard = this.drawPile[numberIdx];
+            this.drawPile[numberIdx] = drawnCard;
+            drawnCard = numberCard;
+          }
+        }
+      }
     }
 
     current.cards.push(drawnCard);
@@ -317,6 +352,14 @@ export class GameSession {
 
     const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === current.currentPhase);
     if (!phaseDef) throw new Error('Invalid phase definition');
+
+    for (const group of cardGroups) {
+      for (const card of group) {
+        if (card.isCracked) {
+          throw new Error('Cannot include cracked cards in a lay down');
+        }
+      }
+    }
 
     const validation = validatePhase(cardGroups, phaseDef);
     if (!validation.isValid || !validation.annotatedGroups) {
@@ -393,6 +436,7 @@ export class GameSession {
     const cards = cardIds.map(id => {
       const c = current.cards.find(card => card.id === id);
       if (!c) throw new Error(`Card ${id} not in hand`);
+      if (c.isCracked) throw new Error('Cannot include cracked cards in an extra group');
       return c;
     });
 
@@ -505,6 +549,9 @@ export class GameSession {
       if (c.type !== 'number' && c.type !== 'wild') {
         throw new Error('Special cards cannot be played on hits');
       }
+      if (c.isCracked) {
+        throw new Error('Cracked cards cannot be played on hits');
+      }
       cardsToHit.push(c);
     }
 
@@ -597,6 +644,14 @@ export class GameSession {
     const cardIndex = current.cards.findIndex(c => c.id === cardId);
     if (cardIndex === -1) throw new Error('Card not in hand');
     const card = current.cards[cardIndex];
+
+    if (card.isCracked) {
+      const isLastCardToWin = current.cards.length === 1 && Boolean(current.phaseCompletedInRound);
+      if (!isLastCardToWin) {
+        throw new Error('Cracked cards cannot be discarded or played unless cleansed by Status');
+      }
+    }
+
     const isSpecialChaosCard = isChaosSpecialCard(card.type);
     let shouldActivate = isSpecialChaosCard ? activateAbility : true;
 
@@ -607,15 +662,16 @@ export class GameSession {
 
       if (card.type === 'time') {
         const active = this.getActivePlayers();
-        const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
+        const maxPhase = this.phaseDefinitions.length;
+        const eligibleOpponents = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < maxPhase);
         if (_skipTargetPlayerId) {
-          const target = active.find(p => p.id === _skipTargetPlayerId && p.id !== current.id);
+          const target = active.find(p => p.id === _skipTargetPlayerId);
           if (!target) throw new Error('Target player not found');
-          if (target.currentPhase <= 1 || target.currentPhase >= 10) {
-            throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
+          if (target.currentPhase <= 1 || target.currentPhase >= maxPhase) {
+            throw new Error(`Cannot target a player on Stage 1 or Stage ${maxPhase} with Time card`);
           }
-        } else if (eligible.length === 0) {
-          // If no target was specified and no eligible targets exist, gracefully fall back to normal discard
+        } else if (eligibleOpponents.length === 0) {
+          // If no target was specified and no eligible opponents exist, gracefully fall back to normal discard
           shouldActivate = false;
         }
       }
@@ -697,6 +753,16 @@ export class GameSession {
       this.applyNumberEyeEffect(current, card, _skipTargetPlayerId);
     } else if (card.type === 'color_eye') {
       this.applyColorEyeEffect(current, card, _skipTargetPlayerId);
+    } else if (card.type === 'crack') {
+      this.applyCrackEffect(current, card);
+    } else if (card.type === 'status') {
+      this.applyStatusEffect(current, card);
+    } else if (card.type === 'luck') {
+      this.applyLuckEffect(current, card);
+    } else if (card.type === 'unlucky') {
+      this.applyUnluckyEffect(current, card, _skipTargetPlayerId);
+    } else if (card.type === 'double') {
+      this.applyDoubleEffect(current, card, _skipTargetPlayerId);
     } else if (card.type === 'random') {
       this.applyRandomEffect(current, card, _skipTargetPlayerId);
     } else {
@@ -830,7 +896,7 @@ export class GameSession {
   ): void {
     const active = this.getActivePlayers();
     let target = skipTargetPlayerId
-      ? active.find(p => p.id === skipTargetPlayerId && p.id !== current.id)
+      ? active.find(p => p.id === skipTargetPlayerId)
       : undefined;
 
     if (!target) {
@@ -899,7 +965,7 @@ export class GameSession {
   }
 
   private applyRedoEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType): void {
-    const freshDeck = createDeck(this.settings.gameMode);
+    const freshDeck = createDeck(this.settings);
     const freshHand = freshDeck.slice(0, 10).map((c, idx) => ({
       ...c,
       id: `fresh_${c.type}_${Date.now()}_${idx}`
@@ -932,22 +998,25 @@ export class GameSession {
     randomChosenType?: CardType
   ): void {
     const active = this.getActivePlayers();
+    const maxPhase = this.phaseDefinitions.length;
     let target = skipTargetPlayerId
-      ? active.find(p => p.id === skipTargetPlayerId && p.id !== current.id)
+      ? active.find(p => p.id === skipTargetPlayerId)
       : undefined;
 
     if (!target) {
-      const eligible = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < 10);
-      eligible.sort((a, b) => b.currentPhase - a.currentPhase);
-      target = eligible[0];
+      const eligibleOpponents = active.filter(p => p.id !== current.id && p.currentPhase > 1 && p.currentPhase < maxPhase);
+      eligibleOpponents.sort((a, b) => b.currentPhase - a.currentPhase);
+      if (eligibleOpponents.length > 0) {
+        target = eligibleOpponents[0];
+      }
     }
 
     if (!target) {
-      throw new Error('No eligible targets for Time card (target must be between Stage 2 and 9)');
+      throw new Error(`No eligible targets for Time card (target must be between Stage 2 and ${maxPhase - 1})`);
     }
 
-    if (target.currentPhase <= 1 || target.currentPhase >= 10) {
-      throw new Error('Cannot target a player on Stage 1 or Stage 10 with Time card');
+    if (target.currentPhase <= 1 || target.currentPhase >= maxPhase) {
+      throw new Error(`Cannot target a player on Stage 1 or Stage ${maxPhase} with Time card`);
     }
 
     const isRewind = Math.random() < 0.50;
@@ -1078,6 +1147,174 @@ export class GameSession {
     });
   }
 
+  private applyCrackEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    const opponents = active.filter(p => p.id !== current.id);
+
+    for (const opp of opponents) {
+      if (opp.cards.length === 0) continue;
+      const uncracked = opp.cards.filter(c => !c.isCracked);
+      const targetCard = uncracked.length > 0
+        ? uncracked[Math.floor(Math.random() * uncracked.length)]
+        : opp.cards[Math.floor(Math.random() * opp.cards.length)];
+      targetCard.isCracked = true;
+      opp.crackedCardCount = opp.cards.filter(c => c.isCracked).length;
+    }
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `💥 ${current.name} played CRACK! The table shook violently and a random card cracked in each opponent's hand!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'crack',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      randomChosenType,
+      message: `${current.name} cracked opponents' cards with a ground-shaking tremor!`
+    });
+  }
+
+  private applyStatusEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    randomChosenType?: CardType
+  ): void {
+    current.hasNumberEyeEffect = false;
+    current.hasColorEyeEffect = false;
+    current.hasLuck = false;
+    current.hasUnlucky = false;
+    current.hasDoubleDebuff = false;
+    for (const c of current.cards) {
+      c.isCracked = false;
+    }
+    current.crackedCardCount = 0;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `✨ ${current.name} played STATUS! All positive and negative status effects were purged!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'status',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      randomChosenType,
+      message: `${current.name} cleansed all active buffs and debuffs!`
+    });
+  }
+
+  private applyLuckEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    randomChosenType?: CardType
+  ): void {
+    current.hasLuck = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `🍀 ${current.name} gained LUCK! 2x chance to draw wilds, reverses, skips, and specials for the rest of the round!`,
+      playerId: current.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'luck',
+      playerId: current.id,
+      playerName: current.name,
+      card,
+      randomChosenType,
+      message: `${current.name} gained 2x Luck for card draws!`
+    });
+  }
+
+  private applyUnluckyEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId?: string,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId)
+      : undefined;
+
+    if (!target) {
+      const opponents = active.filter(p => p.id !== current.id);
+      target = opponents.length > 0 ? opponents[0] : current;
+    }
+
+    target.hasUnlucky = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `💀 ${current.name} cursed ${target.name} with BAD LUCK! Chance of drawing special/wild cards halved!`,
+      playerId: target.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'unlucky',
+      playerId: current.id,
+      playerName: current.name,
+      targetPlayerId: target.id,
+      card,
+      randomChosenType,
+      message: `${current.name} gave Bad Luck to ${target.name}!`
+    });
+  }
+
+  private applyDoubleEffect(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId?: string,
+    randomChosenType?: CardType
+  ): void {
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId)
+      : undefined;
+
+    if (!target) {
+      const opponents = active.filter(p => p.id !== current.id);
+      target = opponents.length > 0 ? opponents[0] : current;
+    }
+
+    target.hasDoubleDebuff = true;
+
+    this.notify({
+      id: `notif_${Date.now()}`,
+      type: 'info',
+      message: `✖️2 ${current.name} played DOUBLE on ${target.name}! If they complete this Stage, they must repeat it again!`,
+      playerId: target.id,
+      timestamp: Date.now()
+    });
+
+    this.emitAction({
+      type: 'double',
+      playerId: current.id,
+      playerName: current.name,
+      targetPlayerId: target.id,
+      card,
+      randomChosenType,
+      message: `${current.name} cursed ${target.name} with Repeat Stage (Double)!`
+    });
+  }
+
   private applyRandomEffect(
     current: GamePlayerInternal,
     card: Card,
@@ -1085,14 +1322,15 @@ export class GameSession {
   ): void {
     const active = this.getActivePlayers();
     const opponents = active.filter(p => p.id !== current.id);
-    const eligibleTimeTargets = opponents.filter(p => p.currentPhase > 1 && p.currentPhase < 10);
+    const maxPhase = this.phaseDefinitions.length;
+    const eligibleTimeTargets = opponents.filter(p => p.currentPhase > 1 && p.currentPhase < maxPhase);
 
-    const possibleAbilities: CardType[] = ['redo'];
+    const possibleAbilities: CardType[] = ['redo', 'luck', 'status'];
     if (current.phaseCompletedInRound) {
       possibleAbilities.push('nuke');
     }
     if (opponents.length > 0) {
-      possibleAbilities.push('jester', 'plus_two', 'plus_three', 'number_eye', 'color_eye');
+      possibleAbilities.push('jester', 'plus_two', 'plus_three', 'number_eye', 'color_eye', 'crack', 'unlucky', 'double');
       if (eligibleTimeTargets.length > 0) {
         possibleAbilities.push('time');
       }
@@ -1124,6 +1362,16 @@ export class GameSession {
       this.applyNumberEyeEffect(current, card, skipTargetPlayerId, chosen);
     } else if (chosen === 'color_eye') {
       this.applyColorEyeEffect(current, card, skipTargetPlayerId, chosen);
+    } else if (chosen === 'crack') {
+      this.applyCrackEffect(current, card, chosen);
+    } else if (chosen === 'status') {
+      this.applyStatusEffect(current, card, chosen);
+    } else if (chosen === 'luck') {
+      this.applyLuckEffect(current, card, chosen);
+    } else if (chosen === 'unlucky') {
+      this.applyUnluckyEffect(current, card, skipTargetPlayerId, chosen);
+    } else if (chosen === 'double') {
+      this.applyDoubleEffect(current, card, skipTargetPlayerId, chosen);
     }
   }
 
@@ -1151,7 +1399,16 @@ export class GameSession {
       }
 
       if (player.phaseCompletedInRound) {
-        if (player.currentPhase >= maxPhase) {
+        if (player.hasDoubleDebuff) {
+          player.hasDoubleDebuff = false;
+          this.notify({
+            id: `notif_${Date.now()}`,
+            type: 'info',
+            message: `✖️2 ${player.name} had Double active! They must repeat Stage ${player.currentPhase} again next round!`,
+            playerId: player.id,
+            timestamp: Date.now()
+          });
+        } else if (player.currentPhase >= maxPhase) {
           player.completedAllPhases = true;
           player.currentPhase = maxPhase;
         } else {
@@ -1199,7 +1456,7 @@ export class GameSession {
           if (this.status === 'round_end') {
             this.nextRound();
           }
-        }, 3500);
+        }, 8000);
         this.roundEndAutoTimeout.unref?.();
       }
     }
@@ -1229,6 +1486,10 @@ export class GameSession {
       player.cardCount = 0;
       player.laidDownPhases = [];
       player.isSkipped = false;
+      player.hasLuck = false;
+      player.hasUnlucky = false;
+      player.hasDoubleDebuff = false;
+      player.crackedCardCount = 0;
     }
 
     this.startRound();
@@ -1251,7 +1512,7 @@ export class GameSession {
   private ensureDrawPileHasCards(): void {
     if (this.drawPile.length === 0) {
       if (this.discardPile.length <= 1) {
-        this.drawPile = createDeck(this.settings.gameMode);
+        this.drawPile = createDeck(this.settings);
       } else {
         const top = this.discardPile.pop()!;
         this.drawPile = shuffleDeck(this.discardPile);
@@ -1295,7 +1556,11 @@ export class GameSession {
         isSkipped: p.isSkipped,
         isResigned: p.isResigned,
         hasNumberEyeEffect: p.hasNumberEyeEffect,
-        hasColorEyeEffect: p.hasColorEyeEffect
+        hasColorEyeEffect: p.hasColorEyeEffect,
+        hasLuck: p.hasLuck,
+        hasUnlucky: p.hasUnlucky,
+        hasDoubleDebuff: p.hasDoubleDebuff,
+        crackedCardCount: p.cards.filter(c => c.isCracked).length
       })),
       allLaidDownPhases: this.allLaidDownPhases,
       winnerId: this.winnerId,
@@ -1330,13 +1595,17 @@ export class GameSession {
       if (this.status !== 'in_game') return;
       const current = this.getCurrentPlayer();
       if (current && current.id === bot.id && (current.isBot || !current.connected)) {
-        this.executeBotTurn(current);
+        this.takeTurnForBot(current);
       }
     }, 1200);
     this.botActionTimeout.unref?.();
   }
 
   public executeBotTurn(bot: GamePlayerInternal): void {
+    this.takeTurnForBot(bot);
+  }
+
+  public takeTurnForBot(bot: GamePlayerInternal): void {
     if (this.status !== 'in_game') return;
     const current = this.getCurrentPlayer();
     if (!current || current.id !== bot.id) return;
@@ -1354,9 +1623,10 @@ export class GameSession {
 
     const phaseDef = this.phaseDefinitions.find(p => p.phaseNumber === bot.currentPhase);
 
-    // 2. Play Stage if not yet completed
+    // 2. Play Stage if not yet completed (exclude cracked cards)
     if (!bot.phaseCompletedInRound && phaseDef) {
-      const combination = findValidPhaseCombination(bot.cards, phaseDef);
+      const uncrackedCards = bot.cards.filter(c => !c.isCracked);
+      const combination = findValidPhaseCombination(uncrackedCards, phaseDef);
       if (combination) {
         try {
           this.layDownPhase(bot.id, combination);
@@ -1367,7 +1637,8 @@ export class GameSession {
     // 3. Play extra melds and hit onto table groups if stage is made
     if (bot.phaseCompletedInRound && phaseDef) {
       if (this.settings.allowPartialAndExtraSets) {
-        const extra = findExtraMeldMatch(bot.cards, phaseDef);
+        const uncrackedCards = bot.cards.filter(c => !c.isCracked);
+        const extra = findExtraMeldMatch(uncrackedCards, phaseDef);
         if (extra && extra.cards.length > 0) {
           try {
             this.layExtraGroup(bot.id, extra.cards.map(c => c.id));
@@ -1378,7 +1649,7 @@ export class GameSession {
       if (bot.cards.length > 0) {
         for (const group of this.allLaidDownPhases) {
           if (bot.cards.length === 0) break;
-          const candidateCards = [...bot.cards];
+          const candidateCards = bot.cards.filter(c => !c.isCracked);
           for (const card of candidateCards) {
             if (bot.cards.length === 0) break;
             if (validateHit(card, group, 'high')) {
@@ -1402,21 +1673,25 @@ export class GameSession {
     // 4. Discard
     if (this.turnStage === 'play' || this.turnStage === 'discard') {
       const opponents = this.getActivePlayers().filter(p => p.id !== bot.id);
-      const eligibleTimeTargets = opponents.filter(p => p.currentPhase > 1 && p.currentPhase < 10);
+      const maxPhase = this.phaseDefinitions.length;
+      const eligibleTimeTargets = opponents.filter(p => p.currentPhase > 1 && p.currentPhase < maxPhase);
+      const isLastCardToWin = bot.cards.length === 1 && Boolean(bot.phaseCompletedInRound);
 
       const eligibleCards = bot.cards.filter(c => {
+        if (c.isCracked && !isLastCardToWin) return false;
         if (c.type === 'skip') return false;
         if (c.type === 'nuke' && !bot.phaseCompletedInRound) return false;
-        if (c.type === 'time' && eligibleTimeTargets.length === 0) return false;
+        if (c.type === 'time' && eligibleTimeTargets.length === 0 && (bot.currentPhase <= 1 || bot.currentPhase >= maxPhase)) return false;
         return true;
       });
       const cardToDiscard = eligibleCards.length > 0
         ? eligibleCards.sort((a, b) => b.points - a.points)[0]
         : (bot.cards.find(c => {
+            if (c.isCracked && !isLastCardToWin) return false;
             if (c.type === 'nuke' && !bot.phaseCompletedInRound) return false;
             if (c.type === 'time' && eligibleTimeTargets.length === 0) return false;
             return true;
-          }) || bot.cards[0]);
+          }) || (isLastCardToWin ? bot.cards[0] : bot.cards.find(c => !c.isCracked) || bot.cards[0]));
 
       let targetPlayerId: string | undefined;
       if (cardToDiscard && cardToDiscard.type === 'jester') {
@@ -1428,6 +1703,13 @@ export class GameSession {
         if (eligibleTimeTargets.length > 0) {
           eligibleTimeTargets.sort((a, b) => b.currentPhase - a.currentPhase);
           targetPlayerId = eligibleTimeTargets[0].id;
+        } else if (bot.currentPhase > 1 && bot.currentPhase < maxPhase) {
+          targetPlayerId = bot.id;
+        }
+      } else if (cardToDiscard && (cardToDiscard.type === 'unlucky' || cardToDiscard.type === 'double')) {
+        if (opponents.length > 0) {
+          opponents.sort((a, b) => b.currentPhase - a.currentPhase);
+          targetPlayerId = opponents[0].id;
         }
       }
 
@@ -1435,11 +1717,11 @@ export class GameSession {
         if (cardToDiscard) {
           const canUseAbility =
             (cardToDiscard.type !== 'nuke' || bot.phaseCompletedInRound) &&
-            (cardToDiscard.type !== 'time' || eligibleTimeTargets.length > 0);
+            (cardToDiscard.type !== 'time' || eligibleTimeTargets.length > 0 || (bot.currentPhase > 1 && bot.currentPhase < maxPhase));
           this.discardCard(bot.id, cardToDiscard.id, targetPlayerId, canUseAbility);
         }
       } catch (e) {
-        const fallback = bot.cards[0];
+        const fallback = bot.cards.find(c => !c.isCracked || isLastCardToWin) || bot.cards[0];
         if (fallback) {
           try {
             this.discardCard(bot.id, fallback.id, undefined, false);

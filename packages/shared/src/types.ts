@@ -14,7 +14,68 @@ export type CardType =
   | 'time'
   | 'number_eye'
   | 'color_eye'
-  | 'random';
+  | 'random'
+  | 'crack'
+  | 'status'
+  | 'luck'
+  | 'unlucky'
+  | 'double';
+
+export type SpecialCardType =
+  | 'nuke'
+  | 'jester'
+  | 'plus_two'
+  | 'plus_three'
+  | 'redo'
+  | 'time'
+  | 'number_eye'
+  | 'color_eye'
+  | 'random'
+  | 'crack'
+  | 'status'
+  | 'luck'
+  | 'unlucky'
+  | 'double'
+  | 'reverse'
+  | 'skip';
+
+export const ALL_SPECIAL_CARD_TYPES: SpecialCardType[] = [
+  'nuke',
+  'jester',
+  'plus_two',
+  'plus_three',
+  'redo',
+  'time',
+  'number_eye',
+  'color_eye',
+  'random',
+  'crack',
+  'status',
+  'luck',
+  'unlucky',
+  'double',
+  'reverse',
+  'skip'
+];
+
+export const DEFAULT_SPECIAL_CARDS: Record<SpecialCardType, boolean> = {
+  nuke: true,
+  jester: true,
+  plus_two: true,
+  plus_three: true,
+  redo: true,
+  time: true,
+  number_eye: true,
+  color_eye: true,
+  random: true,
+  crack: true,
+  status: true,
+  luck: true,
+  unlucky: true,
+  double: true,
+  reverse: true,
+  skip: true
+};
 
 export interface Card {
   id: string;
@@ -22,6 +83,7 @@ export interface Card {
   color: CardColor;
   value: number; // 1-12 for number, 0 for special
   points: number; // 1-9: 5pts, 10-12: 10pts, Skip/Reverse: 15pts, Wild: 25pts, Specials: 20-50pts
+  isCracked?: boolean;
 }
 
 export type RequirementType = 'set' | 'run' | 'color';
@@ -69,6 +131,10 @@ export interface PlayerPublic {
   isResigned?: boolean;
   hasNumberEyeEffect?: boolean;
   hasColorEyeEffect?: boolean;
+  hasLuck?: boolean;
+  hasUnlucky?: boolean;
+  hasDoubleDebuff?: boolean;
+  crackedCardCount?: number;
 }
 
 export interface PlayerPrivate extends PlayerPublic {
@@ -82,7 +148,9 @@ export type GameMode = 'classic' | 'speed' | 'chaos';
 export interface GameSettings {
   turnTimerSeconds: number; // 0 = unlimited, 30, 45, 60
   allowPartialAndExtraSets?: boolean; // House rule: allow laying either side of '+' and extra sets
-  gameMode?: GameMode; // 'classic' (10 stages), 'speed' (5 stages), 'chaos' (10 stages + chaos cards)
+  totalPhases?: number; // 1-10 (default 10)
+  enabledSpecialCards?: Record<SpecialCardType, boolean>;
+  gameMode?: GameMode; // Optional legacy fallback
   customActionCards?: boolean;
 }
 
@@ -118,7 +186,12 @@ export interface GameActionEvent {
     | 'time'
     | 'number_eye'
     | 'color_eye'
-    | 'random';
+    | 'random'
+    | 'crack'
+    | 'status'
+    | 'luck'
+    | 'unlucky'
+    | 'double';
   playerId: string;
   playerName: string;
   source?: 'deck' | 'discard';

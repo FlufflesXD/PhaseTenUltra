@@ -1,4 +1,12 @@
-import { Card, CardColor, CardType, GameMode } from './types.js';
+import {
+  Card,
+  CardColor,
+  CardType,
+  GameMode,
+  GameSettings,
+  SpecialCardType,
+  DEFAULT_SPECIAL_CARDS
+} from './types.js';
 
 export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
   { type: 'nuke', points: 50 },
@@ -9,14 +17,19 @@ export const CHAOS_SPECIAL_CARDS: { type: CardType; points: number }[] = [
   { type: 'time', points: 30 },
   { type: 'number_eye', points: 30 },
   { type: 'color_eye', points: 30 },
-  { type: 'random', points: 35 }
+  { type: 'random', points: 35 },
+  { type: 'crack', points: 35 },
+  { type: 'status', points: 25 },
+  { type: 'luck', points: 30 },
+  { type: 'unlucky', points: 30 },
+  { type: 'double', points: 35 }
 ];
 
 export function isChaosSpecialCard(type: CardType): boolean {
   return CHAOS_SPECIAL_CARDS.some(c => c.type === type);
 }
 
-export function createStandardDeck(mode?: GameMode): Card[] {
+export function createStandardDeck(settingsOrMode?: GameSettings | GameMode): Card[] {
   const cards: Card[] = [];
   const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];
   let idCounter = 1;
@@ -37,20 +50,49 @@ export function createStandardDeck(mode?: GameMode): Card[] {
     }
   }
 
-  // In Chaos Mode, add 1 copy of each custom card onto the deck
-  if (mode === 'chaos') {
-    for (const special of CHAOS_SPECIAL_CARDS) {
-      cards.push({
-        id: `card_${idCounter++}`,
-        type: special.type,
-        color: 'none',
-        value: 0,
-        points: special.points
-      });
+  // Determine enabled special cards
+  let enabled: Record<SpecialCardType, boolean> = {
+    nuke: false,
+    jester: false,
+    plus_two: false,
+    plus_three: false,
+    redo: false,
+    time: false,
+    number_eye: false,
+    color_eye: false,
+    random: false,
+    crack: false,
+    status: false,
+    luck: false,
+    unlucky: false,
+    double: false,
+    reverse: true,
+    skip: true
+  };
+
+  if (typeof settingsOrMode === 'object' && settingsOrMode?.enabledSpecialCards) {
+    enabled = { ...settingsOrMode.enabledSpecialCards };
+  } else if (settingsOrMode === 'chaos') {
+    enabled = { ...DEFAULT_SPECIAL_CARDS };
+  }
+
+  // Add custom special cards based on host toggles
+  for (const special of CHAOS_SPECIAL_CARDS) {
+    if (enabled[special.type as SpecialCardType]) {
+      const count = special.type === 'status' ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        cards.push({
+          id: `card_${idCounter++}`,
+          type: special.type,
+          color: 'none',
+          value: 0,
+          points: special.points
+        });
+      }
     }
   }
 
-  // 8 Wild cards = 25 points each
+  // 8 Wild cards = 25 points each (always present)
   for (let i = 0; i < 8; i++) {
     cards.push({
       id: `card_${idCounter++}`,
@@ -61,33 +103,37 @@ export function createStandardDeck(mode?: GameMode): Card[] {
     });
   }
 
-  // 4 Skip cards = 15 points each
-  for (let i = 0; i < 4; i++) {
-    cards.push({
-      id: `card_${idCounter++}`,
-      type: 'skip',
-      color: 'none',
-      value: 0,
-      points: 15
-    });
+  // 4 Skip cards = 15 points each (if enabled)
+  if (enabled.skip !== false) {
+    for (let i = 0; i < 4; i++) {
+      cards.push({
+        id: `card_${idCounter++}`,
+        type: 'skip',
+        color: 'none',
+        value: 0,
+        points: 15
+      });
+    }
   }
 
-  // 4 Reverse cards = 15 points each (in classic, speed, and chaos)
-  for (let i = 0; i < 4; i++) {
-    cards.push({
-      id: `card_${idCounter++}`,
-      type: 'reverse',
-      color: 'none',
-      value: 0,
-      points: 15
-    });
+  // 4 Reverse cards = 15 points each (if enabled)
+  if (enabled.reverse !== false) {
+    for (let i = 0; i < 4; i++) {
+      cards.push({
+        id: `card_${idCounter++}`,
+        type: 'reverse',
+        color: 'none',
+        value: 0,
+        points: 15
+      });
+    }
   }
 
   return cards;
 }
 
-export function createDeck(mode?: GameMode): Card[] {
-  return shuffleDeck(createStandardDeck(mode));
+export function createDeck(settingsOrMode?: GameSettings | GameMode): Card[] {
+  return shuffleDeck(createStandardDeck(settingsOrMode));
 }
 
 function secureRandomInt(maxExclusive: number): number {

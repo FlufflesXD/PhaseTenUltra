@@ -4,7 +4,8 @@ import {
   GameSettings,
   PlayerPublic,
   RoomState,
-  GameActionEvent
+  GameActionEvent,
+  DEFAULT_SPECIAL_CARDS
 } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
 
@@ -47,7 +48,9 @@ export class Room {
     this.hostSecretToken = hostUser.secretToken;
     this.settings = {
       turnTimerSeconds: 45,
-      allowPartialAndExtraSets: true
+      allowPartialAndExtraSets: true,
+      totalPhases: 10,
+      enabledSpecialCards: { ...DEFAULT_SPECIAL_CARDS }
     };
     this.users.set(hostUser.socketId, hostUser);
     this.onBroadcastRoom = callbacks.broadcastRoom;
@@ -247,7 +250,14 @@ export class Room {
     if (this.hostSecretToken !== hostToken) {
       throw new Error('Only the lobby host can modify settings');
     }
-    this.settings = { ...this.settings, ...newSettings, allowPartialAndExtraSets: true };
+    this.settings = {
+      ...this.settings,
+      ...newSettings,
+      enabledSpecialCards: newSettings.enabledSpecialCards
+        ? { ...this.settings.enabledSpecialCards, ...newSettings.enabledSpecialCards }
+        : this.settings.enabledSpecialCards,
+      allowPartialAndExtraSets: true
+    };
     if (this.gameSession) {
       this.gameSession.settings = this.settings;
     }

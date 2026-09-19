@@ -1,5 +1,24 @@
 import React, { useState } from 'react';
-import { RoomState, GameSettings } from '@phase-ten/shared';
+import { RoomState, GameSettings, SpecialCardType, ALL_SPECIAL_CARD_TYPES, DEFAULT_SPECIAL_CARDS } from '@phase-ten/shared';
+
+const SPECIAL_CARD_METADATA: Record<SpecialCardType, { name: string; icon: string; desc: string }> = {
+  nuke: { name: 'Nuke', icon: '☢', desc: 'Resets all opponents to Phase 1' },
+  jester: { name: 'Jester', icon: '🃏', desc: 'Rolls +1-3 cards or discard' },
+  plus_two: { name: '+2 Draw', icon: '+2', desc: 'Target draws 2 cards' },
+  plus_three: { name: '+3 Draw', icon: '+3', desc: 'Target draws 3 cards' },
+  redo: { name: 'Redo Hand', icon: '🔄', desc: 'Replace hand with fresh deck cards' },
+  time: { name: 'Time Warp', icon: '⏳', desc: '50/50 chance: rewind phase or draw 3' },
+  number_eye: { name: 'Number Eye', icon: '👁', desc: 'Converts target card numbers to ?' },
+  color_eye: { name: 'Color Eye', icon: '👁', desc: 'Greys out target card colors' },
+  random: { name: 'Chaos Die', icon: '🎲', desc: 'Triggers a random card effect' },
+  crack: { name: 'Crack', icon: '💥', desc: 'Screen shake & cracks opponent cards' },
+  status: { name: 'Status Clear', icon: '✨', desc: 'Purges all buffs and debuffs' },
+  luck: { name: 'Luck', icon: '🍀', desc: '2x chance for special/action cards' },
+  unlucky: { name: 'Unlucky', icon: '💀', desc: 'Halves special card draw rate' },
+  double: { name: 'Double Stage', icon: '✖️2', desc: 'Target repeats stage on completion' },
+  reverse: { name: 'Reverse', icon: '⇄', desc: 'Reverses turn order & ring spin' },
+  skip: { name: 'Skip', icon: '⛔', desc: 'Skips target player turn' },
+};
 
 interface LobbyViewProps {
   roomState: RoomState | null;
@@ -66,7 +85,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 <span className="text-amber-400">🔗</span>
                 <h1 className="text-sm font-bold uppercase tracking-wider text-amber-200">Room Invitation</h1>
               </div>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.2</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.3</span>
             </div>
 
             <div className="text-center py-2.5 bg-neutral-900/60 border border-neutral-800 rounded">
@@ -133,7 +152,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="border-b border-neutral-800 pb-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold uppercase tracking-wider">TenStages Online</h1>
-              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.2</span>
+              <span className="text-[10px] text-neutral-500 border border-neutral-800 px-1 py-0.5 rounded">v5.3</span>
             </div>
             <button
               onClick={onOpenRules}
@@ -294,34 +313,113 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           )}
         </div>
 
-        {/* Game Mode Setting */}
+        {/* Stages / Phases Setting */}
         <div className="border border-neutral-800 p-2.5 rounded flex justify-between items-center text-xs">
           <div className="flex flex-col">
-            <span className="text-neutral-400">Game Mode:</span>
-            <span className="text-[10px] text-neutral-500">
-              {roomState.settings.gameMode === 'speed'
-                ? '5 Stages (Fast Pace)'
-                : roomState.settings.gameMode === 'chaos'
-                ? '10 Stages + Chaos Ability Cards'
-                : '10 Standard Stages'}
-            </span>
+            <span className="text-neutral-400">Phases to Complete:</span>
+            <span className="text-[10px] text-neutral-500">First player to finish all phases wins</span>
           </div>
           {isHost ? (
             <select
-              value={roomState.settings.gameMode || 'classic'}
-              onChange={e => onUpdateSettings({ gameMode: e.target.value as any })}
-              className="bg-black border border-neutral-700 rounded px-2 py-1 text-white focus:outline-none capitalize cursor-pointer"
+              value={roomState.settings.totalPhases ?? 10}
+              onChange={e => onUpdateSettings({ totalPhases: parseInt(e.target.value, 10) })}
+              className="bg-black border border-neutral-700 rounded px-2.5 py-1 text-white focus:outline-none cursor-pointer font-bold"
             >
-              <option value="classic">Classic (10 Stages)</option>
-              <option value="speed">Speed (5 Stages)</option>
-              <option value="chaos">Chaos (Special Ability Cards)</option>
+              {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>
+                  {n} {n === 1 ? 'Phase' : 'Phases'} {n === 10 ? '(Full Game)' : ''}
+                </option>
+              ))}
             </select>
           ) : (
-            <span className="text-white uppercase font-bold text-[11px]">
-              {roomState.settings.gameMode || 'classic'}
+            <span className="text-white font-bold text-xs">
+              {roomState.settings.totalPhases ?? 10} Phases
             </span>
           )}
         </div>
+
+        {/* Special Cards Configuration */}
+        {(() => {
+          const activeCards = roomState.settings.enabledSpecialCards || DEFAULT_SPECIAL_CARDS;
+          const activeSpecialCount = ALL_SPECIAL_CARD_TYPES.filter(t => activeCards[t] ?? true).length;
+
+          return (
+            <div className="border border-neutral-800 p-2.5 rounded space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-white uppercase tracking-wider text-[11px]">Special Cards</span>
+                  <span className="text-[10px] text-neutral-400">
+                    ({activeSpecialCount}/{ALL_SPECIAL_CARD_TYPES.length} active)
+                  </span>
+                </div>
+                {isHost && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allOn = {} as Record<SpecialCardType, boolean>;
+                        ALL_SPECIAL_CARD_TYPES.forEach(t => { allOn[t] = true; });
+                        onUpdateSettings({ enabledSpecialCards: allOn });
+                      }}
+                      className="text-[10px] text-neutral-400 hover:text-white underline cursor-pointer"
+                    >
+                      All On
+                    </button>
+                    <span className="text-neutral-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allOff = {} as Record<SpecialCardType, boolean>;
+                        ALL_SPECIAL_CARD_TYPES.forEach(t => { allOff[t] = false; });
+                        onUpdateSettings({ enabledSpecialCards: allOff });
+                      }}
+                      className="text-[10px] text-neutral-400 hover:text-white underline cursor-pointer"
+                    >
+                      All Off
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                {ALL_SPECIAL_CARD_TYPES.map(type => {
+                  const meta = SPECIAL_CARD_METADATA[type];
+                  const isEnabled = activeCards[type] ?? true;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      disabled={!isHost}
+                      onClick={() => {
+                        if (!isHost) return;
+                        onUpdateSettings({
+                          enabledSpecialCards: {
+                            ...activeCards,
+                            [type]: !isEnabled
+                          }
+                        });
+                      }}
+                      title={meta.desc}
+                      className={`flex items-center justify-between p-1.5 rounded border text-[11px] transition-colors text-left ${
+                        isEnabled
+                          ? 'bg-neutral-900 border-neutral-700 text-white hover:border-neutral-500'
+                          : 'bg-black border-neutral-800/70 text-neutral-500 opacity-60 hover:opacity-80'
+                      } ${!isHost ? 'cursor-default' : 'cursor-pointer'}`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate mr-1">
+                        <span className="text-xs shrink-0">{meta.icon}</span>
+                        <span className="truncate font-medium">{meta.name}</span>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1 rounded shrink-0 ${isEnabled ? 'bg-white text-black' : 'bg-neutral-800 text-neutral-600'}`}>
+                        {isEnabled ? 'ON' : 'OFF'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
 
 

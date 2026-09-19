@@ -84,6 +84,12 @@ export const GameTable: React.FC<GameTableProps> = ({
   } | null>(null);
   const [numberEyeEvent, setNumberEyeEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
   const [colorEyeEvent, setColorEyeEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
+  const [crackEvent, setCrackEvent] = useState<{ playerName: string } | null>(null);
+  const [statusEvent, setStatusEvent] = useState<{ playerName: string } | null>(null);
+  const [luckEvent, setLuckEvent] = useState<{ playerName: string } | null>(null);
+  const [unluckyEvent, setUnluckyEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
+  const [doubleEvent, setDoubleEvent] = useState<{ sourceName: string; targetName: string } | null>(null);
+  const [isScreenShaking, setIsScreenShaking] = useState(false);
 
   const lastSoundActionIdRef = useRef<string | null>(null);
 
@@ -94,6 +100,11 @@ export const GameTable: React.FC<GameTableProps> = ({
   const timeWarpTimerRef = useRef<NodeJS.Timeout | null>(null);
   const numberEyeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const colorEyeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const crackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const luckTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const unluckyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const doubleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyingCardTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -105,6 +116,11 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
       if (numberEyeTimerRef.current) clearTimeout(numberEyeTimerRef.current);
       if (colorEyeTimerRef.current) clearTimeout(colorEyeTimerRef.current);
+      if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      if (luckTimerRef.current) clearTimeout(luckTimerRef.current);
+      if (unluckyTimerRef.current) clearTimeout(unluckyTimerRef.current);
+      if (doubleTimerRef.current) clearTimeout(doubleTimerRef.current);
       if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
     };
   }, []);
@@ -123,7 +139,12 @@ export const GameTable: React.FC<GameTableProps> = ({
       type === 'time' ||
       type === 'number_eye' ||
       type === 'color_eye' ||
-      type === 'random'
+      type === 'random' ||
+      type === 'crack' ||
+      type === 'status' ||
+      type === 'luck' ||
+      type === 'unlucky' ||
+      type === 'double'
     );
   };
 
@@ -399,6 +420,16 @@ export const GameTable: React.FC<GameTableProps> = ({
         playSpecialSound('number_eye');
       } else if (latestAction.type === 'color_eye') {
         playSpecialSound('color_eye');
+      } else if (latestAction.type === 'crack') {
+        playSpecialSound('crack');
+      } else if (latestAction.type === 'status') {
+        playSpecialSound('status');
+      } else if (latestAction.type === 'luck') {
+        playSpecialSound('luck');
+      } else if (latestAction.type === 'unlucky') {
+        playSpecialSound('unlucky');
+      } else if (latestAction.type === 'double') {
+        playSpecialSound('double');
       }
     }
 
@@ -471,6 +502,47 @@ export const GameTable: React.FC<GameTableProps> = ({
         setColorEyeEvent(null);
         colorEyeTimerRef.current = null;
       }, 3000);
+    } else if (latestAction.type === 'crack') {
+      if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
+      setIsScreenShaking(true);
+      setCrackEvent({ playerName: latestAction.playerName });
+      crackTimerRef.current = setTimeout(() => {
+        setIsScreenShaking(false);
+        setCrackEvent(null);
+        crackTimerRef.current = null;
+      }, 2000);
+    } else if (latestAction.type === 'status') {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      setStatusEvent({ playerName: latestAction.playerName });
+      statusTimerRef.current = setTimeout(() => {
+        setStatusEvent(null);
+        statusTimerRef.current = null;
+      }, 2800);
+    } else if (latestAction.type === 'luck') {
+      if (luckTimerRef.current) clearTimeout(luckTimerRef.current);
+      setLuckEvent({ playerName: latestAction.playerName });
+      luckTimerRef.current = setTimeout(() => {
+        setLuckEvent(null);
+        luckTimerRef.current = null;
+      }, 2800);
+    } else if (latestAction.type === 'unlucky') {
+      if (unluckyTimerRef.current) clearTimeout(unluckyTimerRef.current);
+      const targetName =
+        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+      setUnluckyEvent({ sourceName: latestAction.playerName, targetName });
+      unluckyTimerRef.current = setTimeout(() => {
+        setUnluckyEvent(null);
+        unluckyTimerRef.current = null;
+      }, 3000);
+    } else if (latestAction.type === 'double') {
+      if (doubleTimerRef.current) clearTimeout(doubleTimerRef.current);
+      const targetName =
+        currentPlayers.find(p => p.id === latestAction.targetPlayerId)?.name || 'Opponent';
+      setDoubleEvent({ sourceName: latestAction.playerName, targetName });
+      doubleTimerRef.current = setTimeout(() => {
+        setDoubleEvent(null);
+        doubleTimerRef.current = null;
+      }, 3000);
     }
   }, [latestAction, isMuted]);
 
@@ -497,6 +569,10 @@ export const GameTable: React.FC<GameTableProps> = ({
     return localHand.find(c => c.id === selectedCardId) ?? null;
   }, [localHand, selectedCardId]);
 
+  const isWinningSoftlockExemption = (card: Card) => {
+    return Boolean(card.isCracked && localHand.length === 1 && me?.phaseCompletedInRound);
+  };
+
   const isJesterSelected =
     selectedCard?.type === 'jester' &&
     isMyTurn &&
@@ -517,6 +593,21 @@ export const GameTable: React.FC<GameTableProps> = ({
     isMyTurn &&
     (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
 
+  const isUnluckySelected =
+    selectedCard?.type === 'unlucky' &&
+    isMyTurn &&
+    (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+
+  const isDoubleSelected =
+    selectedCard?.type === 'double' &&
+    isMyTurn &&
+    (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+
+  const isPlusSelected =
+    (selectedCard?.type === 'plus_two' || selectedCard?.type === 'draw_two' || selectedCard?.type === 'plus_three') &&
+    isMyTurn &&
+    (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
+
   const opponents = useMemo(() => {
     return gameState.players.filter(p => p.id !== me?.id && !p.isSpectator);
   }, [gameState.players, me?.id]);
@@ -525,7 +616,9 @@ export const GameTable: React.FC<GameTableProps> = ({
     return opponents.filter(p => p.currentPhase > 1 && p.currentPhase < 10);
   }, [opponents]);
 
+  const isSelfEligibleTimeTarget = Boolean(me && me.currentPhase > 1 && me.currentPhase < 10);
   const hasEligibleTimeTargets = eligibleTimeTargets.length > 0;
+  const hasAnyTimeTarget = hasEligibleTimeTargets || isSelfEligibleTimeTarget;
 
   const handleOpponentSwapClick = (targetPlayer: PlayerPublic) => {
     if (!isJesterSelected || !selectedCard) return;
@@ -552,6 +645,35 @@ export const GameTable: React.FC<GameTableProps> = ({
     clearSelection();
   };
 
+  const handleOpponentUnluckyClick = (targetPlayer: PlayerPublic) => {
+    if (!isUnluckySelected || !selectedCard) return;
+    onDiscardCard(selectedCard.id, targetPlayer.id, true);
+    clearSelection();
+  };
+
+  const handleOpponentDoubleClick = (targetPlayer: PlayerPublic) => {
+    if (!isDoubleSelected || !selectedCard) return;
+    onDiscardCard(selectedCard.id, targetPlayer.id, true);
+    clearSelection();
+  };
+
+  const handlePlusTargetClick = (targetPlayer: PlayerPublic) => {
+    if (!isPlusSelected || !selectedCard) return;
+    onDiscardCard(selectedCard.id, targetPlayer.id, true);
+    clearSelection();
+  };
+
+  const handleSelfTargetClick = () => {
+    if (!selectedCard || !me) return;
+    if (isTimeSelected && isSelfEligibleTimeTarget) {
+      onDiscardCard(selectedCard.id, me.id, true);
+      clearSelection();
+    } else if (isPlusSelected) {
+      onDiscardCard(selectedCard.id, me.id, true);
+      clearSelection();
+    }
+  };
+
   const copyInviteLink = () => {
     const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${gameState.roomCode}`;
     navigator.clipboard.writeText(inviteUrl);
@@ -561,6 +683,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const handleCardClick = (card: Card) => {
     if (me?.isResigned) return;
+    if (card.isCracked && !isWinningSoftlockExemption(card)) return;
     setSelectedCardId(prev => (prev === card.id ? null : card.id));
   };
 
@@ -576,6 +699,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const handleNormalDiscard = () => {
     if (me?.isResigned || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
     const isSpecial = isChaosSpecialCard(selectedCard.type);
     onDiscardCard(selectedCard.id, undefined, isSpecial ? false : true);
     clearSelection();
@@ -583,9 +707,10 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const handleDiscardSelected = (explicitTargetId?: string) => {
     if (!selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
     if (selectedCard.type === 'nuke' && !me?.phaseCompletedInRound) return;
     if (selectedCard.type === 'time') {
-      const targetId = explicitTargetId || (hasEligibleTimeTargets ? eligibleTimeTargets[0].id : undefined);
+      const targetId = explicitTargetId || (eligibleTimeTargets.length > 0 ? eligibleTimeTargets[0].id : (isSelfEligibleTimeTarget ? me?.id : undefined));
       if (!targetId) return;
       onDiscardCard(selectedCard.id, targetId, true);
       clearSelection();
@@ -594,9 +719,14 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (
       selectedCard.type === 'jester' ||
       selectedCard.type === 'number_eye' ||
-      selectedCard.type === 'color_eye'
+      selectedCard.type === 'color_eye' ||
+      selectedCard.type === 'unlucky' ||
+      selectedCard.type === 'double' ||
+      selectedCard.type === 'plus_two' ||
+      selectedCard.type === 'draw_two' ||
+      selectedCard.type === 'plus_three'
     ) {
-      const targetId = explicitTargetId || (opponents.length > 0 ? opponents[0].id : undefined);
+      const targetId = explicitTargetId || (opponents.length > 0 ? opponents[0].id : me?.id);
       if (!targetId) return;
       onDiscardCard(selectedCard.id, targetId, true);
       clearSelection();
@@ -609,13 +739,13 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleTableGroupClick = (group: LaidDownPhaseGroup, targetEnd?: 'low' | 'high') => {
     if (!isMyTurn || gameState.turnStage !== 'play' || !me?.phaseCompletedInRound) return;
 
-    if (selectedCard && validateHit(selectedCard, group, targetEnd)) {
+    if (selectedCard && !selectedCard.isCracked && validateHit(selectedCard, group, targetEnd)) {
       onHitCard(selectedCard.id, group.id, targetEnd);
       clearSelection();
       return;
     }
 
-    const matchingCard = localHand.find(c => validateHit(c, group));
+    const matchingCard = localHand.find(c => !c.isCracked && validateHit(c, group));
     if (matchingCard) {
       setSelectedCardId(matchingCard.id);
     }
@@ -624,13 +754,14 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Full combination check before phase is laid down
   const fullPhaseCombination = useMemo(() => {
     if (!currentPhaseDef || me?.phaseCompletedInRound) return null;
-    return findValidPhaseCombination(localHand, currentPhaseDef);
+    const uncrackedHand = localHand.filter(c => !c.isCracked);
+    return findValidPhaseCombination(uncrackedHand, currentPhaseDef);
   }, [localHand, currentPhaseDef, me?.phaseCompletedInRound]);
 
   // Extra meld / half rule checks after phase has been laid down
   const availableExtraMelds = useMemo(() => {
     if (!me?.phaseCompletedInRound || !currentPhaseDef || !(gameState.settings?.allowPartialAndExtraSets ?? true)) return [];
-    let pool = [...localHand];
+    let pool = localHand.filter(c => !c.isCracked);
     const results: { label: string; type: string; cards: Card[] }[] = [];
 
     for (let i = 0; i < currentPhaseDef.requirements.length; i++) {
@@ -699,6 +830,47 @@ export const GameTable: React.FC<GameTableProps> = ({
     );
   };
 
+  const renderPlayerStatusBadges = (player: PlayerPublic) => (
+    <>
+      {player.hasNumberEyeEffect && (
+        <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
+          <span>👁️</span>
+          <span>?</span>
+        </span>
+      )}
+      {player.hasColorEyeEffect && (
+        <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
+          <span>👁️</span>
+          <span>Grey</span>
+        </span>
+      )}
+      {player.hasLuck && (
+        <span title="Luck Active: 2x Special card draws" className="text-[10px] bg-green-950/80 text-green-300 border border-green-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow animate-pulse">
+          <span>🍀</span>
+          <span>Luck</span>
+        </span>
+      )}
+      {player.hasUnlucky && (
+        <span title="Unlucky Debuff: Halved special card draws" className="text-[10px] bg-red-950/80 text-red-300 border border-red-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow animate-pulse">
+          <span>💀</span>
+          <span>Unlucky</span>
+        </span>
+      )}
+      {player.hasDoubleDebuff && (
+        <span title="Double Debuff: Must repeat stage after completing" className="text-[10px] bg-purple-950/80 text-purple-300 border border-purple-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
+          <span>✖️2</span>
+          <span>Double</span>
+        </span>
+      )}
+      {Boolean(player.crackedCardCount && player.crackedCardCount > 0) && (
+        <span title={`${player.crackedCardCount} cracked card(s) locked`} className="text-[10px] bg-stone-900/90 text-stone-300 border border-stone-500/80 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
+          <span>💥</span>
+          <span>{player.crackedCardCount}</span>
+        </span>
+      )}
+    </>
+  );
+
   // Render an opponent station (Nameplate, 3D fanned cards, and their laid melds)
   const renderOpponentStation = (
     player: PlayerPublic | null,
@@ -714,13 +886,19 @@ export const GameTable: React.FC<GameTableProps> = ({
       isJesterSelected ||
       isEligibleTimeTarget ||
       isNumberEyeSelected ||
-      isColorEyeSelected;
+      isColorEyeSelected ||
+      isUnluckySelected ||
+      isDoubleSelected ||
+      isPlusSelected;
 
     const handleStationClick = () => {
       if (isJesterSelected) handleOpponentSwapClick(player);
       else if (isEligibleTimeTarget) handleOpponentTimeClick(player);
       else if (isNumberEyeSelected) handleOpponentNumberEyeClick(player);
       else if (isColorEyeSelected) handleOpponentColorEyeClick(player);
+      else if (isUnluckySelected) handleOpponentUnluckyClick(player);
+      else if (isDoubleSelected) handleOpponentDoubleClick(player);
+      else if (isPlusSelected) handlePlusTargetClick(player);
     };
 
     const targetRingClass = isTargetable
@@ -730,7 +908,15 @@ export const GameTable: React.FC<GameTableProps> = ({
         ? 'ring-4 ring-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.95)] cursor-pointer hover:scale-105 animate-pulse'
         : isNumberEyeSelected
         ? 'ring-4 ring-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.95)] cursor-pointer hover:scale-105 animate-pulse'
-        : 'ring-4 ring-neutral-400 shadow-[0_0_25px_rgba(200,200,200,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : isColorEyeSelected
+        ? 'ring-4 ring-neutral-400 shadow-[0_0_25px_rgba(200,200,200,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : isUnluckySelected
+        ? 'ring-4 ring-rose-500 shadow-[0_0_25px_rgba(244,63,94,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : isDoubleSelected
+        ? 'ring-4 ring-purple-600 shadow-[0_0_25px_rgba(147,51,234,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : isPlusSelected
+        ? 'ring-4 ring-indigo-500 shadow-[0_0_25px_rgba(99,102,241,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+        : ''
       : '';
 
     const targetCardBorderClass = isJesterSelected
@@ -741,7 +927,101 @@ export const GameTable: React.FC<GameTableProps> = ({
       ? 'border-amber-400 drop-shadow-[0_0_12px_rgba(245,158,11,0.8)]'
       : isColorEyeSelected
       ? 'border-neutral-300 drop-shadow-[0_0_12px_rgba(200,200,200,0.8)]'
+      : isUnluckySelected
+      ? 'border-rose-400 drop-shadow-[0_0_12px_rgba(244,63,94,0.8)]'
+      : isDoubleSelected
+      ? 'border-purple-400 drop-shadow-[0_0_12px_rgba(147,51,234,0.8)]'
+      : isPlusSelected
+      ? 'border-indigo-400 drop-shadow-[0_0_12px_rgba(99,102,241,0.8)]'
       : 'border-neutral-600';
+
+    const renderActionButtons = () => (
+      <>
+        {isJesterSelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+          >
+            <span>🃏</span>
+            <span>Swap Hands!</span>
+          </button>
+        )}
+
+        {isEligibleTimeTarget && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+          >
+            <span>⏳</span>
+            <span>Time Warp!</span>
+          </button>
+        )}
+
+        {isImmuneTimeTarget && (
+          <div className="bg-neutral-900/90 text-neutral-400 border border-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 select-none pointer-events-none shrink-0">
+            <span>🔒</span>
+            <span>Stage {player.currentPhase} Immune</span>
+          </div>
+        )}
+
+        {isNumberEyeSelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+          >
+            <span>👁️</span>
+            <span>Blind Numbers!</span>
+          </button>
+        )}
+
+        {isColorEyeSelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+          >
+            <span>👁️</span>
+            <span>Greyscale!</span>
+          </button>
+        )}
+
+        {isUnluckySelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(244,63,94,0.9)] border border-rose-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+          >
+            <span>💀</span>
+            <span>Curse Bad Luck!</span>
+          </button>
+        )}
+
+        {isDoubleSelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-700 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(147,51,234,0.9)] border border-purple-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+          >
+            <span>✖️2</span>
+            <span>Double Stage!</span>
+          </button>
+        )}
+
+        {isPlusSelected && (
+          <button
+            type="button"
+            onClick={handleStationClick}
+            className="bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.9)] border border-indigo-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+          >
+            <span>➕</span>
+            <span>Draw Cards!</span>
+          </button>
+        )}
+      </>
+    );
 
     if (position === 'top') {
       return (
@@ -773,18 +1053,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
-                {player.hasNumberEyeEffect && (
-                  <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
-                    <span>👁️</span>
-                    <span>?</span>
-                  </span>
-                )}
-                {player.hasColorEyeEffect && (
-                  <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
-                    <span>👁️</span>
-                    <span>Grey</span>
-                  </span>
-                )}
+                {renderPlayerStatusBadges(player)}
               </div>
               <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -794,61 +1063,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             </div>
 
-            {/* Jester Swap Target Button */}
-            {isJesterSelected && (
-              <button
-                type="button"
-                onClick={handleStationClick}
-                className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
-              >
-                <span>🃏</span>
-                <span>Swap Hands!</span>
-              </button>
-            )}
-
-            {/* Time Warp Target Button */}
-            {isEligibleTimeTarget && (
-              <button
-                type="button"
-                onClick={handleStationClick}
-                className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
-              >
-                <span>⏳</span>
-                <span>Time Warp!</span>
-              </button>
-            )}
-
-            {/* Time Immune Badge */}
-            {isImmuneTimeTarget && (
-              <div className="bg-neutral-900/90 text-neutral-400 border border-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 select-none pointer-events-none shrink-0">
-                <span>🔒</span>
-                <span>Stage {player.currentPhase} Immune</span>
-              </div>
-            )}
-
-            {/* Number Eye Target Button */}
-            {isNumberEyeSelected && (
-              <button
-                type="button"
-                onClick={handleStationClick}
-                className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
-              >
-                <span>👁️</span>
-                <span>Blind Numbers!</span>
-              </button>
-            )}
-
-            {/* Color Eye Target Button */}
-            {isColorEyeSelected && (
-              <button
-                type="button"
-                onClick={handleStationClick}
-                className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
-              >
-                <span>👁️</span>
-                <span>Greyscale!</span>
-              </button>
-            )}
+            {renderActionButtons()}
 
             {isSpectator && player.isBot && onClaimSeat && (
               <button
@@ -917,56 +1132,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           className="absolute left-6 top-[28%] flex flex-col items-start gap-2 z-20 pointer-events-auto select-none max-w-[340px]"
         >
           {/* Left Player Action Buttons */}
-          {isJesterSelected && (
-            <button
-              type="button"
-              onClick={handleStationClick}
-              className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-            >
-              <span>🃏</span>
-              <span>Swap Hands!</span>
-            </button>
-          )}
-
-          {isEligibleTimeTarget && (
-            <button
-              type="button"
-              onClick={handleStationClick}
-              className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-            >
-              <span>⏳</span>
-              <span>Time Warp!</span>
-            </button>
-          )}
-
-          {isImmuneTimeTarget && (
-            <div className="bg-neutral-900/90 text-neutral-400 border border-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 select-none pointer-events-none">
-              <span>🔒</span>
-              <span>Stage {player.currentPhase} Immune</span>
-            </div>
-          )}
-
-          {isNumberEyeSelected && (
-            <button
-              type="button"
-              onClick={handleStationClick}
-              className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-            >
-              <span>👁️</span>
-              <span>Blind Numbers!</span>
-            </button>
-          )}
-
-          {isColorEyeSelected && (
-            <button
-              type="button"
-              onClick={handleStationClick}
-              className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-            >
-              <span>👁️</span>
-              <span>Greyscale!</span>
-            </button>
-          )}
+          {renderActionButtons()}
 
           {/* Player Banner */}
           <div className="flex items-center gap-2.5">
@@ -990,18 +1156,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
                 {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
-                {player.hasNumberEyeEffect && (
-                  <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
-                    <span>👁️</span>
-                    <span>?</span>
-                  </span>
-                )}
-                {player.hasColorEyeEffect && (
-                  <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
-                    <span>👁️</span>
-                    <span>Grey</span>
-                  </span>
-                )}
+                {renderPlayerStatusBadges(player)}
               </div>
               <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
                 <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -1080,56 +1235,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         className="absolute right-6 top-[28%] flex flex-col items-end gap-2 z-20 pointer-events-auto select-none max-w-[340px]"
       >
         {/* Right Player Action Buttons */}
-        {isJesterSelected && (
-          <button
-            type="button"
-            onClick={handleStationClick}
-            className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-          >
-            <span>🃏</span>
-            <span>Swap Hands!</span>
-          </button>
-        )}
-
-        {isEligibleTimeTarget && (
-          <button
-            type="button"
-            onClick={handleStationClick}
-            className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-          >
-            <span>⏳</span>
-            <span>Time Warp!</span>
-          </button>
-        )}
-
-        {isImmuneTimeTarget && (
-          <div className="bg-neutral-900/90 text-neutral-400 border border-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 select-none pointer-events-none">
-            <span>🔒</span>
-            <span>Stage {player.currentPhase} Immune</span>
-          </div>
-        )}
-
-        {isNumberEyeSelected && (
-          <button
-            type="button"
-            onClick={handleStationClick}
-            className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-          >
-            <span>👁️</span>
-            <span>Blind Numbers!</span>
-          </button>
-        )}
-
-        {isColorEyeSelected && (
-          <button
-            type="button"
-            onClick={handleStationClick}
-            className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all"
-          >
-            <span>👁️</span>
-            <span>Greyscale!</span>
-          </button>
-        )}
+        {renderActionButtons()}
 
         {/* Player Banner */}
         <div className="flex items-center gap-2.5">
@@ -1162,18 +1268,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               {player.isBot && <span className="text-xs opacity-80">[BOT]</span>}
               {player.isSkipped && <span className="text-xs text-red-300 font-bold">[SKIPPED]</span>}
               {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
-              {player.hasNumberEyeEffect && (
-                <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
-                  <span>👁️</span>
-                  <span>?</span>
-                </span>
-              )}
-              {player.hasColorEyeEffect && (
-                <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
-                  <span>👁️</span>
-                  <span>Grey</span>
-                </span>
-              )}
+              {renderPlayerStatusBadges(player)}
             </div>
             <div className="bg-black/80 px-3 py-0.5 text-xs text-neutral-300 flex items-center justify-between gap-3">
               <span className="font-semibold">Stage {player.currentPhase} {player.phaseCompletedInRound ? '✓' : ''}</span>
@@ -1257,7 +1352,8 @@ export const GameTable: React.FC<GameTableProps> = ({
           width: 1920,
           height: 1080,
           transform: `scale(${scale})`,
-          transformOrigin: 'center center'
+          transformOrigin: 'center center',
+          ...(isScreenShaking ? { animation: 'screenShake 0.08s infinite' } : {})
         }}
         className="relative w-[1920px] h-[1080px] shrink-0 overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.95)] z-10"
       >
@@ -1287,7 +1383,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               <span>🔗</span>
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.2</span>
+            <span className="text-xs text-neutral-400 border border-white/10 px-2 py-0.5 rounded font-medium">v5.3</span>
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             <span
               title={`Play Direction: ${gameState.playDirection === 1 ? 'Clockwise' : 'Counter-Clockwise'}`}
@@ -1583,44 +1679,66 @@ export const GameTable: React.FC<GameTableProps> = ({
         {/* 7. Client Station & Hand (Bottom) */}
         <footer ref={handRef} className="absolute bottom-0 inset-x-0 z-30 pb-3 pointer-events-auto flex flex-col items-center select-none w-full">
           {/* Client Nameplate & Card Count (Bottom Left) */}
-          {me && (
-            <div className="absolute left-6 bottom-4 flex items-center gap-2.5 z-40">
-              <div
-                className={`flex flex-col rounded-lg overflow-hidden border transition-all ${
-                  isMyTurn
-                    ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
-                    : 'border-white/20'
-                }`}
-              >
+          {me && (() => {
+            const isMyTimeTargetable = isTimeSelected && isSelfEligibleTimeTarget;
+            const isMySelfTargetable = isMyTimeTargetable || isPlusSelected;
+            const myTargetRingClass = isMySelfTargetable
+              ? isMyTimeTargetable
+                ? 'ring-4 ring-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+                : 'ring-4 ring-indigo-500 shadow-[0_0_25px_rgba(99,102,241,0.95)] cursor-pointer hover:scale-105 animate-pulse'
+              : '';
+
+            return (
+              <div className="absolute left-6 bottom-4 flex items-center gap-2.5 z-40">
                 <div
-                  className={`px-3 py-1 font-bold text-xs flex items-center gap-1.5 shadow ${
+                  onClick={isMySelfTargetable ? handleSelfTargetClick : undefined}
+                  className={`flex flex-col rounded-lg overflow-hidden border transition-all ${myTargetRingClass} ${
                     isMyTurn
-                      ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-extrabold'
-                      : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white'
+                      ? 'border-amber-400 animate-turn-glow shadow-[0_0_20px_rgba(251,191,36,0.6)]'
+                      : 'border-white/20'
                   }`}
                 >
-                  <span>{me.name} (You)</span>
-                  {me.isSkipped && <span className="text-[10px] text-red-300 font-bold">[SKIPPED]</span>}
-                  {me.isResigned && <span className="text-[10px] text-rose-400 font-extrabold">[RESIGNED]</span>}
-                  {me.hasNumberEyeEffect && (
-                    <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
-                      <span>👁️</span>
-                      <span>?</span>
-                    </span>
-                  )}
-                  {me.hasColorEyeEffect && (
-                    <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5">
-                      <span>👁️</span>
-                      <span>Grey</span>
-                    </span>
-                  )}
+                  <div
+                    className={`px-3 py-1 font-bold text-xs flex items-center gap-1.5 shadow ${
+                      isMyTurn
+                        ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-extrabold'
+                        : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white'
+                    }`}
+                  >
+                    <span>{me.name} (You)</span>
+                    {me.isSkipped && <span className="text-[10px] text-red-300 font-bold">[SKIPPED]</span>}
+                    {me.isResigned && <span className="text-[10px] text-rose-400 font-extrabold">[RESIGNED]</span>}
+                    {renderPlayerStatusBadges(me)}
+                  </div>
+                  <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-2">
+                    <span className="font-semibold">Stage {me.currentPhase} {me.phaseCompletedInRound ? '✓' : ''}</span>
+                  </div>
                 </div>
-                <div className="bg-black/80 px-2.5 py-0.5 text-[10px] text-neutral-300 flex items-center justify-between gap-2">
-                  <span className="font-semibold">Stage {me.currentPhase} {me.phaseCompletedInRound ? '✓' : ''}</span>
-                </div>
+
+                {isMyTimeTargetable && (
+                  <button
+                    type="button"
+                    onClick={handleSelfTargetClick}
+                    className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+                  >
+                    <span>⏳</span>
+                    <span>Time Warp Self!</span>
+                  </button>
+                )}
+
+                {isPlusSelected && (
+                  <button
+                    type="button"
+                    onClick={handleSelfTargetClick}
+                    className="bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.9)] border border-indigo-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
+                  >
+                    <span>➕</span>
+                    <span>Draw On Self!</span>
+                  </button>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Client Laid Down Melds in Front of their hand */}
           {me && me.laidDownPhases && me.laidDownPhases.length > 0 && (
@@ -1841,7 +1959,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                       card={c}
                       size="lg"
                       isSelected={isSelected}
-                      isSelectable={true}
+                      isSelectable={!c.isCracked || isWinningSoftlockExemption(c)}
                       isNumberEyeActive={Boolean(me?.hasNumberEyeEffect)}
                       isColorEyeActive={Boolean(me?.hasColorEyeEffect)}
                     />
@@ -1859,13 +1977,71 @@ export const GameTable: React.FC<GameTableProps> = ({
                               <span>🔒</span>
                               <span>Stage Locked</span>
                             </div>
-                          ) : c.type === 'time' && !hasEligibleTimeTargets ? (
-                            <div
-                              title="No opponents on Stage 2–9"
-                              className="bg-neutral-900/90 border border-emerald-500/50 text-emerald-300 font-extrabold text-[10px] py-1 px-2 rounded-lg flex items-center justify-center gap-1 select-none whitespace-nowrap"
-                            >
-                              <span>🔒</span>
-                              <span>No Targets</span>
+                          ) : c.type === 'time' ? (
+                            !hasAnyTimeTarget ? (
+                              <div
+                                title="No eligible targets on Stage 2–9"
+                                className="bg-neutral-900/90 border border-emerald-500/50 text-emerald-300 font-extrabold text-[10px] py-1 px-2 rounded-lg flex items-center justify-center gap-1 select-none whitespace-nowrap"
+                              >
+                                <span>🔒</span>
+                                <span>No Targets</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-1 w-full">
+                                {hasEligibleTimeTargets && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDiscardSelected(eligibleTimeTargets[0].id);
+                                    }}
+                                    className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-emerald-600/90 hover:bg-emerald-600 border-emerald-400"
+                                  >
+                                    <span>⏳</span>
+                                    <span>WARP ENEMY</span>
+                                  </button>
+                                )}
+                                {isSelfEligibleTimeTarget && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDiscardSelected(me?.id);
+                                    }}
+                                    className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-teal-600/90 hover:bg-teal-600 border-teal-400"
+                                  >
+                                    <span>⏳</span>
+                                    <span>WARP SELF</span>
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          ) : (c.type === 'plus_two' || c.type === 'draw_two' || c.type === 'plus_three') ? (
+                            <div className="flex flex-col gap-1 w-full">
+                              {opponents.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDiscardSelected(opponents[0].id);
+                                  }}
+                                  className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-indigo-600/90 hover:bg-indigo-600 border-indigo-400"
+                                >
+                                  <span>➕</span>
+                                  <span>DRAW ENEMY</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDiscardSelected(me?.id);
+                                }}
+                                className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-sky-600/90 hover:bg-sky-600 border-sky-400"
+                              >
+                                <span>➕</span>
+                                <span>DRAW SELF</span>
+                              </button>
                             </div>
                           ) : (
                             <button
@@ -1881,14 +2057,22 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   ? 'bg-purple-600/90 hover:bg-purple-600 border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.8)]'
                                   : c.type === 'redo'
                                   ? 'bg-pink-600/90 hover:bg-pink-600 border-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.8)]'
-                                  : c.type === 'time'
-                                  ? 'bg-emerald-600/90 hover:bg-emerald-600 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]'
                                   : c.type === 'number_eye'
                                   ? 'bg-amber-600/90 hover:bg-amber-600 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.8)]'
                                   : c.type === 'color_eye'
                                   ? 'bg-stone-600/90 hover:bg-stone-600 border-stone-400 shadow-[0_0_12px_rgba(163,163,163,0.8)]'
                                   : c.type === 'random'
                                   ? 'bg-cyan-600/90 hover:bg-cyan-600 border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.8)]'
+                                  : c.type === 'crack'
+                                  ? 'bg-stone-600/90 hover:bg-stone-600 border-stone-400 shadow-[0_0_12px_rgba(168,162,158,0.8)]'
+                                  : c.type === 'status'
+                                  ? 'bg-teal-600/90 hover:bg-teal-600 border-teal-400 shadow-[0_0_12px_rgba(45,212,191,0.8)]'
+                                  : c.type === 'luck'
+                                  ? 'bg-green-600/90 hover:bg-green-600 border-green-400 shadow-[0_0_12px_rgba(74,222,128,0.8)]'
+                                  : c.type === 'unlucky'
+                                  ? 'bg-rose-600/90 hover:bg-rose-600 border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.8)]'
+                                  : c.type === 'double'
+                                  ? 'bg-purple-600/90 hover:bg-purple-600 border-purple-400 shadow-[0_0_12px_rgba(147,51,234,0.8)]'
                                   : 'bg-indigo-600/90 hover:bg-indigo-600 border-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.8)]'
                               }`}
                             >
@@ -1899,14 +2083,22 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   ? '🃏'
                                   : c.type === 'redo'
                                   ? '🔄'
-                                  : c.type === 'time'
-                                  ? '⏳'
                                   : c.type === 'number_eye'
                                   ? '👁️'
                                   : c.type === 'color_eye'
                                   ? '👁️'
                                   : c.type === 'random'
                                   ? '🎲'
+                                  : c.type === 'crack'
+                                  ? '💥'
+                                  : c.type === 'status'
+                                  ? '✨'
+                                  : c.type === 'luck'
+                                  ? '🍀'
+                                  : c.type === 'unlucky'
+                                  ? '💀'
+                                  : c.type === 'double'
+                                  ? '✖️2'
                                   : '⚡'}
                               </span>
                               <span>
@@ -1916,14 +2108,22 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   ? 'SWAP HAND'
                                   : c.type === 'redo'
                                   ? 'REDO HAND'
-                                  : c.type === 'time'
-                                  ? 'TIME WARP'
                                   : c.type === 'number_eye'
                                   ? 'BLIND NUMBERS'
                                   : c.type === 'color_eye'
                                   ? 'GREYSCALE'
                                   : c.type === 'random'
                                   ? 'ROLL RANDOM'
+                                  : c.type === 'crack'
+                                  ? 'SHATTER'
+                                  : c.type === 'status'
+                                  ? 'PURGE STATUS'
+                                  : c.type === 'luck'
+                                  ? 'BLESSING'
+                                  : c.type === 'unlucky'
+                                  ? 'CURSE'
+                                  : c.type === 'double'
+                                  ? 'DOUBLE TRAP'
                                   : 'USE ABILITY'}
                               </span>
                             </button>
@@ -2211,6 +2411,134 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
       )}
+
+      {/* Crack Earthquake Banner Animation */}
+      {crackEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-stone-950/95 via-neutral-900/95 to-stone-950/95 border-2 border-stone-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(168,162,158,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-bounce">💥</span>
+              <img
+                src="/cards/custom/crack.png"
+                alt="Crack Card"
+                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(168,162,158,0.8)]"
+              />
+              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>⚡</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              SHATTERED DECKS!
+            </div>
+            <div className="text-lg font-bold text-stone-200 text-center">
+              <span className="text-yellow-300">{crackEvent.playerName}</span> triggered an earthquake and cracked a card in everyone else's hand!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Clear Banner Animation */}
+      {statusEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-teal-950/95 via-cyan-950/95 to-teal-950/95 border-2 border-teal-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(45,212,191,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-pulse">✨</span>
+              <img
+                src="/cards/custom/status.png"
+                alt="Status Card"
+                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(45,212,191,0.8)]"
+              />
+              <span className="animate-pulse" style={{ animationDelay: '150ms' }}>🌟</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              STATUS PURGED!
+            </div>
+            <div className="text-lg font-bold text-teal-200 text-center">
+              <span className="text-yellow-300">{statusEvent.playerName}</span> wiped away all active status effects and cracked cards!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Luck Blessing Banner Animation */}
+      {luckEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-green-950/95 via-emerald-950/95 to-green-950/95 border-2 border-green-400/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(74,222,128,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-bounce">🍀</span>
+              <img
+                src="/cards/custom/luck.png"
+                alt="Luck Card"
+                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(74,222,128,0.8)]"
+              />
+              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>✨</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              FORTUNE BLESSED!
+            </div>
+            <div className="text-lg font-bold text-green-200 text-center">
+              <span className="text-yellow-300">{luckEvent.playerName}</span> gained 2x chance to draw Special cards, Wilds, and Reverses!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unlucky Curse Banner Animation */}
+      {unluckyEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-rose-950/95 via-red-950/95 to-rose-950/95 border-2 border-rose-500/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(244,63,94,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-pulse">💀</span>
+              <img
+                src="/cards/custom/unlucky.png"
+                alt="Unlucky Card"
+                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(244,63,94,0.8)]"
+              />
+              <span className="animate-pulse" style={{ animationDelay: '150ms' }}>🥀</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              UNLUCKY CURSE!
+            </div>
+            <div className="text-lg font-bold text-rose-200 text-center">
+              <span className="text-yellow-300">{unluckyEvent.sourceName}</span> cursed{' '}
+              <span className="text-pink-300">{unluckyEvent.targetName}</span> with halved special card draws!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Double Stage Trap Banner Animation */}
+      {doubleEvent && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="animate-jester-swap flex flex-col items-center gap-4 bg-gradient-to-r from-purple-950/95 via-fuchsia-950/95 to-purple-950/95 border-2 border-purple-500/85 p-8 rounded-3xl shadow-[0_0_60px_rgba(168,85,247,0.9)] backdrop-blur-md">
+            <div className="flex items-center gap-6 text-6xl">
+              <span className="animate-bounce">✖️2</span>
+              <img
+                src="/cards/custom/double.png"
+                alt="Double Card"
+                className="w-16 h-24 object-contain rounded-lg shadow-xl drop-shadow-[0_0_20px_rgba(168,85,247,0.8)]"
+              />
+              <span className="animate-bounce" style={{ animationDelay: '150ms' }}>🔁</span>
+            </div>
+            <div className="text-3xl font-black text-white tracking-wider uppercase text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]">
+              DOUBLE STAGE TRAP!
+            </div>
+            <div className="text-lg font-bold text-purple-200 text-center">
+              <span className="text-yellow-300">{doubleEvent.sourceName}</span> trapped{' '}
+              <span className="text-pink-300">{doubleEvent.targetName}</span> to repeat their current stage next round!
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes screenShake {
+          0% { transform: scale(${scale}) translate(0, 0) rotate(0deg); }
+          20% { transform: scale(${scale}) translate(-8px, 6px) rotate(-0.5deg); }
+          40% { transform: scale(${scale}) translate(8px, -5px) rotate(0.5deg); }
+          60% { transform: scale(${scale}) translate(-7px, -4px) rotate(-0.3deg); }
+          80% { transform: scale(${scale}) translate(7px, 5px) rotate(0.4deg); }
+          100% { transform: scale(${scale}) translate(0, 0) rotate(0deg); }
+        }
+      `}</style>
     </div>
   );
 };

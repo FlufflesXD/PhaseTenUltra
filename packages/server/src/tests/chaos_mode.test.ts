@@ -4,9 +4,9 @@ import { createStandardDeck, createDeck, Card } from '@phase-ten/shared';
 import { GameSession } from '../game/GameSession.js';
 
 describe('Chaos Game Mode & Custom Card Tests', () => {
-  test('Chaos Mode Deck Composition: Exactly 121 cards with all 96 colored cards plus 9 special cards, 8 wilds, 4 skips, and 4 reverses', () => {
+  test('Full Deck Composition: Exactly 127 cards with 96 colored, 15 custom special cards (status 2x), 8 wilds, 4 skips, 4 reverses', () => {
     const deck = createStandardDeck('chaos');
-    assert.strictEqual(deck.length, 121, 'Chaos deck must contain exactly 121 cards');
+    assert.strictEqual(deck.length, 127, 'Full deck must contain exactly 127 cards');
 
     const nukes = deck.filter(c => c.type === 'nuke');
     const jesters = deck.filter(c => c.type === 'jester');
@@ -17,6 +17,11 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     const numberEyes = deck.filter(c => c.type === 'number_eye');
     const colorEyes = deck.filter(c => c.type === 'color_eye');
     const randoms = deck.filter(c => c.type === 'random');
+    const cracks = deck.filter(c => c.type === 'crack');
+    const statuses = deck.filter(c => c.type === 'status');
+    const lucks = deck.filter(c => c.type === 'luck');
+    const unluckies = deck.filter(c => c.type === 'unlucky');
+    const doubles = deck.filter(c => c.type === 'double');
     const reverses = deck.filter(c => c.type === 'reverse');
     const wilds = deck.filter(c => c.type === 'wild');
     const skips = deck.filter(c => c.type === 'skip');
@@ -31,6 +36,11 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(numberEyes.length, 1, 'Exactly 1 number_eye card in deck');
     assert.strictEqual(colorEyes.length, 1, 'Exactly 1 color_eye card in deck');
     assert.strictEqual(randoms.length, 1, 'Exactly 1 random card in deck');
+    assert.strictEqual(cracks.length, 1, 'Exactly 1 crack card in deck');
+    assert.strictEqual(statuses.length, 2, 'Exactly 2 status cards in deck');
+    assert.strictEqual(lucks.length, 1, 'Exactly 1 luck card in deck');
+    assert.strictEqual(unluckies.length, 1, 'Exactly 1 unlucky card in deck');
+    assert.strictEqual(doubles.length, 1, 'Exactly 1 double card in deck');
     assert.strictEqual(reverses.length, 4, 'Exactly 4 reverse cards in deck');
     assert.strictEqual(wilds.length, 8, 'Exactly 8 wilds in deck');
     assert.strictEqual(skips.length, 4, 'Exactly 4 skips in deck');
@@ -1150,7 +1160,7 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     session.discardCard('p1_tok', 'rnd1', 'p2');
     assert.ok(lastAction, 'An action should have been emitted');
     // Random must roll into one of the known effects
-    const validRollTypes = ['redo', 'jester', 'plus_two', 'plus_three', 'number_eye', 'color_eye'];
+    const validRollTypes = ['redo', 'jester', 'plus_two', 'plus_three', 'number_eye', 'color_eye', 'crack', 'status', 'luck', 'unlucky', 'double'];
     assert.ok(validRollTypes.includes(lastAction.type), `Rolled action type ${lastAction.type} must be in valid list`);
   });
 
@@ -1240,6 +1250,377 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
 
     assert.strictEqual(session.playDirection, -1, 'Reverse card must flip direction even if activateAbility was false');
     assert.strictEqual(lastAction.type, 'reverse');
+  });
+
+  test('Self-Targeting: Time card can be used on myself to advance or rewind stage', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'SELF_TIME',
+      { turnTimerSeconds: 0, totalPhases: 10 },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 4,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'time_self', type: 'time', color: 'none', value: 0, points: 30 },
+          { id: 'num_1', type: 'number', color: 'red', value: 5, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    const origRandom = Math.random;
+    try {
+      // 0.49 => rewind (4 -> 3)
+      Math.random = () => 0.49;
+      session.discardCard('p1_tok', 'time_self', 'p1'); // Targets self!
+      assert.strictEqual(lastAction.type, 'time');
+      assert.strictEqual(lastAction.targetPlayerId, 'p1');
+      assert.strictEqual(session.players[0].currentPhase, 3, 'P1 rewound their own stage');
+    } finally {
+      Math.random = origRandom;
+    }
+  });
+
+  test('Self-Targeting: +2 and +3 cards can be used on myself', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'SELF_PLUS',
+      { turnTimerSeconds: 0, totalPhases: 10 },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'p2_card', type: 'plus_two', color: 'none', value: 0, points: 20 },
+          { id: 'num_1', type: 'number', color: 'red', value: 5, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.drawPile = [
+      { id: 'd1', type: 'number', color: 'blue', value: 1, points: 5 },
+      { id: 'd2', type: 'number', color: 'blue', value: 2, points: 5 }
+    ];
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Discard +2 targeting self 'p1'
+    session.discardCard('p1_tok', 'p2_card', 'p1');
+    assert.strictEqual(lastAction.type, 'plus_two');
+    assert.strictEqual(lastAction.targetPlayerId, 'p1');
+    // Hand was 2, minus discarded plus_two = 1, plus 2 drawn = 3
+    assert.strictEqual(session.players[0].cards.length, 3, 'P1 gave +2 cards to self');
+  });
+
+  test('Crack Card: Shakes arena and cracks random card in each opponent deck; Softlock exemption allows discarding last card to win', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'CRACK_TEST',
+      { turnTimerSeconds: 0, totalPhases: 10 },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'crack_1', type: 'crack', color: 'none', value: 0, points: 35 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'p2_c1', type: 'number', color: 'blue', value: 3, points: 5 },
+          { id: 'p2_c2', type: 'number', color: 'blue', value: 4, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // P1 plays Crack
+    session.discardCard('p1_tok', 'crack_1');
+    assert.strictEqual(lastAction.type, 'crack');
+
+    // Check that P2 has exactly 1 cracked card
+    const p2Cracked = session.players[1].cards.filter(c => c.isCracked);
+    assert.strictEqual(p2Cracked.length, 1, 'P2 must have 1 cracked card');
+    assert.strictEqual(session.players[1].crackedCardCount, 1);
+
+    // P2 tries to discard the cracked card when they have not completed stage -> should throw
+    session.currentTurnIndex = 1;
+    session.turnStage = 'play';
+    assert.throws(() => {
+      session.discardCard('p2_tok', p2Cracked[0].id);
+    }, /Cracked cards cannot be discarded/);
+
+    // Now test softlock exemption: P2 completes stage, only has 1 card left (which is cracked)
+    session.players[1].phaseCompletedInRound = true;
+    session.players[1].cards = [p2Cracked[0]];
+    session.players[1].cardCount = 1;
+
+    // Discarding last card to win succeeds even if cracked!
+    session.discardCard('p2_tok', p2Cracked[0].id);
+    assert.strictEqual(session.players[1].cards.length, 0);
+    assert.strictEqual(session.status, 'round_end', 'Discarding last cracked card to win ends round');
+  });
+
+  test('Status Card: Purges all positive and negative effects and uncracks cards', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'STATUS_TEST',
+      { turnTimerSeconds: 0, totalPhases: 10 },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        hasNumberEyeEffect: true,
+        hasColorEyeEffect: true,
+        hasLuck: true,
+        hasUnlucky: true,
+        hasDoubleDebuff: true,
+        cards: [
+          { id: 'status_card', type: 'status', color: 'none', value: 0, points: 25 },
+          { id: 'cracked_c', type: 'number', color: 'red', value: 7, points: 5, isCracked: true }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    session.discardCard('p1_tok', 'status_card');
+    assert.strictEqual(lastAction.type, 'status');
+
+    const p1 = session.players[0];
+    assert.strictEqual(p1.hasNumberEyeEffect, false);
+    assert.strictEqual(p1.hasColorEyeEffect, false);
+    assert.strictEqual(p1.hasLuck, false);
+    assert.strictEqual(p1.hasUnlucky, false);
+    assert.strictEqual(p1.hasDoubleDebuff, false);
+    assert.strictEqual(p1.crackedCardCount, 0);
+    assert.strictEqual(p1.cards[0].isCracked, false, 'Cracked card was healed by Status');
+  });
+
+  test('Double Card: Target completes stage but must repeat it again next round', () => {
+    let lastAction: any = null;
+    const session = new GameSession(
+      'DOUBLE_TEST',
+      { turnTimerSeconds: 0, totalPhases: 10 },
+      () => {},
+      () => {},
+      (action) => { lastAction = action; }
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'double_card', type: 'double', color: 'none', value: 0, points: 35 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 3,
+        phaseCompletedInRound: true, // P2 laid down phase 3
+        cardCount: 1,
+        cards: [{ id: 'p2_c1', type: 'number', color: 'blue', value: 2, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // P1 casts Double on P2
+    session.discardCard('p1_tok', 'double_card', 'p2');
+    assert.strictEqual(lastAction.type, 'double');
+    assert.strictEqual(session.players[1].hasDoubleDebuff, true);
+
+    // Now P1 goes out by discarding c1
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+    session.discardCard('p1_tok', 'c1');
+
+    assert.strictEqual(session.status, 'round_end');
+    // Normally P2 would advance from stage 3 to 4, but due to Double, stays on stage 3!
+    assert.strictEqual(session.players[1].currentPhase, 3, 'P2 must repeat Stage 3');
+    assert.strictEqual(session.players[1].hasDoubleDebuff, false, 'Debuff cleared after repeat');
+  });
+
+  test('Configurable totalPhases and per-card toggles in settings', () => {
+    // 1. totalPhases = 3
+    const session = new GameSession(
+      'CONFIG_TEST',
+      {
+        turnTimerSeconds: 0,
+        totalPhases: 3,
+        enabledSpecialCards: {
+          nuke: false,
+          jester: false,
+          plus_two: false,
+          plus_three: false,
+          redo: false,
+          time: false,
+          number_eye: false,
+          color_eye: false,
+          random: false,
+          crack: false,
+          status: true, // Only status enabled
+          luck: false,
+          unlucky: false,
+          double: false,
+          reverse: false,
+          skip: true
+        }
+      },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      { id: 'p1', secretToken: 'p1', name: 'P1', isHost: true, isSpectator: false, connected: true, score: 0, currentPhase: 1, phaseCompletedInRound: false, cardCount: 0, cards: [], laidDownPhases: [], isSkipped: false },
+      { id: 'p2', secretToken: 'p2', name: 'P2', isHost: false, isSpectator: false, connected: true, score: 0, currentPhase: 1, phaseCompletedInRound: false, cardCount: 0, cards: [], laidDownPhases: [], isSkipped: false }
+    ];
+
+    session.startGame();
+    assert.strictEqual(session.phaseDefinitions.length, 3, 'Only 3 stages initialized');
+
+    // Deck must have: 96 colored + 2 status + 4 skips + 8 wilds = 110 cards
+    // 20 cards dealt (10 each), so draw pile has 89 cards (and 1 on discard)
+    const allCardsInGame = [...session.drawPile, ...session.discardPile, ...session.players[0].cards, ...session.players[1].cards];
+    assert.strictEqual(allCardsInGame.length, 110);
+    assert.strictEqual(allCardsInGame.filter(c => c.type === 'status').length, 2, 'Status enabled has 2 copies');
+    assert.strictEqual(allCardsInGame.filter(c => c.type === 'nuke').length, 0, 'Disabled nuke not present');
+    assert.strictEqual(allCardsInGame.filter(c => c.type === 'reverse').length, 0, 'Disabled reverse not present');
   });
 });
 
