@@ -2752,6 +2752,99 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     session.cleanup();
     done();
   });
+
+  test('v6.7 Alternate Dimension Normal Discard and Delay Handling', (t, done) => {
+    let emittedActions: any[] = [];
+    const session = new GameSession(
+      'TEST_V67_ALT',
+      {
+        totalPhases: 10,
+        turnTimerSeconds: 60,
+        gameMode: 'chaos'
+      },
+      () => {},
+      () => {},
+      (action) => { emittedActions.push(action); }
+    );
+
+    session.enableAnimationDelays = true;
+    session.players = [
+      {
+        id: 'p1',
+        name: 'Player 1',
+        isSpectator: false,
+        isBot: false,
+        isHost: true,
+        secretToken: 'tok1',
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'alt_num_1', type: 'number', color: 'red', value: 7, points: 5 },
+          { id: 'alt_num_2', type: 'number', color: 'blue', value: 8, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'bot1',
+        name: 'Bot 1',
+        isSpectator: false,
+        isBot: true,
+        isHost: false,
+        secretToken: 'tok2',
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'alt_num_3', type: 'number', color: 'green', value: 9, points: 5 },
+          { id: 'alt_num_4', type: 'number', color: 'yellow', value: 10, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    // Normal number card discard with enableAnimationDelays = true must emit type: 'discard' (not 'number')
+    session.discardCard('p1', 'alt_num_1');
+
+    assert.strictEqual(session.players[0].cards.some(c => c.id === 'alt_num_1'), false);
+    assert.strictEqual(session.discardPile.some(c => c.id === 'alt_num_1'), true);
+
+    const discardAction = emittedActions.find(a => a.type === 'discard' && a.card?.id === 'alt_num_1');
+    assert.ok(discardAction, 'Must emit action of type discard for number card');
+    assert.strictEqual(emittedActions.some(a => a.type === 'number'), false, 'Must never emit action type number');
+
+    // Now test Alternate World turn 2 triggers alternate return cleanly
+    session.isAlternateWorld = true;
+    session.alternateDimensionActive = true;
+    session.alternateTurnCounter = 1; // Turn 2 in alternate world
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+    session.players[0].cards.push({ id: 'alt_num_5', type: 'number', color: 'red', value: 3, points: 5 });
+
+    session.discardCard('p1', 'alt_num_5');
+
+    const altDiscardAction = emittedActions.find(a => a.type === 'discard' && a.card?.id === 'alt_num_5');
+    assert.ok(altDiscardAction, 'Must emit discard action in alternate dimension');
+    assert.strictEqual(session.alternateDimensionActive, false, 'Must reset alternateDimensionActive upon triggering return');
+
+    // Wait for the 600ms deferred alternate shift
+    setTimeout(() => {
+      const shiftAction = emittedActions.find(a => a.type === 'alternate_shift' && a.isAlternateWorld === false);
+      assert.ok(shiftAction, 'Must emit alternate_shift back to main dimension after discard flight delay');
+      session.cleanup();
+      done();
+    }, 700);
+  });
 });
 
 

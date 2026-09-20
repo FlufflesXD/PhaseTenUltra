@@ -1635,7 +1635,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
               
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.6</span>
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.7</span>
             {gameState.isAlternateWorld && (
               <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
                 
@@ -2954,18 +2954,6 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
       {/* +2 and +3 Sequential Card Draw Penalty Animation */}
       {plusDrawEvent && (
         <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden">
-          {/* Central Announcement Banner */}
-          <div className="absolute top-28 inset-x-0 flex flex-col items-center justify-center pointer-events-none select-none">
-            <div className="bg-neutral-950/90 border-2 border-indigo-500/80 px-6 py-2 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.8)] flex items-center gap-3 animate-bounce">
-              <span className="text-2xl md:text-3xl font-black text-indigo-400">
-                +{plusDrawEvent.count} PENALTY
-              </span>
-              <span className="text-sm md:text-base font-bold text-neutral-200">
-                Dealing to <strong className="text-white font-black">{plusDrawEvent.targetName}</strong> ({plusDrawEvent.currentStep}/{plusDrawEvent.count})
-              </span>
-            </div>
-          </div>
-
           {/* Flying Card to Target Station */}
           <div
             key={`plus_card_${plusDrawEvent.currentStep}`}

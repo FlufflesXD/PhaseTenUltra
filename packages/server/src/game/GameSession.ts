@@ -805,7 +805,8 @@ export class GameSession {
     }
 
     const isSpecialChaosCard = isChaosSpecialCard(card.type);
-    let shouldActivate = isSpecialChaosCard ? activateAbility : (isUltimateCard(card.type) ? false : true);
+    const isUnoSpecial = card.type === 'skip' || card.type === 'reverse';
+    let shouldActivate = isSpecialChaosCard ? (activateAbility !== false) : isUnoSpecial;
 
     if (shouldActivate) {
       if (card.type === 'nuke' && !current.phaseCompletedInRound) {
@@ -895,7 +896,7 @@ export class GameSession {
         card,
         message: `${current.name} reversed play direction!`
       });
-    } else if (this.enableAnimationDelays) {
+    } else if (this.enableAnimationDelays && isSpecialChaosCard) {
       // Execute special card with animation delay: Totem hover (3.0s) plays first,
       // then mechanical state mutation applies at 3.0s, and turn advances at animDuration.
       this.executeSpecialCardWithAnimationDelay(current, card, _skipTargetPlayerId, animDuration);
@@ -955,6 +956,7 @@ export class GameSession {
 
     if (this.enableAnimationDelays && triggersAlternateReturn) {
       this.alternateTurnCounter = 0;
+      this.alternateDimensionActive = false;
       // 600ms discard animation + 1600ms dimension flip transition = 2200ms
       this.animationLockUntil = Date.now() + 2200;
 
@@ -2774,6 +2776,8 @@ export class GameSession {
         }
       }
       this.isAlternateWorld = false;
+      this.alternateDimensionActive = false;
+      this.alternateTurnCounter = 0;
     } else {
       // Save Main World
       this.mainWorldState = {
