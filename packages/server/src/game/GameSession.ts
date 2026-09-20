@@ -95,9 +95,6 @@ export class GameSession {
       if (card.type === 'alternate') return 7600;
       return 6000;
     }
-    if (card.type === 'skip' || card.type === 'reverse') {
-      return 3000;
-    }
     if (isChaosSpecialCard(card.type)) {
       if (card.type === 'nuke') return 8000;
       if (card.type === 'time') return 8200;
@@ -882,20 +879,6 @@ export class GameSession {
         card,
         message: `${current.name} skipped ${target.name}!`
       });
-
-      if (this.enableAnimationDelays) {
-        this.addPendingEffectTimeout(() => {
-          if (this.status !== 'in_game') return;
-          this.discardPile.push(card);
-          this.onStateChange();
-          if (current.cards.length === 0) {
-            this.endRound(current);
-            return;
-          }
-          this.advanceTurn();
-        }, animDuration);
-        return;
-      }
     } else if (card.type === 'reverse') {
       this.playDirection = this.playDirection === 1 ? -1 : 1;
       this.notify({
@@ -912,20 +895,6 @@ export class GameSession {
         card,
         message: `${current.name} reversed play direction!`
       });
-
-      if (this.enableAnimationDelays) {
-        this.addPendingEffectTimeout(() => {
-          if (this.status !== 'in_game') return;
-          this.discardPile.push(card);
-          this.onStateChange();
-          if (current.cards.length === 0) {
-            this.endRound(current);
-            return;
-          }
-          this.advanceTurn();
-        }, animDuration);
-        return;
-      }
     } else if (this.enableAnimationDelays) {
       // Execute special card with animation delay: Totem hover (3.0s) plays first,
       // then mechanical state mutation applies at 3.0s, and turn advances at animDuration.
@@ -1783,6 +1752,15 @@ export class GameSession {
         card,
         randomChosenType: chosen,
         message: `${current.name} played RANDOM: ${chosen.toUpperCase()} triggered!`
+      });
+    } else if (card.type === 'number_eye' || card.type === 'color_eye') {
+      this.emitAction({
+        type: card.type,
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target?.id,
+        card,
+        message: `${current.name} used ${card.type === 'number_eye' ? 'NUMBER EYE' : 'COLOR EYE'} on ${target?.name || 'an opponent'}!`
       });
     } else {
       this.emitAction({

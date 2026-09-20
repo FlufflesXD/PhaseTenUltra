@@ -404,7 +404,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         startRot = 0;
         targetRot = 4;
       }
-    } else if (latestAction.type === 'discard') {
+    } else if (latestAction.type === 'discard' || latestAction.type === 'skip' || latestAction.type === 'reverse') {
       discardFlightActiveRef.current = true;
       // Hold previous discard on the pile while the new card is in the air
       const prevDiscard = gameState.discardHistory && gameState.discardHistory.length > 1
@@ -516,9 +516,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       time: { image: '/cards/custom/time.png', title: 'Time' },
       plus_two: { image: '/cards/custom/plus_two.png', title: '+2' },
       plus_three: { image: '/cards/custom/plus_three.png', title: '+3' },
-      random: { image: '/cards/custom/random.png', title: 'Random' },
-      skip: { image: '/cards/skip.png', title: 'Skip' },
-      reverse: { image: '/cards/reverse.png', title: 'Reverse' }
+      random: { image: '/cards/custom/random.png', title: 'Random' }
     };
 
     const specialInfo = SPECIAL_CARDS_MAP[latestAction.type];
@@ -597,18 +595,15 @@ export const GameTable: React.FC<GameTableProps> = ({
           plusDrawTimersRef.current = [];
 
           setPlusDrawEvent({ count, targetCoords, startCoords, targetName, currentStep: 1 });
-          if (!isMuted) playNormalSound('card_discard');
 
           const t1 = setTimeout(() => {
             setPlusDrawEvent(prev => prev ? { ...prev, currentStep: 2 } : null);
-            if (!isMuted) playNormalSound('card_discard');
           }, 700);
           plusDrawTimersRef.current.push(t1);
 
           if (count === 3) {
             const t2 = setTimeout(() => {
               setPlusDrawEvent(prev => prev ? { ...prev, currentStep: 3 } : null);
-              if (!isMuted) playNormalSound('card_discard');
             }, 1400);
             plusDrawTimersRef.current.push(t2);
           }
@@ -661,11 +656,6 @@ export const GameTable: React.FC<GameTableProps> = ({
           finishSpecialAnimation(latestAction.card);
         }
       }, 3000);
-    }
-
-    // Play normal card discard sound
-    if (latestAction.type === 'discard' && !isMuted) {
-      playNormalSound('card_discard');
     }
 
     // Universal Divine Descent (6.0s - Change 0)
@@ -924,11 +914,8 @@ export const GameTable: React.FC<GameTableProps> = ({
   const handleNormalDiscard = () => {
     if (isAnimationLocked || me?.isResigned || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
     if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
-    const isSpecial = isChaosSpecialCard(selectedCard.type);
+    const isSpecial = isChaosSpecialCard(selectedCard.type) || isUltimateCard(selectedCard.type);
     onDiscardCard(selectedCard.id, undefined, isSpecial ? false : true);
-    if (!isMuted && !isSpecial) {
-      playNormalSound('card_discard');
-    }
     clearSelection();
   };
 
@@ -1648,7 +1635,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
               
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.5</span>
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.6</span>
             {gameState.isAlternateWorld && (
               <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
                 
@@ -2962,6 +2949,172 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
             animation: 'dimensionBlackFadeInOut 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards'
           }}
         />
+      )}
+
+      {/* +2 and +3 Sequential Card Draw Penalty Animation */}
+      {plusDrawEvent && (
+        <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden">
+          {/* Central Announcement Banner */}
+          <div className="absolute top-28 inset-x-0 flex flex-col items-center justify-center pointer-events-none select-none">
+            <div className="bg-neutral-950/90 border-2 border-indigo-500/80 px-6 py-2 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.8)] flex items-center gap-3 animate-bounce">
+              <span className="text-2xl md:text-3xl font-black text-indigo-400">
+                +{plusDrawEvent.count} PENALTY
+              </span>
+              <span className="text-sm md:text-base font-bold text-neutral-200">
+                Dealing to <strong className="text-white font-black">{plusDrawEvent.targetName}</strong> ({plusDrawEvent.currentStep}/{plusDrawEvent.count})
+              </span>
+            </div>
+          </div>
+
+          {/* Flying Card to Target Station */}
+          <div
+            key={`plus_card_${plusDrawEvent.currentStep}`}
+            className="absolute left-0 top-0 pointer-events-none"
+            style={{
+              '--start-x': `${plusDrawEvent.startCoords.x}px`,
+              '--start-y': `${plusDrawEvent.startCoords.y}px`,
+              '--mid-x': `${(plusDrawEvent.startCoords.x + plusDrawEvent.targetCoords.x) / 2}px`,
+              '--mid-y': `${Math.min(plusDrawEvent.startCoords.y, plusDrawEvent.targetCoords.y) - 60}px`,
+              '--target-x': `${plusDrawEvent.targetCoords.x}px`,
+              '--target-y': `${plusDrawEvent.targetCoords.y}px`,
+              animation: 'plusDrawCardFlight 0.65s cubic-bezier(0.2, 0.8, 0.25, 1) forwards'
+            } as React.CSSProperties}
+          >
+            <div className="w-[100px] h-[140px] rounded-xl overflow-hidden shadow-[0_0_30px_rgba(99,102,241,0.9)] border-2 border-indigo-400">
+              <img
+                src="/cards/back.png"
+                alt="Card"
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Number Eye & Color Eye Full-Screen Texture Overlay (3.0s) */}
+      {eyeOverlay && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+          {/* Radial Aura Vignette */}
+          <div
+            className={`absolute inset-0 pointer-events-none ${
+              eyeOverlay.type === 'number_eye'
+                ? 'bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.25)_0%,rgba(0,0,0,0.85)_80%,rgba(0,0,0,0.95)_100%)]'
+                : 'bg-[radial-gradient(ellipse_at_center,rgba(168,85,247,0.25)_0%,rgba(0,0,0,0.85)_80%,rgba(0,0,0,0.95)_100%)]'
+            }`}
+            style={{ animation: 'eyeVignettePulse 3.0s ease-in-out forwards' }}
+          />
+
+          {/* Full Screen Pulsing Texture */}
+          <div
+            className="absolute inset-0 w-full h-full pointer-events-none opacity-90"
+            style={{
+              backgroundImage: `url(${eyeOverlay.texture})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              animation: 'eyeTexturePulse 3.0s ease-in-out forwards',
+              mixBlendMode: 'screen'
+            }}
+          />
+
+          {/* Center Card & Announcement Banner */}
+          <div
+            className="relative z-10 flex flex-col items-center gap-4 select-none text-center"
+            style={{ animation: 'eyeVignettePulse 3.0s ease-in-out forwards' }}
+          >
+            <div className="flex flex-col items-center gap-1">
+              <h2 className={`text-4xl md:text-6xl font-black tracking-widest uppercase drop-shadow-[0_0_35px_rgba(255,255,255,0.9)] ${
+                eyeOverlay.type === 'number_eye' ? 'text-amber-400 drop-shadow-[0_0_35px_rgba(245,158,11,1)]' : 'text-purple-400 drop-shadow-[0_0_35px_rgba(168,85,247,1)]'
+              }`}>
+                {eyeOverlay.title}
+              </h2>
+              <div className="text-base md:text-xl font-extrabold text-white bg-black/85 border border-white/20 px-6 py-1.5 rounded-full shadow-2xl">
+                <span className={eyeOverlay.type === 'number_eye' ? 'text-amber-300 font-black' : 'text-purple-300 font-black'}>
+                  {eyeOverlay.playerName}
+                </span>{' '}
+                activated {eyeOverlay.title}!
+              </div>
+            </div>
+
+            <div className={`p-2 rounded-2xl border-2 shadow-[0_0_60px_rgba(255,255,255,0.8)] scale-110 ${
+              eyeOverlay.type === 'number_eye' ? 'border-amber-400 bg-amber-950/70 shadow-[0_0_60px_rgba(245,158,11,0.9)]' : 'border-purple-400 bg-purple-950/70 shadow-[0_0_60px_rgba(168,85,247,0.9)]'
+            }`}>
+              <img
+                src={eyeOverlay.type === 'number_eye' ? '/cards/custom/number_eye.png' : '/cards/custom/color_eye.png'}
+                alt={eyeOverlay.title}
+                className="w-28 h-40 object-contain rounded-xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jester Hand Swap Animation (1.25s) */}
+      {jesterSwapEvent && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+          {/* Hand Swap Floating Banner */}
+          <div className="relative z-20 flex flex-col items-center gap-2 select-none text-center animate-bounce">
+            <h2 className="text-4xl md:text-6xl font-black text-purple-400 tracking-widest uppercase drop-shadow-[0_0_35px_rgba(168,85,247,1)]">
+              HAND SWAP!
+            </h2>
+            <div className="text-base md:text-xl font-extrabold text-white bg-black/85 border-2 border-purple-500/80 px-8 py-2 rounded-full shadow-[0_0_30px_rgba(168,85,247,0.7)] flex items-center gap-3">
+              <span className="text-purple-300 font-black">{jesterSwapEvent.casterName}</span>
+              <span className="text-amber-400 font-black text-2xl">⇄</span>
+              <span className="text-pink-300 font-black">{jesterSwapEvent.targetName}</span>
+            </div>
+          </div>
+
+          {/* Cards Swooping from Caster to Target */}
+          <div
+            className="absolute left-0 top-0 pointer-events-none"
+            style={{
+              '--c-x': `${jesterSwapEvent.casterCoords.x}px`,
+              '--c-y': `${jesterSwapEvent.casterCoords.y}px`,
+              '--m-top-x': `${(jesterSwapEvent.casterCoords.x + jesterSwapEvent.targetCoords.x) / 2}px`,
+              '--m-top-y': `${(jesterSwapEvent.casterCoords.y + jesterSwapEvent.targetCoords.y) / 2 - 90}px`,
+              '--t-x': `${jesterSwapEvent.targetCoords.x}px`,
+              '--t-y': `${jesterSwapEvent.targetCoords.y}px`,
+              animation: 'jesterSwoopForward 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards'
+            } as React.CSSProperties}
+          >
+            <div className="relative flex -space-x-8">
+              {[0, 1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  className="w-[90px] h-[130px] rounded-xl overflow-hidden shadow-[0_0_25px_rgba(168,85,247,0.9)] border-2 border-purple-400"
+                  style={{ transform: `rotate(${(i - 1.5) * 12}deg)` }}
+                >
+                  <img src="/cards/back.png" alt="Card" className="w-full h-full object-contain" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cards Swooping from Target to Caster */}
+          <div
+            className="absolute left-0 top-0 pointer-events-none"
+            style={{
+              '--c-x': `${jesterSwapEvent.casterCoords.x}px`,
+              '--c-y': `${jesterSwapEvent.casterCoords.y}px`,
+              '--m-bot-x': `${(jesterSwapEvent.casterCoords.x + jesterSwapEvent.targetCoords.x) / 2}px`,
+              '--m-bot-y': `${(jesterSwapEvent.casterCoords.y + jesterSwapEvent.targetCoords.y) / 2 + 90}px`,
+              '--t-x': `${jesterSwapEvent.targetCoords.x}px`,
+              '--t-y': `${jesterSwapEvent.targetCoords.y}px`,
+              animation: 'jesterSwoopBackward 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards'
+            } as React.CSSProperties}
+          >
+            <div className="relative flex -space-x-8">
+              {[0, 1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  className="w-[90px] h-[130px] rounded-xl overflow-hidden shadow-[0_0_25px_rgba(236,72,153,0.9)] border-2 border-pink-400"
+                  style={{ transform: `rotate(${(i - 1.5) * -12}deg)` }}
+                >
+                  <img src="/cards/back.png" alt="Card" className="w-full h-full object-contain" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Admin Password Prompt Modal */}

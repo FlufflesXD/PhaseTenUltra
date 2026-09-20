@@ -431,3 +431,119 @@ body {
   animation: totemSparkleRain 2.9s ease-out forwards;
 }
 
+/* +2 and +3 Sequential Card Draw Flight */
+@keyframes plusDrawCardFlight {
+  0% {
+    transform: translate3d(var(--start-x), var(--start-y), 0) translate(-50%, -50%) scale(0.65) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(var(--mid-x), var(--mid-y), 0) translate(-50%, -50%) scale(1.15) rotate(12deg);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--target-x), var(--target-y), 0) translate(-50%, -50%) scale(0.7) rotate(-6deg);
+    opacity: 0.95;
+  }
+}
+
+/* Number Eye and Color Eye Screen Pulse */
+@keyframes eyeTexturePulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  15% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  33% {
+    opacity: 0.35;
+    transform: scale(1.02);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  67% {
+    opacity: 0.35;
+    transform: scale(1.02);
+  }
+  85% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes eyeVignettePulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+/* Jester Intersecting Curved Hand Swap */
+@keyframes jesterSwoopForward {
+  0% {
+    transform: translate3d(var(--c-x), var(--c-y), 0) translate(-50%, -50%) scale(0.75) rotate(-15deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(var(--m-top-x), var(--m-top-y), 0) translate(-50%, -50%) scale(1.2) rotate(180deg);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--t-x), var(--t-y), 0) translate(-50%, -50%) scale(0.75) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes jesterSwoopBackward {
+  0% {
+    transform: translate3d(var(--t-x), var(--t-y), 0) translate(-50%, -50%) scale(0.75) rotate(15deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(var(--m-bot-x), var(--m-bot-y), 0) translate(-50%, -50%) scale(1.2) rotate(-180deg);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--c-x), var(--c-y), 0) translate(-50%, -50%) scale(0.75) rotate(-360deg);
+    opacity: 0;
+  }
+}
+

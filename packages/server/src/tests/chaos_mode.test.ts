@@ -2681,7 +2681,7 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     done();
   });
 
-  test('v6.4.1 Skip and Reverse 3000ms Duration and Deferred Discard Placement', (t, done) => {
+  test('v6.6 Skip and Reverse 0ms Duration and Immediate Discard Placement', (t, done) => {
     const session = new GameSession(
       'TEST_SKIP_REV',
       {
@@ -2696,8 +2696,8 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     const skipCard = { id: 's1', type: 'skip' as const, color: 'none' as const, value: 0, points: 15 };
     const revCard = { id: 'r1', type: 'reverse' as const, color: 'none' as const, value: 0, points: 15 };
 
-    assert.strictEqual(session.getCardAnimationDuration(skipCard, true), 3000);
-    assert.strictEqual(session.getCardAnimationDuration(revCard, true), 3000);
+    assert.strictEqual(session.getCardAnimationDuration(skipCard, true), 0);
+    assert.strictEqual(session.getCardAnimationDuration(revCard, true), 0);
     assert.strictEqual(session.getCardAnimationDuration(skipCard, false), 0);
 
     session.enableAnimationDelays = true;
@@ -2744,10 +2744,10 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
 
     // Skip card removed from hand
     assert.strictEqual(session.players[0].cards.some(c => c.id === 's1'), false);
-    // Not yet on discard pile
-    assert.strictEqual(session.discardPile.some(c => c.id === 's1'), false);
-    // Animation locked
-    assert.ok(session.isAnimationLocked());
+    // Immediately on discard pile
+    assert.strictEqual(session.discardPile.some(c => c.id === 's1'), true);
+    // Not animation locked
+    assert.strictEqual(session.isAnimationLocked(), false);
 
     session.cleanup();
     done();
