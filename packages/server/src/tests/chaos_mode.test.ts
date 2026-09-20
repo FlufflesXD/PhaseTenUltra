@@ -1884,9 +1884,6 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     session.currentTurnIndex = 0;
     session.turnStage = 'discard';
 
-    // Discarding ultimate directly must throw
-    assert.throws(() => session.discardCard('p1', 'ult_voy'), /Ultimate cards cannot be discarded directly/);
-
     // First sacrifice: Special card (nuke)
     session.sacrificeCard('p1', 'spec_nuke', 'ult_voy');
     const ultCard = session.players[0].cards.find(c => c.id === 'ult_voy')!;
@@ -1986,7 +1983,7 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.strictEqual(session.players[0].hasVoyanceDebuff, true, 'Voyance debuff is immune to Status card');
   });
 
-  test('v6.0 Singularity Ultimate Ability: Gives 10 fresh cards to all players and 2x luck boost to caster', () => {
+  test('v6.1 Singularity Ultimate Ability: Sucks in all players cards, shuffles, and redistributes them randomly with caster luck', () => {
     const session = new GameSession(
       'SINGULARITY_TEST',
       { turnTimerSeconds: 0, gameMode: 'chaos' },
@@ -2036,10 +2033,68 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
 
     session.playUltimateCard('p1', 'ult_sing');
 
-    assert.strictEqual(session.players[0].cards.length, 10, 'P1 gets 10 fresh cards from singularity');
-    assert.strictEqual(session.players[1].cards.length, 10, 'P2 gets 10 fresh cards from singularity');
+    // Total non-ultimate cards sucked: 1 from p1 + 5 from p2 = 6 cards total
+    // 6 cards distributed across 2 players = 3 each
+    assert.strictEqual(session.players[0].cards.length, 3, 'P1 gets 3 redistributed cards');
+    assert.strictEqual(session.players[1].cards.length, 3, 'P2 gets 3 redistributed cards');
     assert.strictEqual(session.players[0].hasLuck, true, 'Singularity caster gains 2x luck boost');
     assert.strictEqual(session.discardPile[session.discardPile.length - 1].type, 'singularity', 'Ultimate placed on discard pile');
+  });
+
+  test('v6.1 Ultimate Card: Can be discarded normally without activating ability', () => {
+    const session = new GameSession(
+      'ULT_DISCARD_TEST',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'ult_sing', type: 'singularity', color: 'none', value: 0, points: 50, ultimateProgress: 0 },
+          { id: 'n1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [{ id: 'n2', type: 'number', color: 'blue', value: 2, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    // Discarding ultimate card should NOT throw and should advance turn
+    session.discardCard('p1', 'ult_sing', undefined, false);
+
+    assert.strictEqual(session.players[0].cards.length, 1, 'P1 has 1 card left');
+    assert.strictEqual(session.discardPile[session.discardPile.length - 1].id, 'ult_sing', 'Ultimate in discard pile');
+    assert.strictEqual(session.currentTurnIndex, 1, 'Turn advanced to P2');
   });
 
   test('v6.0 Voyance Ultimate Ability: Opponent cards visible only to caster', () => {

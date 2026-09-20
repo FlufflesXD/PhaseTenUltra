@@ -52,14 +52,13 @@ export const RulesModal: React.FC<RulesModalProps> = ({ onClose }) => {
 
           <div className="border-t border-neutral-800 pt-2.5">
             <div className="font-bold text-amber-300 mb-1 flex items-center gap-1.5">
-              <span>⚡</span>
               <span>Chaos Mode & Custom Cards:</span>
             </div>
             <div className="space-y-1.5 text-neutral-300">
-              <div>• <span className="text-red-400 font-semibold">☢ Nuke:</span> Can only be played once you have laid down your Stage! Triggers a 5-second blinding nuclear detonation. Immediately reduces every player's hand to exactly 2 cards!</div>
-              <div>• <span className="text-purple-400 font-semibold">🃏 Jester:</span> Click on any opponent's cards or nameplate to swap hands with them instantly!</div>
-              <div>• <span className="text-cyan-400 font-semibold">🔄 Redo:</span> Replaces your entire remaining hand with a fresh 10-card hand drawn from a brand-new deck (duplicating special cards if lucky!).</div>
-              <div>• <span className="text-amber-400 font-semibold">⏳ Time Warp:</span> Target an opponent on Stage 2–9 in Dio "Za Warudo" time-stop style. 60% chance (Green) rewinds them 1 Stage back; 40% chance (Red) accelerates them 1 Stage forward! Stage 1 & 10 are immune.</div>
+              <div>• <span className="text-red-400 font-semibold">Nuke:</span> Can only be played once you have laid down your Stage! Triggers a 5-second blinding nuclear detonation. Immediately reduces every player's hand to exactly 2 cards!</div>
+              <div>• <span className="text-purple-400 font-semibold">Jester:</span> Click on any opponent's cards or nameplate to swap hands with them instantly!</div>
+              <div>• <span className="text-cyan-400 font-semibold">Redo:</span> Replaces your entire remaining hand with a fresh 10-card hand drawn from a brand-new deck (duplicating special cards if lucky!).</div>
+              <div>• <span className="text-amber-400 font-semibold">Time Warp:</span> Target an opponent on Stage 2–9 in Dio "Za Warudo" time-stop style. 60% chance (Green) rewinds them 1 Stage back; 40% chance (Red) accelerates them 1 Stage forward! Stage 1 & 10 are immune.</div>
               <div>• <span className="text-emerald-400 font-semibold">+2 & +3 Draw:</span> Forces the next player in line to draw 2 or 3 extra penalty cards from the draw pile.</div>
               <div>• <span className="text-yellow-400 font-semibold">Deck Balance:</span> Exactly 1 copy of each of the 6 special cards replaces a standard colored card (90 colored, 6 special, 8 wilds, 4 skips = 108 cards total).</div>
             </div>

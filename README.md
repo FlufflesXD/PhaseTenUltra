@@ -1,4 +1,4 @@
-# 🃏 TenStages (Online Multiplayer)
+# TenStages (Online Multiplayer)
 
 A minimal, clean, authentic online multiplayer 10-stage rummy card game designed for self-hosted servers and Portainer.
 
@@ -11,7 +11,7 @@ A minimal, clean, authentic online multiplayer 10-stage rummy card game designed
 
 ---
 
-## 🚀 Portainer Deployment Guide
+## Portainer Deployment Guide
 
 ### Option 1: Deploy as a Stack in Portainer
 
@@ -27,7 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tenstages:v6.0
+    image: tenstages:v6.1
     container_name: tenstages
     restart: unless-stopped
     ports:
@@ -46,7 +46,7 @@ services:
 
 ```bash
 # Build image
-docker build -t tenstages:v6.0 .
+docker build -t tenstages:v6.1 .
 
 # Run container
 docker run -d \
@@ -54,12 +54,12 @@ docker run -d \
   --restart unless-stopped \
   -p 6969:6969 \
   -e PORT=6969 \
-  tenstages:v6.0
+  tenstages:v6.1
 ```
 
 ---
 
-## 🛠️ Local Development & Testing
+## Local Development & Testing
 
 ```bash
 # Install dependencies

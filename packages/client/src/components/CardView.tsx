@@ -103,29 +103,29 @@ export const CardView: React.FC<CardViewProps> = ({
       : card.type === 'plus_three'
       ? '+3'
       : card.type === 'nuke'
-      ? '☢'
+      ? 'NUKE'
       : card.type === 'jester'
-      ? '🃏'
+      ? 'JEST'
       : card.type === 'redo'
-      ? '🔄'
+      ? 'REDO'
       : card.type === 'time'
-      ? '⏳'
+      ? 'TIME'
       : card.type === 'number_eye'
-      ? '👁'
+      ? '#EYE'
       : card.type === 'color_eye'
-      ? '👁'
+      ? 'CEYE'
       : card.type === 'random'
-      ? '🎲'
+      ? 'RND'
       : card.type === 'crack'
-      ? '💥'
+      ? 'CRCK'
       : card.type === 'status'
-      ? '✨'
+      ? 'STAT'
       : card.type === 'luck'
-      ? '🍀'
+      ? 'LUCK'
       : card.type === 'unlucky'
-      ? '💀'
+      ? 'CURS'
       : card.type === 'double'
-      ? '✖️2'
+      ? '2X'
       : isNumberEyeActive
       ? '?'
       : card.value;
@@ -165,22 +165,22 @@ export const CardView: React.FC<CardViewProps> = ({
         {card.type === 'reverse' && <div className="text-sm sm:text-base tracking-wider">REVERSE</div>}
         {(card.type === 'draw_two' || card.type === 'plus_two') && <div className="text-sm sm:text-base tracking-wider">+2 DRAW</div>}
         {card.type === 'plus_three' && <div className="text-sm sm:text-base tracking-wider">+3 DRAW</div>}
-        {card.type === 'nuke' && <div className="text-sm sm:text-base tracking-wider text-red-500 font-black">☢ NUKE</div>}
-        {card.type === 'jester' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">🃏 JESTER</div>}
-        {card.type === 'redo' && <div className="text-sm sm:text-base tracking-wider text-pink-400 font-black">🔄 REDO</div>}
-        {card.type === 'time' && <div className="text-sm sm:text-base tracking-wider text-emerald-400 font-black">⏳ TIME</div>}
-        {card.type === 'number_eye' && <div className="text-sm sm:text-base tracking-wider text-amber-400 font-black">👁 NUM EYE</div>}
-        {card.type === 'color_eye' && <div className="text-sm sm:text-base tracking-wider text-neutral-400 font-black">👁 COLOR EYE</div>}
-        {card.type === 'random' && <div className="text-sm sm:text-base tracking-wider text-cyan-400 font-black">🎲 RANDOM</div>}
-        {card.type === 'crack' && <div className="text-sm sm:text-base tracking-wider text-stone-400 font-black">💥 CRACK</div>}
-        {card.type === 'status' && <div className="text-sm sm:text-base tracking-wider text-teal-300 font-black">✨ STATUS</div>}
-        {card.type === 'luck' && <div className="text-sm sm:text-base tracking-wider text-green-400 font-black">🍀 LUCK</div>}
-        {card.type === 'unlucky' && <div className="text-sm sm:text-base tracking-wider text-red-500 font-black">💀 UNLUCKY</div>}
-        {card.type === 'double' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">✖️2 DOUBLE</div>}
-        {card.type === 'singularity' && <div className="text-xs sm:text-sm tracking-wider text-purple-400 font-black">🌀 SINGULARITY</div>}
-        {card.type === 'voyance' && <div className="text-xs sm:text-sm tracking-wider text-indigo-400 font-black">👁️ VOYANCE</div>}
-        {card.type === 'alternate' && <div className="text-xs sm:text-sm tracking-wider text-cyan-400 font-black">🌌 ALTERNATE</div>}
-        {card.type === 'avarice' && <div className="text-xs sm:text-sm tracking-wider text-amber-400 font-black">💰 AVARICE</div>}
+        {card.type === 'nuke' && <div className="text-sm sm:text-base tracking-wider text-red-500 font-black">NUKE</div>}
+        {card.type === 'jester' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">JESTER</div>}
+        {card.type === 'redo' && <div className="text-sm sm:text-base tracking-wider text-pink-400 font-black">REDO</div>}
+        {card.type === 'time' && <div className="text-sm sm:text-base tracking-wider text-emerald-400 font-black">TIME</div>}
+        {card.type === 'number_eye' && <div className="text-sm sm:text-base tracking-wider text-amber-400 font-black">NUM EYE</div>}
+        {card.type === 'color_eye' && <div className="text-sm sm:text-base tracking-wider text-neutral-400 font-black">COLOR EYE</div>}
+        {card.type === 'random' && <div className="text-sm sm:text-base tracking-wider text-cyan-400 font-black">RANDOM</div>}
+        {card.type === 'crack' && <div className="text-sm sm:text-base tracking-wider text-stone-400 font-black">CRACK</div>}
+        {card.type === 'status' && <div className="text-sm sm:text-base tracking-wider text-teal-300 font-black">STATUS</div>}
+        {card.type === 'luck' && <div className="text-sm sm:text-base tracking-wider text-green-400 font-black">LUCK</div>}
+        {card.type === 'unlucky' && <div className="text-sm sm:text-base tracking-wider text-red-500 font-black">UNLUCKY</div>}
+        {card.type === 'double' && <div className="text-sm sm:text-base tracking-wider text-purple-400 font-black">DOUBLE</div>}
+        {card.type === 'singularity' && <div className="text-xs sm:text-sm tracking-wider text-purple-400 font-black">SINGULARITY</div>}
+        {card.type === 'voyance' && <div className="text-xs sm:text-sm tracking-wider text-indigo-400 font-black">VOYANCE</div>}
+        {card.type === 'alternate' && <div className="text-xs sm:text-sm tracking-wider text-cyan-400 font-black">ALTERNATE</div>}
+        {card.type === 'avarice' && <div className="text-xs sm:text-sm tracking-wider text-amber-400 font-black">AVARICE</div>}
         {card.type === 'number' && (
           <div>
             <div className="text-xl sm:text-3xl leading-none">{isNumberEyeActive ? '?' : card.value}</div>
@@ -208,7 +208,7 @@ export const CardView: React.FC<CardViewProps> = ({
       <div className="w-full bg-black/85 backdrop-blur-sm border border-amber-500/60 rounded px-1 py-0.5 shadow-lg">
         <div className="flex justify-between items-center text-[8px] font-black tracking-wider uppercase leading-tight mb-0.5">
           <span className={card.ultimateProgress === 100 ? 'text-amber-300 animate-pulse font-bold' : 'text-neutral-300'}>
-            {card.ultimateProgress === 100 ? '🌟 READY' : `${card.ultimateProgress ?? 0}%`}
+            {card.ultimateProgress === 100 ? 'READY' : `${card.ultimateProgress ?? 0}%`}
           </span>
           <span className="text-[7px] text-neutral-400">ULT</span>
         </div>

@@ -735,10 +735,6 @@ export class GameSession {
     if (cardIndex === -1) throw new Error('Card not in hand');
     const card = current.cards[cardIndex];
 
-    if (isUltimateCard(card.type)) {
-      throw new Error('Ultimate cards cannot be discarded directly. Charge them with sacrifices and activate their ultimate ability!');
-    }
-
     if (card.isCracked) {
       const isLastCardToWin = current.cards.length === 1 && Boolean(current.phaseCompletedInRound);
       if (!isLastCardToWin) {
@@ -747,7 +743,7 @@ export class GameSession {
     }
 
     const isSpecialChaosCard = isChaosSpecialCard(card.type);
-    let shouldActivate = isSpecialChaosCard ? activateAbility : true;
+    let shouldActivate = isSpecialChaosCard ? activateAbility : (isUltimateCard(card.type) ? false : true);
 
     if (shouldActivate) {
       if (card.type === 'nuke' && !current.phaseCompletedInRound) {
@@ -915,7 +911,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `💥 ${current.name} detonated a NUKE! Everyone's hand is reduced to 2 cards! (Ultimate cards preserved)`,
+      message: `${current.name} detonated a NUKE! Everyone's hand is reduced to 2 cards! (Ultimate cards preserved)`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1021,7 +1017,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `➕ ${current.name} played +${count} on ${target.name}!`,
+      message: `${current.name} played +${count} on ${target.name}!`,
       playerId: target.id,
       timestamp: Date.now()
     });
@@ -1081,7 +1077,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `🔄 ${current.name} played REDO! Hand replaced with 10 cards from a fresh deck!`,
+      message: `${current.name} played REDO! Hand replaced with 10 cards from a fresh deck!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1195,7 +1191,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `👁️ ${current.name} played NUMBER EYE on ${target.name}! Their number cards are now question marks!`,
+      message: `${current.name} played NUMBER EYE on ${target.name}! Their number cards are now question marks!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1207,7 +1203,7 @@ export class GameSession {
       targetPlayerId: target.id,
       card,
       randomChosenType,
-      message: `👁️ ${current.name} obscured ${target.name}'s card numbers with question marks!`
+      message: `${current.name} obscured ${target.name}'s card numbers with question marks!`
     });
   }
 
@@ -1236,7 +1232,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `👁️ ${current.name} played COLOR EYE on ${target.name}! Their cards are now grayscale!`,
+      message: `${current.name} played COLOR EYE on ${target.name}! Their cards are now grayscale!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1248,7 +1244,7 @@ export class GameSession {
       targetPlayerId: target.id,
       card,
       randomChosenType,
-      message: `👁️ ${current.name} turned ${target.name}'s cards grayscale!`
+      message: `${current.name} turned ${target.name}'s cards grayscale!`
     });
   }
 
@@ -1273,7 +1269,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `💥 ${current.name} played CRACK! The table shook violently and a random card cracked in each opponent's hand!`,
+      message: `${current.name} played CRACK! The table shook violently and a random card cracked in each opponent's hand!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1306,7 +1302,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `✨ ${current.name} played STATUS! All positive and negative status effects were purged!`,
+      message: `${current.name} played STATUS! All positive and negative status effects were purged!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1331,7 +1327,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `🍀 ${current.name} gained LUCK! 2x chance to draw wilds, reverses, skips, and specials for the rest of the round!`,
+      message: `${current.name} gained LUCK! 2x chance to draw wilds, reverses, skips, and specials for the rest of the round!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1367,7 +1363,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `💀 ${current.name} cursed ${target.name} with BAD LUCK! Chance of drawing special/wild cards halved!`,
+      message: `${current.name} cursed ${target.name} with BAD LUCK! Chance of drawing special/wild cards halved!`,
       playerId: target.id,
       timestamp: Date.now()
     });
@@ -1404,7 +1400,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `✖️2 ${current.name} played DOUBLE on ${target.name}! If they complete this Stage, they must repeat it again!`,
+      message: `${current.name} played DOUBLE on ${target.name}! If they complete this Stage, they must repeat it again!`,
       playerId: target.id,
       timestamp: Date.now()
     });
@@ -1446,7 +1442,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `🎲 ${current.name} played RANDOM and rolled: ${chosen.toUpperCase().replace(/_/g, ' ')}!`,
+      message: `${current.name} played RANDOM and rolled: ${chosen.toUpperCase().replace(/_/g, ' ')}!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -1518,7 +1514,7 @@ export class GameSession {
           this.notify({
             id: `notif_${Date.now()}`,
             type: 'info',
-            message: `✖️2 ${player.name} had Double active! They must repeat Stage ${player.currentPhase} again next round!`,
+            message: `${player.name} had Double active! They must repeat Stage ${player.currentPhase} again next round!`,
             playerId: player.id,
             timestamp: Date.now()
           });
@@ -1937,7 +1933,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `🏳️ ${player.name} resigned for this round. Turns will be skipped until next round.`,
+      message: `${player.name} resigned for this round. Turns will be skipped until next round.`,
       playerId: player.id,
       timestamp: Date.now()
     });
@@ -2053,7 +2049,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `⚡ Admin spawned a ${spawnedCard.type.toUpperCase()} card into ${player.name}'s hand.`,
+      message: `Admin spawned a ${spawnedCard.type.toUpperCase()} card into ${player.name}'s hand.`,
       playerId: player.id,
       timestamp: Date.now()
     });
@@ -2114,7 +2110,7 @@ export class GameSession {
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `🔥 ${current.name} sacrificed ${sacCard.type.toUpperCase()} to charge ${ultimateCard.type.toUpperCase()} (${ultimateCard.ultimateProgress}%)!`,
+      message: `${current.name} sacrificed ${sacCard.type.toUpperCase()} to charge ${ultimateCard.type.toUpperCase()} (${ultimateCard.ultimateProgress}%)!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -2162,13 +2158,13 @@ export class GameSession {
       playerName: current.name,
       card: ultimateCard,
       ultimateCardType: ultimateCard.type as UltimateCardType,
-      message: `✨ ${current.name} invoked ${ultimateCard.type.toUpperCase()}! God rays illuminate the heavens as the ultimate card descends!`
+      message: `${current.name} invoked ${ultimateCard.type.toUpperCase()}! God rays illuminate the heavens as the ultimate card descends!`
     });
 
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `🌟 ${current.name} activated ULTIMATE: ${ultimateCard.type.toUpperCase()}!`,
+      message: `${current.name} activated ULTIMATE: ${ultimateCard.type.toUpperCase()}!`,
       playerId: current.id,
       timestamp: Date.now()
     });
@@ -2194,27 +2190,35 @@ export class GameSession {
 
   private applySingularityEffect(current: GamePlayerInternal, card: Card): void {
     const active = this.getActivePlayers();
-    const freshDeck = createDeck(this.settings, 'sing_');
 
     // Caster gets 2x luck boost on wilds, special cards, reverses, skips, and ultimates
     current.hasLuck = true;
 
+    // Sucking in everyone's cards (including special cards and ultimates)
+    const suckedCards: Card[] = [];
     for (const player of active) {
+      suckedCards.push(...player.cards);
       player.cards = [];
-      const isCaster = player.id === current.id;
-      for (let i = 0; i < 10; i++) {
-        if (freshDeck.length === 0) break;
-        let drawn = freshDeck.pop()!;
-        if (isCaster && drawn.type === 'number' && Math.random() < 0.50) {
-          const luckyIdx = freshDeck.findIndex(c => c.type !== 'number');
-          if (luckyIdx !== -1) {
-            const lucky = freshDeck[luckyIdx];
-            freshDeck[luckyIdx] = drawn;
-            drawn = lucky;
-          }
-        }
-        player.cards.push(drawn);
-      }
+    }
+
+    // Mix (shuffle) all sucked cards thoroughly
+    for (let i = suckedCards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [suckedCards[i], suckedCards[j]] = [suckedCards[j], suckedCards[i]];
+    }
+
+    // Redistribute randomly to everyone (round-robin starting with caster)
+    const casterIdx = active.findIndex(p => p.id === current.id);
+    const startIdx = casterIdx !== -1 ? casterIdx : 0;
+
+    let playerIdx = startIdx;
+    while (suckedCards.length > 0) {
+      const drawn = suckedCards.pop()!;
+      active[playerIdx].cards.push(drawn);
+      playerIdx = (playerIdx + 1) % active.length;
+    }
+
+    for (const player of active) {
       player.cardCount = player.cards.length;
       player.cards = sortCardsByValue(player.cards);
     }
@@ -2225,7 +2229,7 @@ export class GameSession {
       playerName: current.name,
       card,
       ultimateCardType: 'singularity',
-      message: `🌀 Singularity erupted! All cards were consumed by the black hole and 10 fresh cards were spit out!`
+      message: `Singularity erupted! All cards were consumed by the black hole and redistributed!`
     });
   }
 
@@ -2244,7 +2248,7 @@ export class GameSession {
       playerName: current.name,
       card,
       ultimateCardType: 'voyance',
-      message: `👁️ Voyance activated! All opponent cards are permanently revealed to ${current.name}!`
+      message: `Voyance activated! All opponent cards are permanently revealed to ${current.name}!`
     });
   }
 
@@ -2290,7 +2294,7 @@ export class GameSession {
       card,
       ultimateCardType: 'alternate',
       isAlternateWorld: true,
-      message: `🌌 Reality cracked! Entered the Alternate World with 10 pure number cards!`
+      message: `Reality shifted! Entered the Alternate World with 10 pure number cards!`
     });
   }
 
@@ -2347,13 +2351,13 @@ export class GameSession {
       playerId: 'system',
       playerName: 'Dimension Rift',
       isAlternateWorld: this.isAlternateWorld,
-      message: `🌀 Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`
+      message: `Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`
     });
 
     this.notify({
       id: `notif_${Date.now()}`,
       type: 'info',
-      message: `🌀 Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`,
+      message: `Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`,
       timestamp: Date.now()
     });
   }
@@ -2382,7 +2386,7 @@ export class GameSession {
       card,
       ultimateCardType: 'avarice',
       stolenCards: specialCards,
-      message: `💰 Avarice activated! ${current.name} plundered ${specialCards.length} special cards from the discard pile!`
+      message: `Avarice activated! ${current.name} plundered ${specialCards.length} special cards from the discard pile!`
     });
   }
 

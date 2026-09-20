@@ -112,18 +112,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     playerName: string;
     ultType: string;
   } | null>(null);
-  const [singularityEvent, setSingularityEvent] = useState<{
-    playerName: string;
-    stage: 'suction' | 'rumble' | 'eruption';
-  } | null>(null);
-  const [voyanceEvent, setVoyanceEvent] = useState<{ playerName: string } | null>(null);
   const [dimensionFadeActive, setDimensionFadeActive] = useState(false);
-  const [dimensionFadeMessage, setDimensionFadeMessage] = useState<string>('');
-  const [avariceEvent, setAvariceEvent] = useState<{
-    playerName: string;
-    cards: Card[];
-    currentIndex: number;
-  } | null>(null);
 
   const lastSoundActionIdRef = useRef<string | null>(null);
 
@@ -133,12 +122,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const crackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyingCardTimerRef = useRef<NodeJS.Timeout | null>(null);
   const divineDescentTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const singularityTimerRef1 = useRef<NodeJS.Timeout | null>(null);
-  const singularityTimerRef2 = useRef<NodeJS.Timeout | null>(null);
-  const singularityTimerRef3 = useRef<NodeJS.Timeout | null>(null);
-  const voyanceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const dimensionFadeTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const avariceIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
@@ -148,12 +132,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
       if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
       if (divineDescentTimerRef.current) clearTimeout(divineDescentTimerRef.current);
-      if (singularityTimerRef1.current) clearTimeout(singularityTimerRef1.current);
-      if (singularityTimerRef2.current) clearTimeout(singularityTimerRef2.current);
-      if (singularityTimerRef3.current) clearTimeout(singularityTimerRef3.current);
-      if (voyanceTimerRef.current) clearTimeout(voyanceTimerRef.current);
       if (dimensionFadeTimerRef.current) clearTimeout(dimensionFadeTimerRef.current);
-      if (avariceIntervalRef.current) clearInterval(avariceIntervalRef.current);
     };
   }, []);
 
@@ -457,36 +436,6 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (!latestAction || lastSoundActionIdRef.current === latestAction.id) return;
     lastSoundActionIdRef.current = latestAction.id;
 
-    if (!isMuted) {
-      if (latestAction.type === 'nuke') {
-        playSpecialSound('nuke');
-      } else if (latestAction.type === 'jester') {
-        playSpecialSound('jester');
-      } else if (latestAction.type === 'plus_two') {
-        playSpecialSound('plus_two');
-      } else if (latestAction.type === 'plus_three') {
-        playSpecialSound('plus_three');
-      } else if (latestAction.type === 'redo') {
-        playSpecialSound('redo');
-      } else if (latestAction.type === 'time') {
-        playSpecialSound('time');
-      } else if (latestAction.type === 'number_eye') {
-        playSpecialSound('number_eye');
-      } else if (latestAction.type === 'color_eye') {
-        playSpecialSound('color_eye');
-      } else if (latestAction.type === 'crack') {
-        playSpecialSound('crack');
-      } else if (latestAction.type === 'status') {
-        playSpecialSound('status');
-      } else if (latestAction.type === 'luck') {
-        playSpecialSound('luck');
-      } else if (latestAction.type === 'unlucky') {
-        playSpecialSound('unlucky');
-      } else if (latestAction.type === 'double') {
-        playSpecialSound('double');
-      }
-    }
-
     const SPECIAL_CARDS_MAP: Record<string, { image: string; title: string }> = {
       crack: { image: '/cards/custom/crack.png', title: 'Crack' },
       status: { image: '/cards/custom/status.png', title: 'Status' },
@@ -514,11 +463,22 @@ export const GameTable: React.FC<GameTableProps> = ({
         playerName: latestAction.playerName
       });
 
-      // Special card floats like a Totem of Undying in Minecraft for 2 seconds,
-      // then the follow-up special animation executes:
+      // Special card floats like a Totem of Undying for 2 seconds,
+      // then sounds and follow-up custom animations execute:
       totemTimerRef.current = setTimeout(() => {
         setActiveTotem(null);
         totemTimerRef.current = null;
+
+        if (!isMuted) {
+          const soundTypes = [
+            'nuke', 'jester', 'plus_two', 'plus_three', 'redo',
+            'time', 'number_eye', 'color_eye', 'crack', 'status',
+            'luck', 'unlucky', 'double'
+          ];
+          if (soundTypes.includes(latestAction.type)) {
+            playSpecialSound(latestAction.type);
+          }
+        }
 
         const currentPlayers = gameStateRef.current.players;
 
@@ -569,77 +529,14 @@ export const GameTable: React.FC<GameTableProps> = ({
       }, 5500);
     }
 
-    // Singularity Ability: 5s suction -> 2s rumble -> 6s eruption
-    if (latestAction.type === 'ultimate_singularity') {
-      if (singularityTimerRef1.current) clearTimeout(singularityTimerRef1.current);
-      if (singularityTimerRef2.current) clearTimeout(singularityTimerRef2.current);
-      if (singularityTimerRef3.current) clearTimeout(singularityTimerRef3.current);
-
-      setSingularityEvent({ playerName: latestAction.playerName, stage: 'suction' });
-
-      singularityTimerRef1.current = setTimeout(() => {
-        setSingularityEvent({ playerName: latestAction.playerName, stage: 'rumble' });
-        setIsScreenShaking(true);
-
-        singularityTimerRef2.current = setTimeout(() => {
-          setIsScreenShaking(false);
-          setSingularityEvent({ playerName: latestAction.playerName, stage: 'eruption' });
-
-          singularityTimerRef3.current = setTimeout(() => {
-            setSingularityEvent(null);
-            singularityTimerRef1.current = null;
-            singularityTimerRef2.current = null;
-            singularityTimerRef3.current = null;
-          }, 6000);
-        }, 2000);
-      }, 5000);
-    }
-
-    // Voyance Ability
-    if (latestAction.type === 'ultimate_voyance') {
-      if (voyanceTimerRef.current) clearTimeout(voyanceTimerRef.current);
-      setVoyanceEvent({ playerName: latestAction.playerName });
-      voyanceTimerRef.current = setTimeout(() => {
-        setVoyanceEvent(null);
-        voyanceTimerRef.current = null;
-      }, 4000);
-    }
-
-    // Alternate Dimension Entry or Shift (2s dark fade)
+    // Alternate Dimension Entry or Shift (2s smooth black transition)
     if (latestAction.type === 'ultimate_alternate' || latestAction.type === 'alternate_shift') {
       if (dimensionFadeTimerRef.current) clearTimeout(dimensionFadeTimerRef.current);
-      const isAlt = latestAction.type === 'ultimate_alternate' ? true : Boolean(latestAction.isAlternateWorld);
-      setDimensionFadeMessage(isAlt ? '🌌 ENTERING THE ALTERNATE REALITY 🌌' : '🌀 RETURNING TO THE MAIN REALITY 🌀');
       setDimensionFadeActive(true);
       dimensionFadeTimerRef.current = setTimeout(() => {
         setDimensionFadeActive(false);
         dimensionFadeTimerRef.current = null;
       }, 2000);
-    }
-
-    // Avarice Ability: 1s per card sequential plunder
-    if (latestAction.type === 'ultimate_avarice') {
-      if (avariceIntervalRef.current) clearInterval(avariceIntervalRef.current);
-      const stolen = (latestAction.stolenCards && latestAction.stolenCards.length > 0)
-        ? latestAction.stolenCards
-        : (latestAction.card ? [latestAction.card] : []);
-
-      if (stolen.length > 0) {
-        setAvariceEvent({ playerName: latestAction.playerName, cards: stolen, currentIndex: 0 });
-        let currentIdx = 0;
-        avariceIntervalRef.current = setInterval(() => {
-          currentIdx += 1;
-          if (currentIdx >= stolen.length) {
-            if (avariceIntervalRef.current) {
-              clearInterval(avariceIntervalRef.current);
-              avariceIntervalRef.current = null;
-            }
-            setTimeout(() => setAvariceEvent(null), 1200);
-          } else {
-            setAvariceEvent(prev => prev ? { ...prev, currentIndex: currentIdx } : null);
-          }
-        }, 1000);
-      }
     }
   }, [latestAction, isMuted]);
 
@@ -976,44 +873,50 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const renderPlayerStatusBadges = (player: PlayerPublic) => (
-    <>
+    <div className="flex items-center gap-1.5 flex-wrap">
       {player.hasNumberEyeEffect && (
-        <span title="Number Eye Active: Numbers are question marks" className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
-          <span>👁️</span>
-          <span>?</span>
+        <span title="Number Blind" className="inline-flex items-center gap-1 bg-amber-950/80 text-amber-300 border border-amber-500/60 px-1.5 py-0.5 rounded text-[11px] font-bold">
+          <img src="/status_effect_icons/number_eye.png" alt="Number Blind" className="w-3.5 h-3.5 object-contain" />
+          <span>Number Blind</span>
         </span>
       )}
       {player.hasColorEyeEffect && (
-        <span title="Color Eye Active: Cards are grayscale" className="text-[10px] bg-neutral-800 text-neutral-300 border border-neutral-600 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
-          <span>👁️</span>
-          <span>Grey</span>
+        <span title="Color Blind" className="inline-flex items-center gap-1 bg-neutral-800 text-neutral-300 border border-neutral-600 px-1.5 py-0.5 rounded text-[11px] font-bold">
+          <img src="/status_effect_icons/color_eye.png" alt="Color Blind" className="w-3.5 h-3.5 object-contain" />
+          <span>Color Blind</span>
         </span>
       )}
       {player.hasLuck && (
-        <span title="Luck Active: 2x Special card draws" className="text-[10px] bg-green-950/80 text-green-300 border border-green-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow animate-pulse">
-          <span>🍀</span>
+        <span title="2x Luck" className="inline-flex items-center gap-1 bg-emerald-950/80 text-emerald-300 border border-emerald-500/60 px-1.5 py-0.5 rounded text-[11px] font-bold animate-pulse">
+          <img src="/status_effect_icons/luck.png" alt="Luck" className="w-3.5 h-3.5 object-contain" />
           <span>Luck</span>
         </span>
       )}
       {player.hasUnlucky && (
-        <span title="Unlucky Debuff: Halved special card draws" className="text-[10px] bg-red-950/80 text-red-300 border border-red-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow animate-pulse">
-          <span>💀</span>
+        <span title="Unlucky" className="inline-flex items-center gap-1 bg-rose-950/80 text-rose-300 border border-rose-500/60 px-1.5 py-0.5 rounded text-[11px] font-bold animate-pulse">
+          <img src="/status_effect_icons/unlucky.png" alt="Unlucky" className="w-3.5 h-3.5 object-contain" />
           <span>Unlucky</span>
         </span>
       )}
       {player.hasDoubleDebuff && (
-        <span title="Double Debuff: Must repeat stage after completing" className="text-[10px] bg-purple-950/80 text-purple-300 border border-purple-500/60 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
-          <span>✖️2</span>
+        <span title="Double Stage" className="inline-flex items-center gap-1 bg-purple-950/80 text-purple-300 border border-purple-500/60 px-1.5 py-0.5 rounded text-[11px] font-bold">
+          <img src="/status_effect_icons/double.png" alt="Double" className="w-3.5 h-3.5 object-contain" />
           <span>Double</span>
         </span>
       )}
       {Boolean(player.crackedCardCount && player.crackedCardCount > 0) && (
-        <span title={`${player.crackedCardCount} cracked card(s) locked`} className="text-[10px] bg-stone-900/90 text-stone-300 border border-stone-500/80 px-1 py-0.5 rounded font-bold flex items-center gap-0.5 shadow">
-          <span>💥</span>
-          <span>{player.crackedCardCount}</span>
+        <span title={`${player.crackedCardCount} cracked card(s) locked`} className="inline-flex items-center gap-1 bg-stone-900/90 text-stone-300 border border-stone-500/80 px-1.5 py-0.5 rounded text-[11px] font-bold">
+          <img src="/status_effect_icons/crack.png" alt="Cracked" className="w-3.5 h-3.5 object-contain" />
+          <span>{player.crackedCardCount} Cracked</span>
         </span>
       )}
-    </>
+      {player.hasVoyanceDebuff && (
+        <span title="Voyance Active" className="inline-flex items-center gap-1 bg-cyan-950/80 text-cyan-300 border border-cyan-500/60 px-1.5 py-0.5 rounded text-[11px] font-bold">
+          <img src="/status_effect_icons/voyance.png" alt="Voyance" className="w-3.5 h-3.5 object-contain" />
+          <span>Voyance</span>
+        </span>
+      )}
+    </div>
   );
 
   // Render an opponent station (Nameplate, 3D fanned cards, and their laid melds)
@@ -1088,7 +991,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             onClick={handleStationClick}
             className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
           >
-            <span>🃏</span>
+            
             <span>Swap Hands!</span>
           </button>
         )}
@@ -1099,14 +1002,12 @@ export const GameTable: React.FC<GameTableProps> = ({
             onClick={handleStationClick}
             className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
           >
-            <span>⏳</span>
             <span>Time Warp!</span>
           </button>
         )}
 
         {isImmuneTimeTarget && (
           <div className="bg-neutral-900/90 text-neutral-400 border border-neutral-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 select-none pointer-events-none shrink-0">
-            <span>🔒</span>
             <span>Stage {player.currentPhase} Immune</span>
           </div>
         )}
@@ -1117,7 +1018,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             onClick={handleStationClick}
             className="bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
           >
-            <span>👁️</span>
             <span>Blind Numbers!</span>
           </button>
         )}
@@ -1128,7 +1028,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             onClick={handleStationClick}
             className="bg-gradient-to-r from-neutral-600 via-stone-600 to-zinc-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(163,163,163,0.9)] border border-white/60 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
           >
-            <span>👁️</span>
             <span>Greyscale!</span>
           </button>
         )}
@@ -1139,7 +1038,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             onClick={handleStationClick}
             className="bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(244,63,94,0.9)] border border-rose-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
           >
-            <span>💀</span>
             <span>Curse Bad Luck!</span>
           </button>
         )}
@@ -1150,7 +1048,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             onClick={handleStationClick}
             className="bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-700 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(147,51,234,0.9)] border border-purple-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
           >
-            <span>✖️2</span>
             <span>Double Stage!</span>
           </button>
         )}
@@ -1161,7 +1058,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             onClick={handleStationClick}
             className="bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.9)] border border-indigo-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
           >
-            <span>➕</span>
             <span>Draw Cards!</span>
           </button>
         )}
@@ -1200,8 +1096,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
                 {player.hasVoyanceDebuff && (
                   <span className="text-[10px] text-cyan-300 font-black flex items-center gap-0.5 bg-cyan-950/80 border border-cyan-400/60 px-1.5 py-0.5 rounded shadow">
-                    <span>👁️</span>
-                    <span>EXPOSED</span>
+                    <img src="/status_effect_icons/voyance.png" alt="Exposed" className="w-3.5 h-3.5 object-contain" /><span>EXPOSED</span>
                   </span>
                 )}
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
@@ -1312,8 +1207,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
                 {player.hasVoyanceDebuff && (
                   <span className="text-[10px] text-cyan-300 font-black flex items-center gap-0.5 bg-cyan-950/80 border border-cyan-400/60 px-1.5 py-0.5 rounded shadow">
-                    <span>👁️</span>
-                    <span>EXPOSED</span>
+                    <img src="/status_effect_icons/voyance.png" alt="Exposed" className="w-3.5 h-3.5 object-contain" /><span>EXPOSED</span>
                   </span>
                 )}
                 {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
@@ -1433,8 +1327,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               {player.isResigned && <span className="text-xs text-rose-400 font-extrabold">[RESIGNED]</span>}
               {player.hasVoyanceDebuff && (
                 <span className="text-[10px] text-cyan-300 font-black flex items-center gap-0.5 bg-cyan-950/80 border border-cyan-400/60 px-1.5 py-0.5 rounded shadow">
-                  <span>👁️</span>
-                  <span>EXPOSED</span>
+                  <img src="/status_effect_icons/voyance.png" alt="Exposed" className="w-3.5 h-3.5 object-contain" /><span>EXPOSED</span>
                 </span>
               )}
               {isPlayerTurn && gameState.turnTimeRemaining > 0 && (
@@ -1519,10 +1412,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         loop
         muted={isMuted}
         playsInline
-        style={{
-          filter: gameState.isAlternateWorld ? 'hue-rotate(180deg) invert(0.2) contrast(1.3)' : undefined
-        }}
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-30 blur-md z-0"
+className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-30 blur-md z-0"
       />
 
       {/* 16:9 Virtual Arena Stage (1920x1080, scaled uniformly to fit any display) */}
@@ -1550,10 +1440,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           loop
           muted={isMuted}
           playsInline
-          style={{
-            filter: gameState.isAlternateWorld ? 'hue-rotate(180deg) invert(0.2) contrast(1.3)' : undefined
-          }}
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
         />
 
         {/* Subtle lighting vignette overlay */}
@@ -1568,13 +1455,13 @@ export const GameTable: React.FC<GameTableProps> = ({
               title="Click to copy invite link"
               className="border border-white/20 bg-black/60 px-3 py-1.5 rounded-lg hover:bg-white/10 cursor-pointer flex items-center gap-2 transition-colors font-medium text-sm"
             >
-              <span>🔗</span>
+              
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.0</span>
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.1</span>
             {gameState.isAlternateWorld && (
               <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
-                <span>🌌</span>
+                
                 <span>Alternate World</span>
                 <span className="text-[10px] text-purple-300 font-mono">({(gameState.alternateTurnCounter ?? 0) % 2 + 1}/2 turns)</span>
               </span>
@@ -1592,7 +1479,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 title="Stages are randomized each round"
                 className="text-xs font-bold px-2 py-0.5 rounded border border-purple-500/50 bg-purple-950/80 text-purple-300 flex items-center gap-1 shadow-sm"
               >
-                <span>🎲</span>
+                
                 <span>Random Stages</span>
               </span>
             )}
@@ -1631,7 +1518,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               title={isMuted ? 'Unmute Arena Audio' : 'Mute Arena Audio'}
               className="text-neutral-400 hover:text-white px-2.5 py-1 border border-white/10 rounded-lg bg-black/40 text-sm cursor-pointer transition-colors"
             >
-              {isMuted ? '🔇' : '🔊'}
+              {isMuted ? 'MUTED' : 'AUDIO'}
             </button>
 
             <button
@@ -1675,7 +1562,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         {isSpectator && (
           <div className="relative z-30 mx-auto mt-4 max-w-md bg-neutral-950/85 backdrop-blur border border-amber-500/40 p-3 rounded-lg text-center text-sm shadow-xl">
             <div className="text-amber-300 font-bold flex items-center justify-center gap-2">
-              <span>👀 SPECTATING MATCH — YOU ARE ON THE WAITLIST</span>
+              <span>SPECTATING MATCH — YOU ARE ON THE WAITLIST</span>
             </div>
             {botPlayers.length > 0 && onClaimSeat && (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1.5">
@@ -1921,7 +1808,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     onClick={handleSelfTargetClick}
                     className="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.9)] border border-emerald-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
                   >
-                    <span>⏳</span>
+                    
                     <span>Time Warp Self!</span>
                   </button>
                 )}
@@ -1932,7 +1819,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                     onClick={handleSelfTargetClick}
                     className="bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-600 hover:brightness-125 text-white font-black text-xs px-3 py-1.5 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.9)] border border-indigo-300 animate-bounce cursor-pointer flex items-center gap-1 tracking-wider uppercase select-none transition-all shrink-0"
                   >
-                    <span>➕</span>
                     <span>Draw On Self!</span>
                   </button>
                 )}
@@ -1984,7 +1870,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                             : 'bg-neutral-800 text-neutral-400 border border-neutral-700 cursor-not-allowed'
                         }`}
                       >
-                        <span>✨</span>
                         <span>{isMyTurn && gameState.turnStage === 'play' ? `Lay Down Stage ${me?.currentPhase}` : 'Draw First'}</span>
                       </button>
                     ) : (
@@ -1993,8 +1878,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold text-xs px-3.5 py-1 rounded-full flex items-center gap-1 shadow">
-                      <span>✓</span>
+                    <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold text-xs px-3.5 py-1 rounded-full flex items-center shadow">
                       <span>Stage {me?.currentPhase} Completed</span>
                     </div>
                     {availableExtraMelds.length > 0 && isMyTurn && gameState.turnStage === 'play' && (
@@ -2014,7 +1898,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Jester Swap Guidance Banner */}
             {isJesterSelected && (
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/90 to-indigo-900/90 border border-purple-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.6)] text-xs text-purple-100 font-bold animate-pulse">
-                <span>🃏</span>
+                
                 <span>Click an opponent's deck or banner above to swap hands!</span>
               </div>
             )}
@@ -2022,7 +1906,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Redo Guidance Banner */}
             {selectedCard?.type === 'redo' && isMyTurn && gameState.turnStage !== 'draw' && (
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-pink-950/90 to-purple-950/90 border border-pink-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(244,114,182,0.6)] text-xs text-pink-100 font-bold animate-pulse">
-                <span>🔄</span>
+                
                 <span>Click REDO HAND below to discard and draw 10 fresh cards from a new deck!</span>
               </div>
             )}
@@ -2030,7 +1914,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Time Guidance Banner */}
             {isTimeSelected && (
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-950/90 to-teal-950/90 border border-emerald-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.6)] text-xs text-emerald-100 font-bold animate-pulse">
-                <span>⏳</span>
+                
                 <span>
                   {hasEligibleTimeTargets
                     ? "Click an opponent's deck or banner above (Stage 2–9) to alter their timeline!"
@@ -2042,7 +1926,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Nuke Locked Guidance Banner */}
             {selectedCard?.type === 'nuke' && !me?.phaseCompletedInRound && (
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-950/95 to-red-950/95 border border-amber-500/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.6)] text-xs text-amber-200 font-bold animate-pulse">
-                <span>☢️</span>
+                
                 <span>Nuke locked! Complete and lay down your Stage before detonating!</span>
               </div>
             )}
@@ -2050,7 +1934,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Number Eye Guidance Banner */}
             {isNumberEyeSelected && (
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-950/90 to-orange-950/90 border border-amber-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.6)] text-xs text-amber-100 font-bold animate-pulse">
-                <span>👁️</span>
+                
                 <span>Click an opponent's deck or banner above to blind their card numbers!</span>
               </div>
             )}
@@ -2058,7 +1942,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Color Eye Guidance Banner */}
             {isColorEyeSelected && (
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-neutral-900/90 to-stone-900/90 border border-neutral-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(163,163,163,0.6)] text-xs text-neutral-100 font-bold animate-pulse">
-                <span>👁️</span>
+                
                 <span>Click an opponent's deck or banner above to turn their hand grayscale!</span>
               </div>
             )}
@@ -2066,7 +1950,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Random Guidance Banner */}
             {selectedCard?.type === 'random' && isMyTurn && gameState.turnStage !== 'draw' && (
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-950/90 to-blue-950/90 border border-cyan-400/80 px-4 py-1 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.6)] text-xs text-cyan-100 font-bold animate-pulse">
-                <span>🎲</span>
+                
                 <span>Click ROLL RANDOM below to trigger a random special card power!</span>
               </div>
             )}
@@ -2074,7 +1958,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             {/* Sort Controls, Deselect, and Resign */}
             {me?.isResigned ? (
               <div className="flex items-center gap-1.5 bg-red-950/90 border border-red-500/80 px-4 py-1 rounded-full text-xs text-red-200 font-bold shadow-[0_0_15px_rgba(239,68,68,0.5)]">
-                <span>🏳️</span>
+                
                 <span>You have resigned this round. Your turns are skipped until next round.</span>
               </div>
             ) : (
@@ -2105,7 +1989,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     }}
                     className="px-3.5 py-0.5 rounded text-xs bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 hover:brightness-125 text-black cursor-pointer transition-all font-black flex items-center gap-1 shadow-[0_0_20px_rgba(251,191,36,0.9)] animate-bounce ml-1 uppercase"
                   >
-                    <span>🌟</span>
+                    
                     <span>Activate Ultimate: {selectedCard?.type.toUpperCase()}</span>
                   </button>
                 )}
@@ -2122,7 +2006,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     }}
                     className="px-3 py-0.5 rounded text-xs bg-gradient-to-r from-orange-600 to-amber-500 hover:brightness-125 text-black cursor-pointer transition-all font-extrabold flex items-center gap-1 shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-pulse ml-1"
                   >
-                    <span>🔥</span>
+                    
                     <span>Sacrifice into {unchargedUlt.type.toUpperCase()} (+50%)</span>
                   </button>
                 )}
@@ -2133,7 +2017,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     onClick={handleNormalDiscard}
                     className="px-2.5 py-0.5 rounded text-xs bg-red-600 hover:bg-red-500 text-white cursor-pointer transition-colors font-bold flex items-center gap-1 shadow-md ml-1"
                   >
-                    <span>{selectedCard.type === 'reverse' ? '⇄' : selectedCard.type === 'skip' ? '🚫' : '🗑️'}</span>
+                    
                     <span>{selectedCard.type === 'reverse' ? 'Play Reverse' : selectedCard.type === 'skip' ? 'Play Skip' : 'Discard'}</span>
                   </button>
                 )}
@@ -2157,7 +2041,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     title="Resign from this round"
                     className="px-2 py-0.5 rounded text-[11px] bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-white font-medium cursor-pointer transition-colors flex items-center gap-1 ml-1"
                   >
-                    <span>🏳️</span>
+                    
                     <span>Resign</span>
                   </button>
                 )}
@@ -2209,7 +2093,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                       isUltimateCard(c.type) ? (
                         <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-2 bg-black/95 backdrop-blur-md p-3 rounded-2xl border-2 border-amber-400/90 shadow-[0_0_30px_rgba(251,191,36,0.8)] select-none min-w-[150px]">
                           <div className="text-[11px] font-black text-amber-300 tracking-wider uppercase drop-shadow flex items-center gap-1">
-                            <span>🌟</span>
+                            
                             <span>{c.type}</span>
                           </div>
                           <div className="w-28 bg-neutral-800 rounded-full h-2.5 overflow-hidden border border-white/20">
@@ -2232,7 +2116,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                               }}
                               className="py-1.5 px-3 rounded-xl border border-yellow-300 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-black font-black text-xs flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(251,191,36,1)] animate-bounce whitespace-nowrap"
                             >
-                              <span>🌟</span>
+                              
                               <span>ACTIVATE ULTIMATE</span>
                             </button>
                           ) : (
@@ -2254,7 +2138,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                             }}
                             className="py-1 px-3 rounded-lg border border-red-500/80 bg-red-600/85 hover:bg-red-600 active:scale-95 text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow whitespace-nowrap"
                           >
-                            <span>🗑️</span>
+                            
                             <span>DISCARD</span>
                           </button>
                         </div>
@@ -2266,7 +2150,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                               title="Complete and lay down your Stage before detonating Nuke"
                               className="bg-neutral-900/90 border border-amber-500/50 text-amber-300 font-extrabold text-[10px] py-1 px-2 rounded-lg flex items-center justify-center gap-1 select-none whitespace-nowrap"
                             >
-                              <span>🔒</span>
                               <span>Stage Locked</span>
                             </div>
                           ) : c.type === 'time' ? (
@@ -2275,7 +2158,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                                 title="No eligible targets on Stage 2–9"
                                 className="bg-neutral-900/90 border border-emerald-500/50 text-emerald-300 font-extrabold text-[10px] py-1 px-2 rounded-lg flex items-center justify-center gap-1 select-none whitespace-nowrap"
                               >
-                                <span>🔒</span>
                                 <span>No Targets</span>
                               </div>
                             ) : (
@@ -2289,7 +2171,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                                     }}
                                     className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-emerald-600/90 hover:bg-emerald-600 border-emerald-400"
                                   >
-                                    <span>⏳</span>
+                                    
                                     <span>WARP ENEMY</span>
                                   </button>
                                 )}
@@ -2302,7 +2184,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                                     }}
                                     className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-teal-600/90 hover:bg-teal-600 border-teal-400"
                                   >
-                                    <span>⏳</span>
+                                    
                                     <span>WARP SELF</span>
                                   </button>
                                 )}
@@ -2319,7 +2201,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   }}
                                   className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-indigo-600/90 hover:bg-indigo-600 border-indigo-400"
                                 >
-                                  <span>➕</span>
                                   <span>DRAW ENEMY</span>
                                 </button>
                               )}
@@ -2331,7 +2212,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                                 }}
                                 className="py-1 px-2.5 rounded-lg border text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-lg whitespace-nowrap bg-sky-600/90 hover:bg-sky-600 border-sky-400"
                               >
-                                <span>➕</span>
                                 <span>DRAW SELF</span>
                               </button>
                             </div>
@@ -2368,31 +2248,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                                   : 'bg-indigo-600/90 hover:bg-indigo-600 border-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.8)]'
                               }`}
                             >
-                              <span>
-                                {c.type === 'nuke'
-                                  ? '☢️'
-                                  : c.type === 'jester'
-                                  ? '🃏'
-                                  : c.type === 'redo'
-                                  ? '🔄'
-                                  : c.type === 'number_eye'
-                                  ? '👁️'
-                                  : c.type === 'color_eye'
-                                  ? '👁️'
-                                  : c.type === 'random'
-                                  ? '🎲'
-                                  : c.type === 'crack'
-                                  ? '💥'
-                                  : c.type === 'status'
-                                  ? '✨'
-                                  : c.type === 'luck'
-                                  ? '🍀'
-                                  : c.type === 'unlucky'
-                                  ? '💀'
-                                  : c.type === 'double'
-                                  ? '✖️2'
-                                  : '⚡'}
-                              </span>
                               <span>
                                 {c.type === 'nuke'
                                   ? 'DETONATE'
@@ -2432,7 +2287,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                               }}
                               className="py-1 px-2.5 rounded-lg border border-orange-400 bg-gradient-to-r from-orange-600 to-amber-500 hover:brightness-110 active:scale-95 text-black font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[0_0_12px_rgba(249,115,22,0.8)] whitespace-nowrap"
                             >
-                              <span>🔥</span>
+                              
                               <span>SACRIFICE (+50%)</span>
                             </button>
                           )}
@@ -2446,7 +2301,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                             }}
                             className="py-1 px-2.5 rounded-lg border border-red-500/80 bg-red-600/85 hover:bg-red-600 active:scale-95 text-white font-black text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-[0_0_10px_rgba(239,68,68,0.7)] whitespace-nowrap"
                           >
-                            <span>🗑️</span>
+                            
                             <span>DISCARD</span>
                           </button>
                         </div>
@@ -2463,7 +2318,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                               }}
                               className="border border-orange-400 bg-gradient-to-r from-orange-600 to-amber-500 text-black font-black text-xs py-1.5 px-3 rounded-lg shadow-[0_0_15px_rgba(249,115,22,0.85)] active:scale-95 flex items-center justify-center gap-1 cursor-pointer transition-all hover:scale-105 whitespace-nowrap"
                             >
-                              <span>🔥</span>
+                              
                               <span>SACRIFICE (+50%)</span>
                             </button>
                           )}
@@ -2481,7 +2336,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                                 : 'bg-red-600/75 hover:bg-red-600/95 border-red-400/80'
                             }`}
                           >
-                            <span className="text-xs">{c.type === 'reverse' ? '⇄' : c.type === 'skip' ? '🚫' : '🗑️'}</span>
+                            
                             <span>{c.type === 'reverse' ? 'PLAY REVERSE' : c.type === 'skip' ? 'PLAY SKIP' : 'DISCARD'}</span>
                           </button>
                         </div>
@@ -2501,7 +2356,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div className="relative w-full h-full flex flex-col items-center justify-center animate-nuke-shake">
             <div className="w-[500px] h-[500px] rounded-full border-8 border-yellow-400/80 animate-ping absolute opacity-50" />
             <div className="relative z-10 flex flex-col items-center gap-3 drop-shadow-[0_0_40px_rgba(255,0,0,1)] select-none">
-              <span className="text-8xl md:text-9xl">☢️</span>
+              <img src="/cards/custom/nuke.png" alt="Nuke" className="w-28 h-40 md:w-36 md:h-52 object-contain drop-shadow-[0_0_35px_rgba(245,158,11,0.9)]" />
               <div className="text-4xl md:text-6xl font-black tracking-widest text-yellow-300 drop-shadow-[0_0_30px_rgba(239,68,68,0.9)] uppercase">
                 NUCLEAR DETONATION
               </div>
@@ -2546,7 +2401,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                 ZA WARUDO!
               </div>
               <div className="text-sm md:text-lg font-black tracking-widest text-purple-300 uppercase">
-                ⌛ TOKI WO TOMARE — TIME HAS STOPPED ⌛
+                TOKI WO TOMARE — TIME HAS STOPPED
               </div>
               <div className="text-base md:text-xl font-bold text-white bg-black/70 border border-yellow-500/80 px-6 py-1 rounded-full shadow-2xl">
                 <span className="text-yellow-300 font-black">{timeWarpEvent.sourceName}</span> invoked Time Warp on{' '}
@@ -2608,7 +2463,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     REWOUND 1 STAGE! (-1)
                   </div>
                   <div className="text-base md:text-xl font-extrabold text-white bg-emerald-950/90 border border-emerald-500 px-6 py-1.5 rounded-full shadow-lg">
-                    {timeWarpEvent.targetName}: Stage {timeWarpEvent.oldPhase} ➔ Stage {timeWarpEvent.newPhase}
+                    {timeWarpEvent.targetName}: Stage {timeWarpEvent.oldPhase} → Stage {timeWarpEvent.newPhase}
                   </div>
                 </>
               ) : (
@@ -2617,7 +2472,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     ADVANCED 1 STAGE! (+1)
                   </div>
                   <div className="text-base md:text-xl font-extrabold text-white bg-rose-950/90 border border-rose-500 px-6 py-1.5 rounded-full shadow-lg">
-                    {timeWarpEvent.targetName}: Stage {timeWarpEvent.oldPhase} ➔ Stage {timeWarpEvent.newPhase}
+                    {timeWarpEvent.targetName}: Stage {timeWarpEvent.oldPhase} → Stage {timeWarpEvent.newPhase}
                   </div>
                 </>
               )}
@@ -2693,7 +2548,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
             <div className="flex items-center gap-2">
-              <span className="text-xl">📊</span>
+              
               <span className="font-extrabold text-base tracking-wide bg-gradient-to-r from-cyan-400 to-sky-200 bg-clip-text text-transparent">
                 GAME STANDINGS
               </span>
@@ -2711,7 +2566,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               }`}
               title={isInfoPinned ? 'Unpin Standings Tab' : 'Pin Standings Tab Open'}
             >
-              <span>📌</span>
+              
               <span>{isInfoPinned ? 'Pinned' : 'Pin'}</span>
             </button>
           </div>
@@ -2740,6 +2595,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                       player.hasLuck ||
                       player.hasUnlucky ||
                       player.hasDoubleDebuff ||
+                      player.hasVoyanceDebuff ||
                       (player.crackedCardCount && player.crackedCardCount > 0)
                     );
 
@@ -2766,7 +2622,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                                 YOU
                               </span>
                             )}
-                            {player.isHost && <span title="Host">👑</span>}
+                            {player.isHost && <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 font-extrabold">HOST</span>}
                             {player.isBot && (
                               <span className="text-[9px] text-neutral-400 font-bold">[BOT]</span>
                             )}
@@ -2791,10 +2647,10 @@ export const GameTable: React.FC<GameTableProps> = ({
                             <span>Phase {player.currentPhase}</span>
                             {player.phaseCompletedInRound && (
                               <span
-                                className="text-emerald-400 font-black text-sm"
+                                className="text-emerald-400 font-bold text-[10px] bg-emerald-950/80 border border-emerald-500/40 px-1 py-0.5 rounded"
                                 title="Completed in current round"
                               >
-                                ✓
+                                DONE
                               </span>
                             )}
                           </div>
@@ -2834,7 +2690,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Footer Info */}
           <div className="text-[10px] text-neutral-400 border-t border-white/10 pt-2 flex items-center justify-between">
             <span>Target: {gameState.settings?.totalPhases ?? 10} Phases</span>
-            <span>Direction: {gameState.playDirection === 1 ? 'Clockwise ↻' : 'Counter-Clockwise ↺'}</span>
+            <span>Direction: {gameState.playDirection === 1 ? 'Clockwise (CW)' : 'Counter-Clockwise (CCW)'}</span>
           </div>
         </div>
 
@@ -2843,7 +2699,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           onClick={() => setIsInfoPinned(prev => !prev)}
           className="w-10 bg-gradient-to-b from-cyan-600 via-sky-700 to-blue-800 border-y border-r border-cyan-400 rounded-r-xl cursor-pointer flex flex-col items-center justify-center py-5 gap-3 shadow-[0_0_25px_rgba(6,182,212,0.6)] hover:brightness-125 transition-all"
         >
-          <span className="text-lg">📊</span>
+          
           <span
             className="text-[10px] font-black tracking-widest text-cyan-100 uppercase"
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
@@ -2856,33 +2712,26 @@ export const GameTable: React.FC<GameTableProps> = ({
       {/* Universal Divine Descent (5.5s) */}
       {divineDescentEvent && (
         <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
-          {/* Rotating Divine God Rays */}
+          {/* Vertical Descending God Rays */}
           <div
-            className="absolute inset-0 pointer-events-none opacity-80 animate-spin"
+            className="absolute inset-0 pointer-events-none"
             style={{
-              animationDuration: '30s',
-              background: `conic-gradient(from 0deg at 50% 40%, 
-                rgba(251,191,36,0.35) 0deg, transparent 12deg, 
-                rgba(251,191,36,0.35) 24deg, transparent 36deg, 
-                rgba(251,191,36,0.35) 48deg, transparent 60deg, 
-                rgba(251,191,36,0.35) 72deg, transparent 84deg, 
-                rgba(251,191,36,0.35) 96deg, transparent 108deg, 
-                rgba(251,191,36,0.35) 120deg, transparent 132deg, 
-                rgba(251,191,36,0.35) 144deg, transparent 156deg, 
-                rgba(251,191,36,0.35) 168deg, transparent 180deg, 
-                rgba(251,191,36,0.35) 192deg, transparent 204deg, 
-                rgba(251,191,36,0.35) 216deg, transparent 228deg, 
-                rgba(251,191,36,0.35) 240deg, transparent 252deg, 
-                rgba(251,191,36,0.35) 264deg, transparent 276deg, 
-                rgba(251,191,36,0.35) 288deg, transparent 300deg, 
-                rgba(251,191,36,0.35) 312deg, transparent 324deg, 
-                rgba(251,191,36,0.35) 336deg, transparent 348deg, 
-                rgba(251,191,36,0.35) 360deg)`
+              background: `
+                linear-gradient(180deg, rgba(251,191,36,0.35) 0%, rgba(251,191,36,0.1) 60%, transparent 100%),
+                repeating-linear-gradient(90deg, rgba(255,235,140,0.18) 0px, rgba(255,235,140,0.18) 50px, transparent 50px, transparent 120px)
+              `,
+              maskImage: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 60%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 60%, transparent 100%)'
             }}
           />
 
-          {/* Heavenly Glow Pillar */}
-          <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-amber-400/30 via-yellow-300/10 to-transparent pointer-events-none" />
+          {/* Central God Ray Light Beam Column from Top */}
+          <div
+            className="absolute top-0 w-[450px] md:w-[650px] h-full pointer-events-none"
+            style={{
+              background: 'radial-gradient(ellipse 50% 100% at 50% 0%, rgba(255,245,180,0.65) 0%, rgba(251,191,36,0.25) 45%, transparent 80%)'
+            }}
+          />
 
           {/* Descending Card & Banner */}
           <div
@@ -2892,7 +2741,6 @@ export const GameTable: React.FC<GameTableProps> = ({
             }}
           >
             <div className="flex flex-col items-center gap-2 select-none text-center">
-              <span className="text-4xl md:text-5xl animate-pulse">⚡ 🌟 ⚡</span>
               <h2 className="text-3xl md:text-5xl font-black text-amber-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(251,191,36,0.9)]">
                 DIVINE DESCENT
               </h2>
@@ -2908,130 +2756,12 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Singularity Ultimate VFX (Suction -> Rumble -> Eruption) */}
-      {singularityEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
-          {singularityEvent.stage === 'suction' && (
-            <div className="relative flex flex-col items-center justify-center">
-              {/* Black hole vortex */}
-              <div
-                className="w-[500px] h-[500px] rounded-full animate-spin border-8 border-purple-500/80 shadow-[0_0_120px_rgba(147,51,234,1),inset_0_0_80px_black] bg-black flex items-center justify-center"
-                style={{ animationDuration: '4s' }}
-              >
-                <div className="w-[300px] h-[300px] rounded-full bg-gradient-to-r from-purple-900 to-black animate-pulse opacity-90" />
-              </div>
-              {/* Swirling suction cards */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                {Array.from({ length: 8 }).map((_, idx) => (
-                  <div
-                    key={idx}
-                    className="absolute w-12 h-16 rounded bg-purple-600/60 border border-purple-300/80"
-                    style={{
-                      transform: `rotate(${idx * 45}deg) translateY(-180px) scale(0.6)`,
-                      animation: 'suctionCard 2s linear infinite',
-                      animationDelay: `${idx * 0.25}s`
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="absolute z-20 text-center select-none mt-72">
-                <div className="text-3xl md:text-5xl font-black text-purple-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(147,51,234,1)] animate-pulse">
-                  🌀 SINGULARITY CONSUMPTION
-                </div>
-                <p className="text-sm md:text-base text-purple-200 font-bold mt-2">
-                  All player cards are being drawn into the event horizon...
-                </p>
-              </div>
-            </div>
-          )}
-
-          {singularityEvent.stage === 'rumble' && (
-            <div className="relative flex flex-col items-center justify-center">
-              {/* Dense critical mass spark */}
-              <div className="w-20 h-20 rounded-full bg-white shadow-[0_0_160px_rgba(255,255,255,1)] animate-ping" />
-              <div className="absolute z-20 text-center select-none">
-                <div className="text-4xl md:text-6xl font-black text-white tracking-widest uppercase drop-shadow-[0_0_40px_rgba(255,255,255,1)]">
-                  ⚡ CRITICAL MASS ⚡
-                </div>
-                <p className="text-base md:text-lg text-purple-200 font-bold mt-2">
-                  Dimensional equilibrium destabilizing...
-                </p>
-              </div>
-            </div>
-          )}
-
-          {singularityEvent.stage === 'eruption' && (
-            <div className="relative flex flex-col items-center justify-center">
-              <div className="w-[800px] h-[800px] rounded-full border-4 border-cyan-400/80 animate-ping absolute opacity-60" />
-              <div className="relative z-20 text-center select-none flex flex-col items-center gap-3">
-                <span className="text-6xl md:text-8xl animate-bounce">✨ 🌀 ✨</span>
-                <div className="text-4xl md:text-6xl font-black text-cyan-300 tracking-widest uppercase drop-shadow-[0_0_40px_rgba(6,182,212,1)]">
-                  COSMIC ERUPTION!
-                </div>
-                <p className="text-lg md:text-xl text-yellow-300 font-extrabold drop-shadow">
-                  10 Fresh Cards Dealt from a New Reality!
-                </p>
-                <div className="bg-emerald-950/90 border border-emerald-400/80 text-emerald-300 px-5 py-1.5 rounded-full font-black text-sm shadow-[0_0_20px_rgba(52,211,153,0.8)]">
-                  🍀 2X LUCK BESTOWED ON {singularityEvent.playerName.toUpperCase()}!
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Voyance Ultimate VFX */}
-      {voyanceEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center animate-fade-in">
-          <div className="bg-neutral-950/90 border-2 border-cyan-400 rounded-3xl p-8 shadow-[0_0_80px_rgba(6,182,212,0.9)] flex flex-col items-center gap-4 text-center select-none max-w-lg">
-            <span className="text-7xl animate-pulse">👁️</span>
-            <div className="text-3xl md:text-4xl font-black text-cyan-300 tracking-widest uppercase drop-shadow-[0_0_20px_rgba(6,182,212,0.8)]">
-              ALL-SEEING VOYANCE
-            </div>
-            <p className="text-sm md:text-base text-neutral-200 font-bold">
-              {voyanceEvent.playerName} has shattered the veil! All opponent decks are now double-sided and visible to the caster!
-            </p>
-            <span className="text-xs text-cyan-400 font-mono tracking-widest uppercase">
-              Permanent Debuff • Cannot be cleansed by Status
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Alternate World 2-Second Dark Fade */}
+      {/* Alternate World 2-Second Smooth Pitch-Black Transition */}
       {dimensionFadeActive && (
-        <div className="fixed inset-0 z-[100] pointer-events-none flex flex-col items-center justify-center bg-black animate-dimension-fade select-none">
-          <div className="relative z-10 flex flex-col items-center gap-3 text-center px-4">
-            <span className="text-6xl md:text-7xl animate-pulse">🌌</span>
-            <h2 className="text-3xl md:text-5xl font-black text-purple-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(168,85,247,0.9)]">
-              {dimensionFadeMessage}
-            </h2>
-            <p className="text-sm md:text-base text-neutral-400 font-mono">
-              Shifting reality matrices...
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Avarice Sequential Plunder VFX */}
-      {avariceEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center animate-fade-in">
-          <div className="relative z-10 flex flex-col items-center gap-4 text-center select-none">
-            <div className="text-4xl md:text-5xl font-black text-amber-300 tracking-widest uppercase drop-shadow-[0_0_30px_rgba(251,191,36,1)] flex items-center gap-3">
-              <span>💰</span>
-              <span>AVARICE PLUNDER</span>
-              <span>💰</span>
-            </div>
-            <p className="text-base text-amber-100 font-bold">
-              {avariceEvent.playerName} is seizing special cards from the discard pile! ({avariceEvent.currentIndex + 1}/{avariceEvent.cards.length})
-            </p>
-            {avariceEvent.cards[avariceEvent.currentIndex] && (
-              <div className="scale-125 animate-bounce shadow-[0_0_40px_rgba(251,191,36,0.9)] rounded-xl">
-                <CardView card={avariceEvent.cards[avariceEvent.currentIndex]} size="lg" isSelectable={false} />
-              </div>
-            )}
-          </div>
-        </div>
+        <div
+          className="fixed inset-0 z-[100] pointer-events-none bg-black select-none"
+          style={{ animation: 'dimension-fade 2s ease-in-out forwards' }}
+        />
       )}
 
       {/* Admin Password Prompt Modal */}
@@ -3040,7 +2770,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div className="bg-neutral-950 border-2 border-amber-500/80 rounded-2xl p-6 w-[340px] shadow-[0_0_40px_rgba(245,158,11,0.5)] flex flex-col gap-4 text-white select-none">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xl">🔐</span>
+                
                 <h3 className="text-base font-black tracking-wider text-amber-400 uppercase">Admin Access</h3>
               </div>
               <button
@@ -3113,7 +2843,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         <div className="fixed top-16 right-6 z-[95] bg-neutral-950/95 border border-amber-500/60 rounded-2xl p-4 w-[380px] shadow-[0_0_35px_rgba(245,158,11,0.4)] backdrop-blur-xl text-white select-none animate-fade-in flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
-              <span className="text-base">⚡</span>
+              
               <span className="text-xs font-black tracking-wider text-amber-400 uppercase">Admin Card Spawner</span>
               <span className="text-[10px] text-neutral-500 font-mono">(Shift+L)</span>
             </div>
@@ -3167,7 +2897,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                   : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50'
               }`}
             >
-              {adminSpawnFeedback.isError ? '✕ ' : '✓ '}
+              {adminSpawnFeedback.isError ? 'Error: ' : 'Success: '}
               {adminSpawnFeedback.msg}
             </div>
           )}
