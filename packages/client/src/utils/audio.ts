@@ -4,33 +4,76 @@
  * ultimate divine descent, and background soundtrack playlist.
  */
 
-function playAudioFile(urls: string[], volume = 0.8): void {
+// SFX Audio element pool to prevent garbage collection drops, decoding lag, or playback interruptions
+const sfxPool = new Map<string, HTMLAudioElement[]>();
+
+function playAudioFile(urls: string[], volume = 0.85): void {
+  if (typeof window === 'undefined') return;
+  if (!urls || urls.length === 0) return;
+
+  const url = urls[0];
   try {
-    if (typeof window === 'undefined') return;
+    let pool = sfxPool.get(url);
+    if (!pool) {
+      pool = [];
+      sfxPool.set(url, pool);
+    }
 
-    const tryPlay = (index: number) => {
-      if (index >= urls.length) return;
-      const audio = new Audio(urls[index]);
-      audio.volume = Math.max(0, Math.min(1, volume));
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // If playback failed or file was missing, try fallback URL
-          tryPlay(index + 1);
-        });
-      }
-    };
+    // Find an existing available audio element or create a new one
+    let audio = pool.find(a => a.paused || a.ended);
+    if (!audio) {
+      audio = new Audio(url);
+      audio.preload = 'auto';
+      pool.push(audio);
+    }
 
-    tryPlay(0);
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.currentTime = 0;
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        // If primary URL failed, try fallback if available
+        if (urls.length > 1) {
+          playAudioFile(urls.slice(1), volume);
+        }
+      });
+    }
   } catch {
     // Silently catch any audio context errors
   }
 }
 
+// Automatically unlock audio and pre-warm key SFX on first user click/touch
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const warmUrls = [
+        '/sounds/normal/card_discard.mp3',
+        '/sounds/special/hover.mp3',
+        '/sounds/special/jester.mp3'
+      ];
+      warmUrls.forEach(url => {
+        let pool = sfxPool.get(url);
+        if (!pool) {
+          const a = new Audio(url);
+          a.preload = 'auto';
+          sfxPool.set(url, [a]);
+        }
+      });
+    } catch {
+      // ignore
+    }
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  };
+  window.addEventListener('pointerdown', unlockAudio, { once: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
+}
+
 /**
  * Normal card action sound effects (e.g. card_discard).
  */
-export function playNormalSound(name: string, volume = 0.7): void {
+export function playNormalSound(name: string, volume = 0.85): void {
   playAudioFile([
     `/sounds/normal/${name}.mp3`,
     `/sounds/normal/${name}.ogg`
@@ -50,7 +93,7 @@ export function playHoverSound(volume = 0.85): void {
 /**
  * Unique ability sound effect for special cards (e.g. crack, nuke, time).
  */
-export function playSpecialSound(name: string, volume = 0.8): void {
+export function playSpecialSound(name: string, volume = 0.85): void {
   playAudioFile([
     `/sounds/special/${name}.mp3`,
     `/sounds/special/${name}.ogg`,

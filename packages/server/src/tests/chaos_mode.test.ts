@@ -2680,6 +2680,78 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     session.cleanup();
     done();
   });
+
+  test('v6.4.1 Skip and Reverse 3000ms Duration and Deferred Discard Placement', (t, done) => {
+    const session = new GameSession(
+      'TEST_SKIP_REV',
+      {
+        totalPhases: 10,
+        turnTimerSeconds: 60,
+        gameMode: 'chaos'
+      },
+      () => {},
+      () => {}
+    );
+
+    const skipCard = { id: 's1', type: 'skip' as const, color: 'none' as const, value: 0, points: 15 };
+    const revCard = { id: 'r1', type: 'reverse' as const, color: 'none' as const, value: 0, points: 15 };
+
+    assert.strictEqual(session.getCardAnimationDuration(skipCard, true), 3000);
+    assert.strictEqual(session.getCardAnimationDuration(revCard, true), 3000);
+    assert.strictEqual(session.getCardAnimationDuration(skipCard, false), 0);
+
+    session.enableAnimationDelays = true;
+    session.players = [
+      {
+        id: 'p1',
+        name: 'Player 1',
+        isSpectator: false,
+        isBot: false,
+        isHost: true,
+        secretToken: 'tok1',
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [skipCard, { id: 'c1', type: 'number', color: 'red', value: 2, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'bot1',
+        name: 'Bot 1',
+        isSpectator: false,
+        isBot: true,
+        isHost: false,
+        secretToken: 'tok2',
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [{ id: 'b1', type: 'number', color: 'blue', value: 5, points: 5 }, { id: 'b2', type: 'number', color: 'blue', value: 6, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    session.discardCard('p1', 's1');
+
+    // Skip card removed from hand
+    assert.strictEqual(session.players[0].cards.some(c => c.id === 's1'), false);
+    // Not yet on discard pile
+    assert.strictEqual(session.discardPile.some(c => c.id === 's1'), false);
+    // Animation locked
+    assert.ok(session.isAnimationLocked());
+
+    session.cleanup();
+    done();
+  });
 });
 
 

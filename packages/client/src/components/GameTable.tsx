@@ -327,6 +327,51 @@ export const GameTable: React.FC<GameTableProps> = ({
     rightPlayer = gameState.players[(myIndex + 3) % numPlayers];
   }
 
+  const getPlayerCoords = (playerId?: string): { x: number; y: number } => {
+    if (!playerId) return { x: 960, y: 540 };
+    if (playerId === secretToken) {
+      return getCenterCoords(handRef.current) || { x: 960, y: 980 };
+    }
+    const oppEl =
+      document.querySelector(`[data-opponent-id="${playerId}"]`) ||
+      document.querySelector(`[data-player-station="${playerId}"]`) ||
+      document.querySelector(`[data-station-header="${playerId}"]`);
+    const coords = getCenterCoords(oppEl);
+    if (coords) return coords;
+
+    if (topPlayer?.id === playerId) return { x: 960, y: 70 };
+    if (leftPlayer?.id === playerId) return { x: 140, y: 350 };
+    if (rightPlayer?.id === playerId) return { x: 1780, y: 350 };
+    return { x: 960, y: 120 };
+  };
+
+  const finishSpecialAnimation = (card?: Card) => {
+    const centerCoords = { x: 960, y: 540 };
+    const discardCoords = getCenterCoords(discardRef.current) || { x: 1045, y: 535 };
+    setActiveFlyingCard({
+      id: `land_${Date.now()}`,
+      card: card || gameStateRef.current.topDiscard || undefined,
+      startX: centerCoords.x,
+      startY: centerCoords.y,
+      targetX: discardCoords.x,
+      targetY: discardCoords.y,
+      startScale: 1.0,
+      targetScale: 1.0,
+      startRot: 0,
+      targetRot: 0
+    });
+    if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
+    flyingCardTimerRef.current = setTimeout(() => {
+      setActiveFlyingCard(null);
+      flyingCardTimerRef.current = null;
+      setDiscardKey(prev => prev + 1);
+      setDisplayedDiscardCard(gameStateRef.current.topDiscard);
+      if (!isMuted) {
+        playNormalSound('card_discard');
+      }
+    }, 350);
+  };
+
   useEffect(() => {
     if (!latestAction || lastHandledActionIdRef.current === latestAction.id) return;
     lastHandledActionIdRef.current = latestAction.id;
@@ -353,24 +398,13 @@ export const GameTable: React.FC<GameTableProps> = ({
         startRot = 0;
         targetRot = -4;
       } else {
-        const oppEl =
-          document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`) ||
-          document.querySelector(`[data-player-station="${latestAction.playerId}"]`) ||
-          document.querySelector(`[data-station-header="${latestAction.playerId}"]`);
-        let oppCoords = getCenterCoords(oppEl);
-        if (!oppCoords) {
-          if (topPlayer?.id === latestAction.playerId) oppCoords = { x: 960, y: 70 };
-          else if (leftPlayer?.id === latestAction.playerId) oppCoords = { x: 140, y: 350 };
-          else if (rightPlayer?.id === latestAction.playerId) oppCoords = { x: 1780, y: 350 };
-          else oppCoords = { x: 960, y: 120 };
-        }
-        targetCoords = oppCoords;
+        targetCoords = getPlayerCoords(latestAction.playerId);
         startScale = 1;
         targetScale = 0.65;
         startRot = 0;
         targetRot = 4;
       }
-    } else if (isDiscardOrSpecialAction(latestAction.type)) {
+    } else if (latestAction.type === 'discard') {
       discardFlightActiveRef.current = true;
       // Hold previous discard on the pile while the new card is in the air
       const prevDiscard = gameState.discardHistory && gameState.discardHistory.length > 1
@@ -393,18 +427,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         startRot = -3;
         targetRot = 0;
       } else {
-        const oppEl =
-          document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`) ||
-          document.querySelector(`[data-player-station="${latestAction.playerId}"]`) ||
-          document.querySelector(`[data-station-header="${latestAction.playerId}"]`);
-        let oppCoords = getCenterCoords(oppEl);
-        if (!oppCoords) {
-          if (topPlayer?.id === latestAction.playerId) oppCoords = { x: 960, y: 70 };
-          else if (leftPlayer?.id === latestAction.playerId) oppCoords = { x: 140, y: 350 };
-          else if (rightPlayer?.id === latestAction.playerId) oppCoords = { x: 1780, y: 350 };
-          else oppCoords = { x: 960, y: 120 };
-        }
-        startCoords = oppCoords;
+        startCoords = getPlayerCoords(latestAction.playerId);
         startScale = 0.65;
         targetScale = 1;
         startRot = 4;
@@ -428,18 +451,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         startRot = -3;
         targetRot = 0;
       } else {
-        const oppEl =
-          document.querySelector(`[data-opponent-id="${latestAction.playerId}"]`) ||
-          document.querySelector(`[data-player-station="${latestAction.playerId}"]`) ||
-          document.querySelector(`[data-station-header="${latestAction.playerId}"]`);
-        let oppCoords = getCenterCoords(oppEl);
-        if (!oppCoords) {
-          if (topPlayer?.id === latestAction.playerId) oppCoords = { x: 960, y: 70 };
-          else if (leftPlayer?.id === latestAction.playerId) oppCoords = { x: 140, y: 350 };
-          else if (rightPlayer?.id === latestAction.playerId) oppCoords = { x: 1780, y: 350 };
-          else oppCoords = { x: 960, y: 120 };
-        }
-        startCoords = oppCoords;
+        startCoords = getPlayerCoords(latestAction.playerId);
         startScale = 0.65;
         targetScale = 0.75;
         startRot = 4;
@@ -478,6 +490,9 @@ export const GameTable: React.FC<GameTableProps> = ({
           discardFlightActiveRef.current = false;
           setDiscardKey(prev => prev + 1);
           setDisplayedDiscardCard(gameStateRef.current.topDiscard);
+          if (!isMuted) {
+            playNormalSound('card_discard');
+          }
         }
       }, 430);
     }
@@ -501,7 +516,9 @@ export const GameTable: React.FC<GameTableProps> = ({
       time: { image: '/cards/custom/time.png', title: 'Time' },
       plus_two: { image: '/cards/custom/plus_two.png', title: '+2' },
       plus_three: { image: '/cards/custom/plus_three.png', title: '+3' },
-      random: { image: '/cards/custom/random.png', title: 'Random' }
+      random: { image: '/cards/custom/random.png', title: 'Random' },
+      skip: { image: '/cards/skip.png', title: 'Skip' },
+      reverse: { image: '/cards/reverse.png', title: 'Reverse' }
     };
 
     const specialInfo = SPECIAL_CARDS_MAP[latestAction.type];
@@ -543,6 +560,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           crackTimerRef.current = setTimeout(() => {
             setIsScreenShaking(false);
             crackTimerRef.current = null;
+            finishSpecialAnimation(latestAction.card);
           }, 2000);
         } else if (latestAction.type === 'nuke') {
           if (nukeTimerRef.current) clearTimeout(nukeTimerRef.current);
@@ -550,6 +568,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           nukeTimerRef.current = setTimeout(() => {
             setNukeActive(false);
             nukeTimerRef.current = null;
+            finishSpecialAnimation(latestAction.card);
           }, 5000);
         } else if (latestAction.type === 'time') {
           if (timeWarpTimerRef.current) clearTimeout(timeWarpTimerRef.current);
@@ -565,7 +584,81 @@ export const GameTable: React.FC<GameTableProps> = ({
           timeWarpTimerRef.current = setTimeout(() => {
             setTimeWarpEvent(null);
             timeWarpTimerRef.current = null;
+            finishSpecialAnimation(latestAction.card);
           }, 5200);
+        } else if (latestAction.type === 'plus_two' || latestAction.type === 'plus_three') {
+          const count = latestAction.type === 'plus_three' ? 3 : 2;
+          const startCoords = getCenterCoords(deckRef.current) || { x: 875, y: 535 };
+          const targetCoords = getPlayerCoords(latestAction.targetPlayerId);
+          const targetPlayer = currentPlayers.find(p => p.id === latestAction.targetPlayerId);
+          const targetName = targetPlayer ? targetPlayer.name : 'Target';
+
+          plusDrawTimersRef.current.forEach(t => clearTimeout(t));
+          plusDrawTimersRef.current = [];
+
+          setPlusDrawEvent({ count, targetCoords, startCoords, targetName, currentStep: 1 });
+          if (!isMuted) playNormalSound('card_discard');
+
+          const t1 = setTimeout(() => {
+            setPlusDrawEvent(prev => prev ? { ...prev, currentStep: 2 } : null);
+            if (!isMuted) playNormalSound('card_discard');
+          }, 700);
+          plusDrawTimersRef.current.push(t1);
+
+          if (count === 3) {
+            const t2 = setTimeout(() => {
+              setPlusDrawEvent(prev => prev ? { ...prev, currentStep: 3 } : null);
+              if (!isMuted) playNormalSound('card_discard');
+            }, 1400);
+            plusDrawTimersRef.current.push(t2);
+          }
+
+          const tEnd = setTimeout(() => {
+            setPlusDrawEvent(null);
+            finishSpecialAnimation(latestAction.card);
+          }, count * 700);
+          plusDrawTimersRef.current.push(tEnd);
+        } else if (latestAction.type === 'number_eye' || latestAction.type === 'color_eye') {
+          if (eyeOverlayTimerRef.current) clearTimeout(eyeOverlayTimerRef.current);
+          const texture =
+            latestAction.type === 'number_eye'
+              ? '/cards/custom/number_eye/texture.png'
+              : '/cards/custom/color_eye/texture.png';
+          const title = latestAction.type === 'number_eye' ? 'NUMBER EYE' : 'COLOR EYE';
+          setEyeOverlay({
+            type: latestAction.type,
+            texture,
+            title,
+            playerName: latestAction.playerName
+          });
+          eyeOverlayTimerRef.current = setTimeout(() => {
+            setEyeOverlay(null);
+            eyeOverlayTimerRef.current = null;
+            finishSpecialAnimation(latestAction.card);
+          }, 3000);
+        } else if (latestAction.type === 'jester') {
+          if (jesterSwapTimerRef.current) clearTimeout(jesterSwapTimerRef.current);
+          const targetPlayer = currentPlayers.find(p => p.id === latestAction.targetPlayerId);
+          const targetName = targetPlayer ? targetPlayer.name : 'Opponent';
+          const casterCoords = getPlayerCoords(latestAction.playerId);
+          const targetCoords = getPlayerCoords(latestAction.targetPlayerId);
+
+          setJesterSwapEvent({
+            casterId: latestAction.playerId,
+            casterName: latestAction.playerName,
+            targetId: latestAction.targetPlayerId,
+            targetName,
+            casterCoords,
+            targetCoords
+          });
+
+          jesterSwapTimerRef.current = setTimeout(() => {
+            setJesterSwapEvent(null);
+            jesterSwapTimerRef.current = null;
+            finishSpecialAnimation(latestAction.card);
+          }, 1250);
+        } else {
+          finishSpecialAnimation(latestAction.card);
         }
       }, 3000);
     }
@@ -589,6 +682,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       divineDescentTimerRef.current = setTimeout(() => {
         setDivineDescentEvent(null);
         divineDescentTimerRef.current = null;
+        finishSpecialAnimation(latestAction.card);
       }, 6000);
     }
 
@@ -832,6 +926,9 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
     const isSpecial = isChaosSpecialCard(selectedCard.type);
     onDiscardCard(selectedCard.id, undefined, isSpecial ? false : true);
+    if (!isMuted && !isSpecial) {
+      playNormalSound('card_discard');
+    }
     clearSelection();
   };
 
