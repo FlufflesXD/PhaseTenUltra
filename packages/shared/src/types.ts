@@ -273,6 +273,7 @@ export interface PublicGameState {
   phaseDefinitions: PhaseDefinition[];
   settings?: GameSettings;
   isAlternateWorld?: boolean;
+  alternateDimensionActive?: boolean;
   voyanceActive?: boolean;
   alternateTurnCounter?: number;
   animationLockUntil?: number;

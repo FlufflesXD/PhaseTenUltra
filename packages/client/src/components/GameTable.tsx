@@ -1635,14 +1635,25 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
               
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.7</span>
-            {gameState.isAlternateWorld && (
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.8</span>
+            {gameState.alternateDimensionActive ? (
+              gameState.isAlternateWorld ? (
+                <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
+                  <span>Alternate World</span>
+                  <span className="text-[10px] text-purple-300 font-mono">({(gameState.alternateTurnCounter ?? 0) % 2 + 1}/2 turns)</span>
+                </span>
+              ) : (
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded border border-cyan-500/50 bg-cyan-950/80 text-cyan-200 flex items-center gap-1 shadow-[0_0_10px_rgba(6,182,212,0.4)]">
+                  <span>Main World</span>
+                  <span className="text-[10px] text-cyan-300 font-mono">({(gameState.alternateTurnCounter ?? 0) % 2 + 1}/2 turns)</span>
+                </span>
+              )
+            ) : gameState.isAlternateWorld ? (
               <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
-                
                 <span>Alternate World</span>
                 <span className="text-[10px] text-purple-300 font-mono">({(gameState.alternateTurnCounter ?? 0) % 2 + 1}/2 turns)</span>
               </span>
-            )}
+            ) : null}
             <span className="text-neutral-300 font-bold text-sm">Round {gameState.roundNumber}</span>
             <span
               title={`Play Direction: ${gameState.playDirection === 1 ? 'Clockwise' : 'Counter-Clockwise'}`}

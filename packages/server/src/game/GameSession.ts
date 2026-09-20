@@ -947,47 +947,58 @@ export class GameSession {
       });
     }
 
-    // Bug 1 Part 2: Normal discard in Alternate Dimension ending turn 2
-    const triggersAlternateReturn = Boolean(
+    // When Alternate Reality is active, every 2 turns triggers a dimension shift
+    const triggersDimensionShift = Boolean(
       this.alternateDimensionActive &&
       this.alternateTurnCounter >= 1 &&
       (!shouldActivate || card.type === 'skip' || card.type === 'reverse')
     );
 
-    if (this.enableAnimationDelays && triggersAlternateReturn) {
+    if (triggersDimensionShift) {
       this.alternateTurnCounter = 0;
-      this.alternateDimensionActive = false;
-      // 600ms discard animation + 1600ms dimension flip transition = 2200ms
-      this.animationLockUntil = Date.now() + 2200;
 
-      this.addPendingEffectTimeout(() => {
-        if (this.status !== 'in_game') return;
-        this.emitAction({
-          type: 'alternate_shift',
-          playerId: 'system',
-          playerName: 'Dimension Rift',
-          isAlternateWorld: false,
-          message: `Dimensional shift! Entering the Main Dimension!`
-        });
+      if (this.enableAnimationDelays) {
+        // 600ms discard animation + 1600ms dimension flip transition = 2200ms
+        this.animationLockUntil = Date.now() + 2200;
 
-        // Under cover of pitch black at 380ms into flip:
         this.addPendingEffectTimeout(() => {
           if (this.status !== 'in_game') return;
-          this.toggleDimension(false);
-          this.onStateChange();
-        }, 380);
+          const targetIsAlternate = !this.isAlternateWorld;
+          this.emitAction({
+            type: 'alternate_shift',
+            playerId: 'system',
+            playerName: 'Dimension Rift',
+            isAlternateWorld: targetIsAlternate,
+            message: `Dimensional shift! Entering ${targetIsAlternate ? 'the Alternate Dimension' : 'the Main Dimension'}!`
+          });
 
-        // Advance turn after 1600ms flip concludes:
-        this.addPendingEffectTimeout(() => {
-          if (this.status !== 'in_game') return;
-          if (current.cards.length === 0) {
-            this.endRound(current);
-            return;
-          }
-          this.advanceTurn();
-        }, 1600);
-      }, 600);
-      return;
+          // Under cover of pitch black at 380ms into flip:
+          this.addPendingEffectTimeout(() => {
+            if (this.status !== 'in_game') return;
+            this.toggleDimension(false);
+            this.onStateChange();
+          }, 380);
+
+          // Advance turn after 1600ms flip concludes:
+          this.addPendingEffectTimeout(() => {
+            if (this.status !== 'in_game') return;
+            if (current.cards.length === 0) {
+              this.endRound(current);
+              return;
+            }
+            this.advanceTurn(0, true);
+          }, 1600);
+        }, 600);
+        return;
+      } else {
+        this.toggleDimension(true);
+        if (current.cards.length === 0) {
+          this.endRound(current);
+          return;
+        }
+        this.advanceTurn(0, true);
+        return;
+      }
     }
 
     if (current.cards.length === 0) {
@@ -1832,15 +1843,48 @@ export class GameSession {
         this.endRound(current);
         return;
       }
+
+      if (this.alternateDimensionActive && this.alternateTurnCounter >= 1) {
+        this.alternateTurnCounter = 0;
+        this.animationLockUntil = Date.now() + 1600;
+
+        const targetIsAlternate = !this.isAlternateWorld;
+        this.emitAction({
+          type: 'alternate_shift',
+          playerId: 'system',
+          playerName: 'Dimension Rift',
+          isAlternateWorld: targetIsAlternate,
+          message: `Dimensional shift! Entering ${targetIsAlternate ? 'the Alternate Dimension' : 'the Main Dimension'}!`
+        });
+
+        // Under cover of pitch black at 380ms into flip:
+        this.addPendingEffectTimeout(() => {
+          if (this.status !== 'in_game') return;
+          this.toggleDimension(false);
+          this.onStateChange();
+        }, 380);
+
+        // Advance turn after 1600ms flip concludes:
+        this.addPendingEffectTimeout(() => {
+          if (this.status !== 'in_game') return;
+          if (current.cards.length === 0) {
+            this.endRound(current);
+            return;
+          }
+          this.advanceTurn(0, true);
+        }, 1600);
+        return;
+      }
+
       this.advanceTurn();
     }, animDuration);
   }
 
-  private advanceTurn(animationDuration: number = 0): void {
+  private advanceTurn(animationDuration: number = 0, skipDimensionIncrement: boolean = false): void {
     const active = this.getActivePlayers();
     if (active.length === 0) return;
 
-    if (this.alternateDimensionActive) {
+    if (this.alternateDimensionActive && !skipDimensionIncrement) {
       this.alternateTurnCounter++;
       if (this.alternateTurnCounter >= 2) {
         this.alternateTurnCounter = 0;
@@ -1867,6 +1911,12 @@ export class GameSession {
       clearInterval(this.turnTimerInterval);
       this.turnTimerInterval = undefined;
     }
+
+    if (this.isAlternateWorld && this.mainWorldState) {
+      this.toggleDimension(false);
+    }
+    this.alternateDimensionActive = false;
+    this.alternateTurnCounter = 0;
 
     this.status = 'round_end';
     this.roundWinnerId = roundWinner ? roundWinner.id : undefined;
@@ -2061,6 +2111,7 @@ export class GameSession {
       phaseDefinitions: this.phaseDefinitions,
       settings: this.settings,
       isAlternateWorld: this.isAlternateWorld,
+      alternateDimensionActive: this.alternateDimensionActive,
       voyanceActive: this.voyanceCasterIds.length > 0,
       alternateTurnCounter: this.alternateTurnCounter,
       animationLockUntil: this.animationLockUntil
@@ -2776,8 +2827,6 @@ export class GameSession {
         }
       }
       this.isAlternateWorld = false;
-      this.alternateDimensionActive = false;
-      this.alternateTurnCounter = 0;
     } else {
       // Save Main World
       this.mainWorldState = {

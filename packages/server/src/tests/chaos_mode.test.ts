@@ -2229,6 +2229,22 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     (session as any).advanceTurn();
     assert.strictEqual(session.isAlternateWorld, false, 'Switched back to Main World after 2 turns');
     assert.ok(session.players[1].cards.some(c => c.id === 'main_1'), 'Original main world cards restored');
+
+    // Turn 3 passes (1 turn in Main World)
+    (session as any).advanceTurn();
+    assert.strictEqual(session.isAlternateWorld, false, 'Still in Main World after 1 turn');
+
+    // Turn 4 passes (2 turns in Main World) -> switches back to Alternate World!
+    (session as any).advanceTurn();
+    assert.strictEqual(session.isAlternateWorld, true, 'Switched back to Alternate World after 2 turns in Main World');
+
+    // Turn 5 passes (1 turn in Alternate World)
+    (session as any).advanceTurn();
+    assert.strictEqual(session.isAlternateWorld, true, 'Still in Alternate World after 1 turn');
+
+    // Turn 6 passes (2 turns in Alternate World) -> switches back to Main World!
+    (session as any).advanceTurn();
+    assert.strictEqual(session.isAlternateWorld, false, 'Switched back to Main World after 2 turns');
   });
 
   test('v6.0 Avarice Ultimate Ability: Plunders all special cards from discard pile into caster hand', () => {
@@ -2835,15 +2851,19 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
 
     const altDiscardAction = emittedActions.find(a => a.type === 'discard' && a.card?.id === 'alt_num_5');
     assert.ok(altDiscardAction, 'Must emit discard action in alternate dimension');
-    assert.strictEqual(session.alternateDimensionActive, false, 'Must reset alternateDimensionActive upon triggering return');
+    assert.strictEqual(session.alternateDimensionActive, true, 'alternateDimensionActive must remain true to continue cycling');
+    assert.strictEqual(session.alternateTurnCounter, 0, 'alternateTurnCounter resets to 0 for next dimension');
 
-    // Wait for the 600ms deferred alternate shift
+    // Wait for the 600ms deferred shift and 380ms black overlay (980ms total)
     setTimeout(() => {
       const shiftAction = emittedActions.find(a => a.type === 'alternate_shift' && a.isAlternateWorld === false);
       assert.ok(shiftAction, 'Must emit alternate_shift back to main dimension after discard flight delay');
+      assert.strictEqual(session.isAlternateWorld, false, 'Now in Main World after flip transition switches world');
+      assert.strictEqual(session.alternateDimensionActive, true, 'Alternate dimension remains active to continue cycling');
+      assert.strictEqual(session.alternateTurnCounter, 0, 'Counter reset for Main World');
       session.cleanup();
       done();
-    }, 700);
+    }, 1050);
   });
 });
 

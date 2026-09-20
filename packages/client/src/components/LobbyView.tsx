@@ -142,7 +142,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   </div>
                 </div>
                 <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-white/5 text-amber-400 border border-white/10">
-                  v6.7
+                  v6.8
                 </span>
               </div>
 
@@ -211,7 +211,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     <div className="flex items-center gap-2">
                       <h1 className="text-xl font-black text-white tracking-tight">PhaseTen Ultra</h1>
                       <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        v6.7
+                        v6.8
                       </span>
                     </div>
                     <p className="text-xs text-neutral-400 font-medium">Ultimate Multiplayer Card Arena</p>
@@ -374,7 +374,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-black text-white tracking-tight">PhaseTen Ultra</h1>
                 <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  v6.7
+                  v6.8
                 </span>
               </div>
               <p className="text-xs text-neutral-400 font-medium">Lobby & Game Configuration</p>
