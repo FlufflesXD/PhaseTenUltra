@@ -572,29 +572,20 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (dimensionFlipTimerRef3.current) clearTimeout(dimensionFlipTimerRef3.current);
 
       const isEntering = latestAction.type === 'ultimate_alternate' ? true : Boolean(latestAction.isAlternateWorld);
-      const startDelay = latestAction.type === 'ultimate_alternate' ? 6000 : 0;
 
+      // Phase 1 (0 to 380ms): Visibly rotate screen upside down in under 0.4s while fading to solid black
+      setDimensionFlipState(isEntering ? 'flipping_to_alt' : 'flipping_to_main');
+      setIsDimensionOverlayVisible(true);
+
+      // Phase 2 (at 380ms): Under cover of solid pitch-black, unflip rotation back to 0deg
       dimensionFlipTimerRef1.current = setTimeout(() => {
-        // Phase 1 (0 to 380ms): Visibly rotate screen upside down in under 0.4s while fading to black
-        setDimensionFlipState(isEntering ? 'flipping_to_alt' : 'flipping_to_main');
-        setIsDimensionOverlayVisible(true);
-        setDimensionOverlayOpacity(1);
+        setDimensionFlipState('idle');
 
-        // Phase 2 (at 380ms): Under complete pitch-black, unflip rotation back to normal
+        // Phase 3 (at 1600ms): Black overlay has finished fading out (1.2s smooth fade-out), unlock controls
         dimensionFlipTimerRef2.current = setTimeout(() => {
-          setDimensionFlipState('idle');
-
-          // Phase 3 (at 420ms): Smoothly fade out from black into the new world
-          setTimeout(() => {
-            setDimensionOverlayOpacity(0);
-          }, 40);
-
-          // Phase 4 (at 1650ms): Transition complete, unlock controls
-          dimensionFlipTimerRef3.current = setTimeout(() => {
-            setIsDimensionOverlayVisible(false);
-          }, 1250);
-        }, 380);
-      }, startDelay);
+          setIsDimensionOverlayVisible(false);
+        }, 1220);
+      }, 380);
     }
   }, [latestAction, isMuted]);
 
@@ -1533,7 +1524,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
               
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.2</span>
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.3</span>
             {gameState.isAlternateWorld && (
               <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
                 
@@ -2788,9 +2779,14 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
         </div>
       </div>
 
-      {/* Universal Divine Descent (5.5s) */}
+      {/* Universal Divine Descent (6.0s with smooth fade-out) */}
       {divineDescentEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden"
+          style={{
+            animation: 'divineOverlayFade 6.0s ease-in-out forwards'
+          }}
+        >
           {/* Vertical Descending God Rays */}
           <div
             className="absolute inset-0 pointer-events-none"
@@ -2840,10 +2836,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
         <div
           className="fixed inset-0 z-[100] pointer-events-none bg-black select-none"
           style={{
-            opacity: dimensionOverlayOpacity,
-            transition: dimensionOverlayOpacity === 1
-              ? 'opacity 0.38s cubic-bezier(0.4, 0, 0.2, 1)'
-              : 'opacity 1.2s ease-out'
+            animation: 'dimensionBlackFadeInOut 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards'
           }}
         />
       )}
@@ -3029,6 +3022,20 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
           80% { transform: scale(${scale}) translate(7px, 5px) rotate(0.4deg); }
           100% { transform: scale(${scale}) translate(0, 0) rotate(0deg); }
         }
+        @keyframes divineOverlayFade {
+          0% {
+            opacity: 0;
+          }
+          10% {
+            opacity: 1;
+          }
+          84% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+          }
+        }
         @keyframes divineDescend {
           0% {
             transform: translateY(-260px) scale(1.4);
@@ -3038,12 +3045,26 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
             transform: translateY(0px) scale(1.1);
             opacity: 1;
           }
-          82% {
+          84% {
             transform: translateY(0px) scale(1.1);
             opacity: 1;
           }
           100% {
-            transform: translateY(160px) scale(0.6);
+            transform: translateY(120px) scale(0.85);
+            opacity: 0;
+          }
+        }
+        @keyframes dimensionBlackFadeInOut {
+          0% {
+            opacity: 0;
+          }
+          24% {
+            opacity: 1;
+          }
+          28% {
+            opacity: 1;
+          }
+          100% {
             opacity: 0;
           }
         }

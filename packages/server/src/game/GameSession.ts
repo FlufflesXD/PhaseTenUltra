@@ -53,7 +53,33 @@ export class GameSession {
   public winnerId?: string;
   public roundWinnerId?: string;
 
-  public voyanceCasterId?: string;
+  public voyanceCasterIds: string[] = [];
+  public get voyanceCasterId(): string | undefined {
+    return this.voyanceCasterIds[0];
+  }
+  public set voyanceCasterId(id: string | undefined) {
+    if (!id) this.voyanceCasterIds = [];
+    else if (!this.voyanceCasterIds.includes(id)) this.voyanceCasterIds.push(id);
+  }
+  public enableAnimationDelays: boolean = false;
+  private pendingEffectTimeouts: NodeJS.Timeout[] = [];
+
+  public clearPendingEffectTimeouts(): void {
+    for (const t of this.pendingEffectTimeouts) {
+      clearTimeout(t);
+    }
+    this.pendingEffectTimeouts = [];
+  }
+
+  public addPendingEffectTimeout(fn: () => void, delayMs: number): NodeJS.Timeout {
+    const t = setTimeout(() => {
+      this.pendingEffectTimeouts = this.pendingEffectTimeouts.filter(item => item !== t);
+      fn();
+    }, delayMs);
+    this.pendingEffectTimeouts.push(t);
+    return t;
+  }
+
   public isAlternateWorld: boolean = false;
   public alternateDimensionActive: boolean = false;
   public alternateTurnCounter: number = 0;
@@ -66,6 +92,7 @@ export class GameSession {
   public getCardAnimationDuration(card: Card, shouldActivate: boolean): number {
     if (!shouldActivate) return 0;
     if (isUltimateCard(card.type)) {
+      if (card.type === 'alternate') return 7600;
       return 6000;
     }
     if (isChaosSpecialCard(card.type)) {
@@ -192,7 +219,8 @@ export class GameSession {
     this.status = 'in_game';
     this.allLaidDownPhases = [];
     this.roundWinnerId = undefined;
-    this.voyanceCasterId = undefined;
+    this.voyanceCasterIds = [];
+    this.clearPendingEffectTimeouts();
     this.isAlternateWorld = false;
     this.alternateDimensionActive = false;
     this.alternateTurnCounter = 0;
@@ -794,6 +822,11 @@ export class GameSession {
 
     this.discardPile.push(card);
 
+    const animDuration = this.getCardAnimationDuration(card, shouldActivate);
+    if (animDuration > 0) {
+      this.animationLockUntil = Date.now() + animDuration;
+    }
+
     if (!shouldActivate) {
       this.notify({
         id: `notif_${Date.now()}`,
@@ -848,6 +881,11 @@ export class GameSession {
         card,
         message: `${current.name} reversed play direction!`
       });
+    } else if (this.enableAnimationDelays) {
+      // Execute special card with animation delay: Totem hover (3.0s) plays first,
+      // then mechanical state mutation applies at 3.0s, and turn advances at animDuration.
+      this.executeSpecialCardWithAnimationDelay(current, card, _skipTargetPlayerId, animDuration);
+      return;
     } else if (card.type === 'nuke') {
       this.applyNukeEffect(current, card);
     } else if (card.type === 'jester') {
@@ -894,9 +932,46 @@ export class GameSession {
       });
     }
 
-    const animDuration = this.getCardAnimationDuration(card, shouldActivate);
-    if (animDuration > 0) {
-      this.animationLockUntil = Date.now() + animDuration;
+    // Bug 1 Part 2: Normal discard in Alternate Dimension ending turn 2
+    const triggersAlternateReturn = Boolean(
+      this.alternateDimensionActive &&
+      this.alternateTurnCounter >= 1 &&
+      (!shouldActivate || card.type === 'skip' || card.type === 'reverse')
+    );
+
+    if (this.enableAnimationDelays && triggersAlternateReturn) {
+      this.alternateTurnCounter = 0;
+      // 600ms discard animation + 1600ms dimension flip transition = 2200ms
+      this.animationLockUntil = Date.now() + 2200;
+
+      this.addPendingEffectTimeout(() => {
+        if (this.status !== 'in_game') return;
+        this.emitAction({
+          type: 'alternate_shift',
+          playerId: 'system',
+          playerName: 'Dimension Rift',
+          isAlternateWorld: false,
+          message: `Dimensional shift! Entering the Main Dimension!`
+        });
+
+        // Under cover of pitch black at 380ms into flip:
+        this.addPendingEffectTimeout(() => {
+          if (this.status !== 'in_game') return;
+          this.toggleDimension(false);
+          this.onStateChange();
+        }, 380);
+
+        // Advance turn after 1600ms flip concludes:
+        this.addPendingEffectTimeout(() => {
+          if (this.status !== 'in_game') return;
+          if (current.cards.length === 0) {
+            this.endRound(current);
+            return;
+          }
+          this.advanceTurn();
+        }, 1600);
+      }, 600);
+      return;
     }
 
     if (current.cards.length === 0) {
@@ -1503,6 +1578,187 @@ export class GameSession {
     }
   }
 
+  private executeSpecialCardWithAnimationDelay(
+    current: GamePlayerInternal,
+    card: Card,
+    skipTargetPlayerId: string | undefined,
+    animDuration: number
+  ): void {
+    // 1. Emit action event at t = 0 so clients launch 3.0s Totem hover
+    const active = this.getActivePlayers();
+    let target = skipTargetPlayerId
+      ? active.find(p => p.id === skipTargetPlayerId && (card.type === 'time' || card.type === 'plus_two' || card.type === 'plus_three' || p.id !== current.id))
+      : undefined;
+
+    if (!target) {
+      const opponents = active.filter(p => p.id !== current.id);
+      opponents.sort((a, b) => a.cards.length - b.cards.length);
+      target = opponents[0];
+    }
+
+    if (card.type === 'nuke') {
+      this.emitAction({
+        type: 'nuke',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} detonated a NUKE!`
+      });
+    } else if (card.type === 'jester') {
+      this.emitAction({
+        type: 'jester',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target?.id,
+        card,
+        message: `${current.name} played Jester on ${target?.name || 'an opponent'}!`
+      });
+    } else if (card.type === 'plus_two' || card.type === 'plus_three') {
+      this.emitAction({
+        type: card.type,
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target?.id,
+        card,
+        message: `${current.name} played ${card.type.toUpperCase()} on ${target?.name || 'an opponent'}!`
+      });
+    } else if (card.type === 'redo') {
+      this.emitAction({
+        type: 'redo',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} played REDO!`
+      });
+    } else if (card.type === 'time') {
+      const rollResult = Math.random() < 0.5 ? 'green' : 'red';
+      const isRewind = rollResult === 'green';
+      const oldPhase = target?.currentPhase ?? 2;
+      const newPhase = isRewind ? Math.max(1, oldPhase - 1) : Math.min(this.phaseDefinitions.length, oldPhase + 1);
+      this.emitAction({
+        type: 'time',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target?.id,
+        card,
+        timeResult: rollResult,
+        timeOldPhase: oldPhase,
+        timeNewPhase: newPhase,
+        message: `${current.name} used TIME on ${target?.name || 'an opponent'}!`
+      });
+    } else if (card.type === 'crack') {
+      this.emitAction({
+        type: 'crack',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} played CRACK!`
+      });
+    } else if (card.type === 'status') {
+      this.emitAction({
+        type: 'status',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} played STATUS CLEAR!`
+      });
+    } else if (card.type === 'luck') {
+      this.emitAction({
+        type: 'luck',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} gained LUCK!`
+      });
+    } else if (card.type === 'unlucky') {
+      this.emitAction({
+        type: 'unlucky',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target?.id,
+        card,
+        message: `${current.name} played UNLUCKY on ${target?.name || 'an opponent'}!`
+      });
+    } else if (card.type === 'double') {
+      this.emitAction({
+        type: 'double',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target?.id,
+        card,
+        message: `${current.name} played DOUBLE on ${target?.name || 'an opponent'}!`
+      });
+    } else if (card.type === 'random') {
+      const allowed = ['nuke', 'jester', 'plus_two', 'plus_three', 'redo', 'time', 'crack', 'status', 'luck', 'unlucky', 'double'];
+      const chosen = allowed[Math.floor(Math.random() * allowed.length)] as CardType;
+      this.emitAction({
+        type: chosen as any,
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target?.id,
+        card,
+        randomChosenType: chosen,
+        message: `${current.name} played RANDOM: ${chosen.toUpperCase()} triggered!`
+      });
+    } else {
+      this.emitAction({
+        type: card.type as any,
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        message: `${current.name} played ${card.type.toUpperCase()}!`
+      });
+    }
+
+    // 2. Schedule mechanical state mutation at 3000ms (end of Totem hover)
+    this.addPendingEffectTimeout(() => {
+      if (this.status !== 'in_game') return;
+
+      if (card.type === 'nuke') {
+        this.applyNukeEffect(current, card);
+      } else if (card.type === 'jester') {
+        this.applyJesterEffect(current, card, skipTargetPlayerId);
+      } else if (card.type === 'plus_two' || card.type === 'plus_three') {
+        const count = card.type === 'plus_three' ? 3 : 2;
+        this.applyPlusCardsEffect(current, card, count, skipTargetPlayerId);
+      } else if (card.type === 'draw_two') {
+        this.applyDrawTwoEffect(current, card);
+      } else if (card.type === 'redo') {
+        this.applyRedoEffect(current, card);
+      } else if (card.type === 'time') {
+        this.applyTimeEffect(current, card, skipTargetPlayerId);
+      } else if (card.type === 'number_eye') {
+        this.applyNumberEyeEffect(current, card, skipTargetPlayerId);
+      } else if (card.type === 'color_eye') {
+        this.applyColorEyeEffect(current, card, skipTargetPlayerId);
+      } else if (card.type === 'crack') {
+        this.applyCrackEffect(current, card);
+      } else if (card.type === 'status') {
+        this.applyStatusEffect(current, card);
+      } else if (card.type === 'luck') {
+        this.applyLuckEffect(current, card);
+      } else if (card.type === 'unlucky') {
+        this.applyUnluckyEffect(current, card, skipTargetPlayerId);
+      } else if (card.type === 'double') {
+        this.applyDoubleEffect(current, card, skipTargetPlayerId);
+      } else if (card.type === 'random') {
+        this.applyRandomEffect(current, card, skipTargetPlayerId);
+      }
+
+      this.onStateChange();
+    }, 3000);
+
+    // 3. Advance turn after full animation concludes
+    this.addPendingEffectTimeout(() => {
+      if (this.status !== 'in_game') return;
+      if (current.cards.length === 0) {
+        this.endRound(current);
+        return;
+      }
+      this.advanceTurn();
+    }, animDuration);
+  }
+
   private advanceTurn(animationDuration: number = 0): void {
     const active = this.getActivePlayers();
     if (active.length === 0) return;
@@ -1529,6 +1785,7 @@ export class GameSession {
   }
 
   private endRound(roundWinner?: GamePlayerInternal): void {
+    this.clearPendingEffectTimeouts();
     if (this.turnTimerInterval) {
       clearInterval(this.turnTimerInterval);
       this.turnTimerInterval = undefined;
@@ -1681,9 +1938,9 @@ export class GameSession {
 
     const isVoyanceCaster = Boolean(
       requestingPlayerId &&
-      this.voyanceCasterId &&
-      (this.voyanceCasterId === requestingPlayerId ||
-        this.players.some(p => p.id === requestingPlayerId && p.secretToken === this.voyanceCasterId))
+      (this.voyanceCasterIds.includes(requestingPlayerId) ||
+        this.players.some(p => (p.id === requestingPlayerId || p.secretToken === requestingPlayerId) &&
+          (this.voyanceCasterIds.includes(p.id) || this.voyanceCasterIds.includes(p.secretToken))))
     );
 
     return {
@@ -1719,7 +1976,7 @@ export class GameSession {
         hasDoubleDebuff: p.hasDoubleDebuff,
         hasVoyanceDebuff: p.hasVoyanceDebuff,
         crackedCardCount: p.cards.filter(c => c.isCracked).length,
-        visibleCards: (isVoyanceCaster && p.id !== requestingPlayerId && p.hasVoyanceDebuff) ? p.cards : undefined
+        visibleCards: (isVoyanceCaster && p.id !== requestingPlayerId && p.secretToken !== requestingPlayerId) ? p.cards : undefined
       })),
       allLaidDownPhases: this.allLaidDownPhases,
       winnerId: this.winnerId,
@@ -1727,7 +1984,7 @@ export class GameSession {
       phaseDefinitions: this.phaseDefinitions,
       settings: this.settings,
       isAlternateWorld: this.isAlternateWorld,
-      voyanceActive: Boolean(this.voyanceCasterId),
+      voyanceActive: this.voyanceCasterIds.length > 0,
       alternateTurnCounter: this.alternateTurnCounter,
       animationLockUntil: this.animationLockUntil
     };
@@ -2209,26 +2466,80 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    // Execute unique ability
-    if (ultimateCard.type === 'singularity') {
-      this.applySingularityEffect(current, ultimateCard);
-    } else if (ultimateCard.type === 'voyance') {
-      this.applyVoyanceEffect(current, ultimateCard);
-    } else if (ultimateCard.type === 'alternate') {
-      this.applyAlternateEffect(current, ultimateCard);
-    } else if (ultimateCard.type === 'avarice') {
-      this.applyAvariceEffect(current, ultimateCard);
-    }
-
-    const animDuration = 6000;
+    const animDuration = this.getCardAnimationDuration(ultimateCard, true);
     this.animationLockUntil = Date.now() + animDuration;
 
-    if (current.cards.length === 0) {
-      this.endRound(current);
-      return;
-    }
+    if (this.enableAnimationDelays) {
+      if (ultimateCard.type === 'alternate') {
+        // Wait for 6.0s Divine Descent to finish, then trigger the 180deg dimension flip:
+        this.addPendingEffectTimeout(() => {
+          if (this.status !== 'in_game') return;
+          this.emitAction({
+            type: 'ultimate_alternate',
+            playerId: current.id,
+            playerName: current.name,
+            card: ultimateCard,
+            ultimateCardType: 'alternate',
+            isAlternateWorld: true,
+            message: `Reality shifted! Entered the Alternate World with 10 pure number cards!`
+          });
 
-    this.advanceTurn(animDuration);
+          // Under cover of pitch black at 380ms into the flip, switch world:
+          this.addPendingEffectTimeout(() => {
+            if (this.status !== 'in_game') return;
+            this.applyAlternateEffect(current, ultimateCard, false);
+            this.onStateChange();
+          }, 380);
+
+          // Advance turn after the full 1600ms flip transition concludes:
+          this.addPendingEffectTimeout(() => {
+            if (this.status !== 'in_game') return;
+            if (current.cards.length === 0) {
+              this.endRound(current);
+              return;
+            }
+            this.advanceTurn();
+          }, 1600);
+        }, 6000);
+      } else {
+        // Singularity, Voyance, Avarice: Execute effect at 6.0s when Divine Descent finishes
+        this.addPendingEffectTimeout(() => {
+          if (this.status !== 'in_game') return;
+          if (ultimateCard.type === 'singularity') {
+            this.applySingularityEffect(current, ultimateCard);
+          } else if (ultimateCard.type === 'voyance') {
+            this.applyVoyanceEffect(current, ultimateCard, true);
+          } else if (ultimateCard.type === 'avarice') {
+            this.applyAvariceEffect(current, ultimateCard);
+          }
+          this.onStateChange();
+
+          if (current.cards.length === 0) {
+            this.endRound(current);
+            return;
+          }
+          this.advanceTurn();
+        }, 6000);
+      }
+    } else {
+      // Synchronous execution for test suites
+      if (ultimateCard.type === 'singularity') {
+        this.applySingularityEffect(current, ultimateCard);
+      } else if (ultimateCard.type === 'voyance') {
+        this.applyVoyanceEffect(current, ultimateCard);
+      } else if (ultimateCard.type === 'alternate') {
+        this.applyAlternateEffect(current, ultimateCard);
+      } else if (ultimateCard.type === 'avarice') {
+        this.applyAvariceEffect(current, ultimateCard);
+      }
+
+      if (current.cards.length === 0) {
+        this.endRound(current);
+        return;
+      }
+
+      this.advanceTurn(animDuration);
+    }
   }
 
   private applySingularityEffect(current: GamePlayerInternal, card: Card): void {
@@ -2276,26 +2587,35 @@ export class GameSession {
     });
   }
 
-  private applyVoyanceEffect(current: GamePlayerInternal, card: Card): void {
-    this.voyanceCasterId = current.id;
-    const active = this.getActivePlayers();
-    for (const opp of active) {
-      if (opp.id !== current.id) {
-        opp.hasVoyanceDebuff = true;
-      }
+  private applyVoyanceEffect(current: GamePlayerInternal, card: Card, skipEmitAction: boolean = false): void {
+    if (!this.voyanceCasterIds.includes(current.id)) {
+      this.voyanceCasterIds.push(current.id);
+    }
+    if (current.secretToken && !this.voyanceCasterIds.includes(current.secretToken)) {
+      this.voyanceCasterIds.push(current.secretToken);
     }
 
-    this.emitAction({
-      type: 'ultimate_voyance',
-      playerId: current.id,
-      playerName: current.name,
-      card,
-      ultimateCardType: 'voyance',
-      message: `Voyance activated! All opponent cards are permanently revealed to ${current.name}!`
-    });
+    const active = this.getActivePlayers();
+    for (const p of active) {
+      const isExposedToOthers = this.voyanceCasterIds.some(
+        cId => cId !== p.id && cId !== p.secretToken
+      );
+      p.hasVoyanceDebuff = isExposedToOthers;
+    }
+
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'ultimate_voyance',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        ultimateCardType: 'voyance',
+        message: `Voyance activated! All opponent cards are permanently revealed to ${current.name}!`
+      });
+    }
   }
 
-  private applyAlternateEffect(current: GamePlayerInternal, card: Card): void {
+  private applyAlternateEffect(current: GamePlayerInternal, card: Card, emitEvent: boolean = true): void {
     const active = this.getActivePlayers();
 
     // Save main world state
@@ -2330,18 +2650,20 @@ export class GameSession {
     this.alternateDimensionActive = true;
     this.alternateTurnCounter = -1;
 
-    this.emitAction({
-      type: 'ultimate_alternate',
-      playerId: current.id,
-      playerName: current.name,
-      card,
-      ultimateCardType: 'alternate',
-      isAlternateWorld: true,
-      message: `Reality shifted! Entered the Alternate World with 10 pure number cards!`
-    });
+    if (emitEvent) {
+      this.emitAction({
+        type: 'ultimate_alternate',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        ultimateCardType: 'alternate',
+        isAlternateWorld: true,
+        message: `Reality shifted! Entered the Alternate World with 10 pure number cards!`
+      });
+    }
   }
 
-  public toggleDimension(): void {
+  public toggleDimension(emitEvent: boolean = true): void {
     const active = this.getActivePlayers();
     if (this.isAlternateWorld) {
       // Save Alternate World
@@ -2389,20 +2711,22 @@ export class GameSession {
       this.isAlternateWorld = true;
     }
 
-    this.emitAction({
-      type: 'alternate_shift',
-      playerId: 'system',
-      playerName: 'Dimension Rift',
-      isAlternateWorld: this.isAlternateWorld,
-      message: `Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`
-    });
+    if (emitEvent) {
+      this.emitAction({
+        type: 'alternate_shift',
+        playerId: 'system',
+        playerName: 'Dimension Rift',
+        isAlternateWorld: this.isAlternateWorld,
+        message: `Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`
+      });
 
-    this.notify({
-      id: `notif_${Date.now()}`,
-      type: 'info',
-      message: `Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`,
-      timestamp: Date.now()
-    });
+      this.notify({
+        id: `notif_${Date.now()}`,
+        type: 'info',
+        message: `Dimensional shift! Entering ${this.isAlternateWorld ? 'the Alternate Dimension' : 'the Main Dimension'}!`,
+        timestamp: Date.now()
+      });
+    }
   }
 
   private applyAvariceEffect(current: GamePlayerInternal, card: Card): void {
@@ -2434,6 +2758,7 @@ export class GameSession {
   }
 
   public cleanup(): void {
+    this.clearPendingEffectTimeouts();
     if (this.roundEndAutoTimeout) {
       clearTimeout(this.roundEndAutoTimeout);
       this.roundEndAutoTimeout = undefined;

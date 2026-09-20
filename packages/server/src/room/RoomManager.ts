@@ -296,6 +296,7 @@ export class Room {
         this.onBroadcastAction?.(this, action);
       }
     );
+    this.gameSession.enableAnimationDelays = true;
 
     const humanPlayers = activeUsers.map(u => ({
       id: u.secretToken,

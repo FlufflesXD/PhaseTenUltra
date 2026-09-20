@@ -2424,6 +2424,162 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     // Because Nuke has an 8.0s animation, the world switch must NOT have happened immediately!
     assert.strictEqual(session.isAlternateWorld, true, 'World shift postponed while Nuke animation is playing');
   });
+
+  test('v6.3 Multi-Caster Voyance: Both casters retain opponent card visibility without canceling each other', () => {
+    const session = new GameSession(
+      'VOYANCE_MULTI',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      () => {}
+    );
+
+    const p1Cards = [
+      { id: 'ult_voy_1', type: 'voyance' as const, color: 'none' as const, value: 0, points: 50, ultimateProgress: 100 },
+      { id: 'p1_c1', type: 'number' as const, color: 'red' as const, value: 5, points: 5 }
+    ];
+    const p2Cards = [
+      { id: 'ult_voy_2', type: 'voyance' as const, color: 'none' as const, value: 0, points: 50, ultimateProgress: 100 },
+      { id: 'p2_c1', type: 'number' as const, color: 'blue' as const, value: 8, points: 10 }
+    ];
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1_tok',
+        name: 'Player 1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: p1Cards,
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2_tok',
+        name: 'Player 2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: p2Cards,
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'play';
+
+    // Player 1 casts Voyance
+    session.playUltimateCard('p1_tok', 'ult_voy_1');
+    assert.ok(session.voyanceCasterIds.includes('p1'), 'P1 is in voyanceCasterIds');
+
+    // Check P1 public state: P1 sees P2 cards
+    const stateForP1 = session.getPublicState('p1_tok');
+    const p2SeenByP1 = stateForP1.players.find(p => p.id === 'p2');
+    assert.ok(p2SeenByP1?.visibleCards, 'P1 can see P2 cards');
+    assert.ok(p2SeenByP1?.visibleCards?.some(c => c.id === 'p2_c1'), 'P1 sees p2_c1');
+
+    // Advance turn to Player 2
+    session.currentTurnIndex = 1;
+    session.turnStage = 'play';
+
+    // Player 2 casts Voyance
+    session.playUltimateCard('p2_tok', 'ult_voy_2');
+    assert.ok(session.voyanceCasterIds.includes('p2'), 'P2 is also in voyanceCasterIds');
+
+    // CRITICAL: Player 1's voyance must STILL be working!
+    const stateForP1AfterP2 = session.getPublicState('p1_tok');
+    const p2SeenByP1AfterP2 = stateForP1AfterP2.players.find(p => p.id === 'p2');
+    assert.ok(p2SeenByP1AfterP2?.visibleCards, 'P1 can STILL see P2 cards after P2 cast Voyance!');
+
+    // Player 2 can also see Player 1 cards!
+    const stateForP2 = session.getPublicState('p2_tok');
+    const p1SeenByP2 = stateForP2.players.find(p => p.id === 'p1');
+    assert.ok(p1SeenByP2?.visibleCards, 'P2 can also see P1 cards!');
+  });
+
+  test('v6.3 Effect Deferral: With enableAnimationDelays = true, mechanical effects execute after delay', (t, done) => {
+    const session = new GameSession(
+      'DELAY_TEST',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      () => {}
+    );
+    session.enableAnimationDelays = true;
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: true,
+        cardCount: 6,
+        cards: [
+          { id: 'nuke_card', type: 'nuke', color: 'none', value: 0, points: 50 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 },
+          { id: 'c2', type: 'number', color: 'red', value: 2, points: 5 },
+          { id: 'c3', type: 'number', color: 'red', value: 3, points: 5 },
+          { id: 'c4', type: 'number', color: 'red', value: 4, points: 5 },
+          { id: 'c5', type: 'number', color: 'red', value: 5, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 5,
+        cards: [
+          { id: 'c6', type: 'number', color: 'blue', value: 6, points: 10 },
+          { id: 'c7', type: 'number', color: 'blue', value: 7, points: 10 },
+          { id: 'c8', type: 'number', color: 'blue', value: 8, points: 10 },
+          { id: 'c9', type: 'number', color: 'blue', value: 9, points: 10 },
+          { id: 'c10', type: 'number', color: 'blue', value: 10, points: 10 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    session.discardCard('p1', 'nuke_card');
+
+    // Right after discarding at t=0, Nuke Totem is hovering, so hands have NOT been reduced yet!
+    assert.strictEqual(session.players[0].cards.length, 5, 'P1 hand has not been reduced to 2 yet at t=0');
+    assert.strictEqual(session.players[1].cards.length, 5, 'P2 hand has not been reduced to 2 yet at t=0');
+    assert.ok(session.isAnimationLocked(), 'Game session is locked during 8s Nuke animation');
+
+    // Clean up timeouts
+    session.cleanup();
+    done();
+  });
 });
 
 
