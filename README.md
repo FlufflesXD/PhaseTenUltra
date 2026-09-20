@@ -10,6 +10,8 @@ A minimal, clean, authentic online multiplayer 10-stage rummy card game designed
 - **No Audio Assets**: Ready for you to plug in your own sound effects when desired.
 
 ---
+"Sounds by JDSherbert – https://jdsherbert.itch.io"
+---
 
 ## Portainer Deployment Guide
 
