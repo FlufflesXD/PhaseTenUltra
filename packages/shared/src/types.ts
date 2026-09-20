@@ -272,6 +272,7 @@ export interface PublicGameState {
   isAlternateWorld?: boolean;
   voyanceActive?: boolean;
   alternateTurnCounter?: number;
+  animationLockUntil?: number;
 }
 
 export interface RoomState {

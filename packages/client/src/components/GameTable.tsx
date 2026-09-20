@@ -17,7 +17,13 @@ import {
   UltimateCardType
 } from '@phase-ten/shared';
 import { CardView } from './CardView.js';
-import { playSpecialSound } from '../utils/audio.js';
+import {
+  playSpecialSound,
+  playHoverSound,
+  playNormalSound,
+  playUltimateDescendSound,
+  soundtrackManager
+} from '../utils/audio.js';
 
 interface GameTableProps {
   gameState: PublicGameState;
@@ -112,7 +118,9 @@ export const GameTable: React.FC<GameTableProps> = ({
     playerName: string;
     ultType: string;
   } | null>(null);
-  const [dimensionFadeActive, setDimensionFadeActive] = useState(false);
+  const [dimensionFlipState, setDimensionFlipState] = useState<'idle' | 'flipping_to_alt' | 'flipping_to_main'>('idle');
+  const [dimensionOverlayOpacity, setDimensionOverlayOpacity] = useState<number>(0);
+  const [isDimensionOverlayVisible, setIsDimensionOverlayVisible] = useState<boolean>(false);
 
   const lastSoundActionIdRef = useRef<string | null>(null);
 
@@ -122,7 +130,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   const crackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyingCardTimerRef = useRef<NodeJS.Timeout | null>(null);
   const divineDescentTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const dimensionFadeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const dimensionFlipTimerRef1 = useRef<NodeJS.Timeout | null>(null);
+  const dimensionFlipTimerRef2 = useRef<NodeJS.Timeout | null>(null);
+  const dimensionFlipTimerRef3 = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
@@ -132,9 +142,23 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (crackTimerRef.current) clearTimeout(crackTimerRef.current);
       if (flyingCardTimerRef.current) clearTimeout(flyingCardTimerRef.current);
       if (divineDescentTimerRef.current) clearTimeout(divineDescentTimerRef.current);
-      if (dimensionFadeTimerRef.current) clearTimeout(dimensionFadeTimerRef.current);
+      if (dimensionFlipTimerRef1.current) clearTimeout(dimensionFlipTimerRef1.current);
+      if (dimensionFlipTimerRef2.current) clearTimeout(dimensionFlipTimerRef2.current);
+      if (dimensionFlipTimerRef3.current) clearTimeout(dimensionFlipTimerRef3.current);
     };
   }, []);
+
+  // Background soundtrack manager lifecycle
+  useEffect(() => {
+    soundtrackManager.start(0.35);
+    return () => {
+      soundtrackManager.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    soundtrackManager.setMuted(isMuted);
+  }, [isMuted]);
 
   // Global Shift + L key listener for Admin Spawner
   useEffect(() => {
@@ -463,8 +487,12 @@ export const GameTable: React.FC<GameTableProps> = ({
         playerName: latestAction.playerName
       });
 
-      // Special card floats like a Totem of Undying for 2 seconds,
+      // Special card floats like a Totem of Undying for 3 seconds (Change 0),
       // then sounds and follow-up custom animations execute:
+      if (!isMuted) {
+        playHoverSound();
+      }
+
       totemTimerRef.current = setTimeout(() => {
         setActiveTotem(null);
         totemTimerRef.current = null;
@@ -512,10 +540,15 @@ export const GameTable: React.FC<GameTableProps> = ({
             timeWarpTimerRef.current = null;
           }, 5200);
         }
-      }, 2000);
+      }, 3000);
     }
 
-    // Universal Divine Descent (5.5s)
+    // Play normal card discard sound
+    if (latestAction.type === 'discard' && !isMuted) {
+      playNormalSound('card_discard');
+    }
+
+    // Universal Divine Descent (6.0s - Change 0)
     if (latestAction.type === 'ultimate_descend') {
       if (divineDescentTimerRef.current) clearTimeout(divineDescentTimerRef.current);
       setDivineDescentEvent({
@@ -523,20 +556,45 @@ export const GameTable: React.FC<GameTableProps> = ({
         playerName: latestAction.playerName,
         ultType: latestAction.ultimateCardType || 'singularity'
       });
+      if (!isMuted) {
+        playUltimateDescendSound();
+      }
       divineDescentTimerRef.current = setTimeout(() => {
         setDivineDescentEvent(null);
         divineDescentTimerRef.current = null;
-      }, 5500);
+      }, 6000);
     }
 
-    // Alternate Dimension Entry or Shift (2s smooth black transition)
+    // Bug 2 & 3: Alternate Dimension Flip and Fade Transition (under 0.4s flip into black, unflip, smooth fade out)
     if (latestAction.type === 'ultimate_alternate' || latestAction.type === 'alternate_shift') {
-      if (dimensionFadeTimerRef.current) clearTimeout(dimensionFadeTimerRef.current);
-      setDimensionFadeActive(true);
-      dimensionFadeTimerRef.current = setTimeout(() => {
-        setDimensionFadeActive(false);
-        dimensionFadeTimerRef.current = null;
-      }, 2000);
+      if (dimensionFlipTimerRef1.current) clearTimeout(dimensionFlipTimerRef1.current);
+      if (dimensionFlipTimerRef2.current) clearTimeout(dimensionFlipTimerRef2.current);
+      if (dimensionFlipTimerRef3.current) clearTimeout(dimensionFlipTimerRef3.current);
+
+      const isEntering = latestAction.type === 'ultimate_alternate' ? true : Boolean(latestAction.isAlternateWorld);
+      const startDelay = latestAction.type === 'ultimate_alternate' ? 6000 : 0;
+
+      dimensionFlipTimerRef1.current = setTimeout(() => {
+        // Phase 1 (0 to 380ms): Visibly rotate screen upside down in under 0.4s while fading to black
+        setDimensionFlipState(isEntering ? 'flipping_to_alt' : 'flipping_to_main');
+        setIsDimensionOverlayVisible(true);
+        setDimensionOverlayOpacity(1);
+
+        // Phase 2 (at 380ms): Under complete pitch-black, unflip rotation back to normal
+        dimensionFlipTimerRef2.current = setTimeout(() => {
+          setDimensionFlipState('idle');
+
+          // Phase 3 (at 420ms): Smoothly fade out from black into the new world
+          setTimeout(() => {
+            setDimensionOverlayOpacity(0);
+          }, 40);
+
+          // Phase 4 (at 1650ms): Transition complete, unlock controls
+          dimensionFlipTimerRef3.current = setTimeout(() => {
+            setIsDimensionOverlayVisible(false);
+          }, 1250);
+        }, 380);
+      }, startDelay);
     }
   }, [latestAction, isMuted]);
 
@@ -594,7 +652,18 @@ export const GameTable: React.FC<GameTableProps> = ({
     return Boolean(card.isCracked && localHand.length === 1 && me?.phaseCompletedInRound);
   };
 
-  const isJesterSelected =
+  const isAnimationLocked = Boolean(
+    activeTotem ||
+    divineDescentEvent ||
+    nukeActive ||
+    timeWarpEvent ||
+    isScreenShaking ||
+    dimensionFlipState !== 'idle' ||
+    isDimensionOverlayVisible ||
+    (gameState.animationLockUntil && Date.now() < gameState.animationLockUntil)
+  );
+
+  const isJesterSelected = !isAnimationLocked &&
     selectedCard?.type === 'jester' &&
     isMyTurn &&
     (gameState.turnStage === 'play' || gameState.turnStage === 'discard');
@@ -724,6 +793,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleCardClick = (card: Card) => {
+    if (isAnimationLocked) return;
     if (me?.isResigned) return;
     if (card.isCracked && !isWinningSoftlockExemption(card)) return;
     setSelectedCardId(prev => (prev === card.id ? null : card.id));
@@ -734,13 +804,13 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleDraw = (source: 'deck' | 'discard') => {
-    if (me?.isResigned || !isMyTurn || gameState.turnStage !== 'draw') return;
+    if (isAnimationLocked || me?.isResigned || !isMyTurn || gameState.turnStage !== 'draw') return;
     if (source === 'discard' && gameState.topDiscard?.type !== 'number') return;
     onDrawCard(source);
   };
 
   const handleNormalDiscard = () => {
-    if (me?.isResigned || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    if (isAnimationLocked || me?.isResigned || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
     if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
     const isSpecial = isChaosSpecialCard(selectedCard.type);
     onDiscardCard(selectedCard.id, undefined, isSpecial ? false : true);
@@ -748,7 +818,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const handleDiscardSelected = (explicitTargetId?: string) => {
-    if (!selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
+    if (isAnimationLocked || !selectedCard || !isMyTurn || gameState.turnStage === 'draw') return;
     if (selectedCard.isCracked && !isWinningSoftlockExemption(selectedCard)) return;
     if (selectedCard.type === 'nuke' && !me?.phaseCompletedInRound) return;
     if (selectedCard.type === 'time') {
@@ -1421,7 +1491,12 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none opaci
         style={{
           width: 1920,
           height: 1080,
-          transform: `scale(${scale})`,
+          transform: dimensionFlipState === 'flipping_to_alt'
+            ? `scale(${scale}) rotate(180deg)`
+            : dimensionFlipState === 'flipping_to_main'
+            ? `scale(${scale}) rotate(-180deg)`
+            : `scale(${scale})`,
+          transition: dimensionFlipState !== 'idle' ? 'transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
           transformOrigin: 'center center',
           ...(isScreenShaking ? { animation: 'screenShake 0.08s infinite' } : {})
         }}
@@ -1458,7 +1533,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
               
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.1</span>
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.2</span>
             {gameState.isAlternateWorld && (
               <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
                 
@@ -1492,7 +1567,11 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
 
           {/* Right HUD Pill */}
           <div className="flex items-center gap-3 pointer-events-auto bg-neutral-950/85 backdrop-blur-md border border-white/15 px-4 py-2 rounded-xl shadow-2xl">
-            {isMyTurn ? (
+            {isAnimationLocked ? (
+              <span className="bg-amber-500/25 border border-amber-400/60 text-amber-300 font-extrabold px-3.5 py-1.5 rounded-full text-xs animate-pulse tracking-wider uppercase">
+                ANIMATING...
+              </span>
+            ) : isMyTurn ? (
               <span className="bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-extrabold px-4 py-1.5 rounded-full text-sm shadow-[0_0_15px_rgba(251,191,36,0.8)] animate-pulse">
                 YOUR TURN ({gameState.turnStage.toUpperCase()})
               </span>
@@ -1683,7 +1762,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
                 <button
                   ref={deckRef}
                   onClick={() => handleDraw('deck')}
-                  disabled={!isMyTurn || gameState.turnStage !== 'draw'}
+                  disabled={isAnimationLocked || !isMyTurn || gameState.turnStage !== 'draw'}
                   className={`relative w-[110px] h-[154px] aspect-[5/7] rounded-xl flex flex-col items-center justify-center transition-transform deck-3d-stack overflow-hidden ${
                     isMyTurn && gameState.turnStage === 'draw'
                       ? 'border-2 border-yellow-300 ring-4 ring-yellow-400/50 hover:scale-105 cursor-pointer animate-pulse'
@@ -2051,7 +2130,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
 
           {/* Client Hand: Curved Arc in Perspective */}
           <div className="w-full max-w-5xl px-4 flex items-end justify-center overflow-visible pb-1 pt-2">
-            <div className={`flex items-end justify-center ${me?.isResigned ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`flex items-end justify-center ${me?.isResigned ? 'opacity-50 pointer-events-none' : ''} ${isAnimationLocked ? 'pointer-events-none opacity-80' : ''}`}>
               {localHand.map((c, i) => {
                 const count = localHand.length;
                 const offset = i - (count - 1) / 2;
@@ -2737,7 +2816,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
           <div
             className="relative z-10 flex flex-col items-center gap-5"
             style={{
-              animation: 'divineDescend 5.5s cubic-bezier(0.25, 1, 0.5, 1) forwards'
+              animation: 'divineDescend 6.0s cubic-bezier(0.25, 1, 0.5, 1) forwards'
             }}
           >
             <div className="flex flex-col items-center gap-2 select-none text-center">
@@ -2756,11 +2835,16 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
         </div>
       )}
 
-      {/* Alternate World 2-Second Smooth Pitch-Black Transition */}
-      {dimensionFadeActive && (
+      {/* Bug 3: Alternate World Smooth Black Fade Overlay */}
+      {isDimensionOverlayVisible && (
         <div
           className="fixed inset-0 z-[100] pointer-events-none bg-black select-none"
-          style={{ animation: 'dimension-fade 2s ease-in-out forwards' }}
+          style={{
+            opacity: dimensionOverlayOpacity,
+            transition: dimensionOverlayOpacity === 1
+              ? 'opacity 0.38s cubic-bezier(0.4, 0, 0.2, 1)'
+              : 'opacity 1.2s ease-out'
+          }}
         />
       )}
 
@@ -2950,11 +3034,11 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
             transform: translateY(-260px) scale(1.4);
             opacity: 0;
           }
-          18% {
+          15% {
             transform: translateY(0px) scale(1.1);
             opacity: 1;
           }
-          80% {
+          82% {
             transform: translateY(0px) scale(1.1);
             opacity: 1;
           }

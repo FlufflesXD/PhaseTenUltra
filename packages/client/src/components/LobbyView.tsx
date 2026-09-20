@@ -125,7 +125,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   </div>
                 </div>
                 <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                  v6.1
+                  v6.2
                 </span>
               </div>
 
@@ -205,7 +205,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                     Rules
                   </button>
                   <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                    v6.1
+                    v6.2
                   </span>
                 </div>
               </div>
@@ -322,7 +322,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-black text-slate-900 tracking-tight">PhaseTen Ultra</h1>
                 <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                  v6.1
+                  v6.2
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">Lobby & Game Configuration</p>

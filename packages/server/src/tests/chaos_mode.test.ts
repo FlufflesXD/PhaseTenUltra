@@ -2297,6 +2297,134 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     assert.ok(!session.discardPile.some(c => c.type === 'time'));
     assert.ok(!session.discardPile.some(c => c.type === 'crack'));
   });
+
+  test('v6.2 Animation Lock: Special and Ultimate cards set animationLockUntil and lock turn actions', () => {
+    const session = new GameSession(
+      'LOCK_TEST',
+      { turnTimerSeconds: 30 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: true,
+        cardCount: 3,
+        cards: [
+          { id: 'nuke_card', type: 'nuke', color: 'none', value: 0, points: 50 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 },
+          { id: 'c2', type: 'number', color: 'red', value: 2, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [{ id: 'c3', type: 'number', color: 'blue', value: 3, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    const now = Date.now();
+    session.discardCard('p1', 'nuke_card');
+
+    assert.ok(session.isAnimationLocked(), 'Game should be animation locked after Nuke');
+    assert.ok(session.animationLockUntil >= now + 7900, 'Nuke animation lock should be ~8000ms');
+
+    // Ultimate card test
+    session.animationLockUntil = 0;
+    const ultCard: Card = { id: 'ult_voy', type: 'voyance', color: 'none', value: 0, points: 50, ultimateProgress: 100 };
+    session.players[1].cards.push(ultCard);
+    session.currentTurnIndex = 1;
+    session.turnStage = 'play';
+
+    const nowUlt = Date.now();
+    session.playUltimateCard('p2', 'ult_voy');
+    assert.ok(session.isAnimationLocked(), 'Game should be animation locked after Ultimate card');
+    assert.ok(session.animationLockUntil >= nowUlt + 5900, 'Ultimate animation lock should be ~6000ms');
+  });
+
+  test('v6.2 Bug 2: Alternate world shift is delayed while card animation is playing', async () => {
+    const session = new GameSession(
+      'ALT_BUG2',
+      { turnTimerSeconds: 0 },
+      () => {},
+      () => {}
+    );
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: true,
+        cardCount: 2,
+        cards: [
+          { id: 'nuke_1', type: 'nuke', color: 'none', value: 0, points: 50 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'p2',
+        secretToken: 'p2',
+        name: 'P2',
+        isHost: false,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [{ id: 'c2', type: 'number', color: 'blue', value: 2, points: 5 }],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.isAlternateWorld = true;
+    session.alternateDimensionActive = true;
+    session.alternateTurnCounter = 1; // 1 turn passed. Next discard will be 2nd turn!
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    // P1 discards Nuke on the 2nd turn of Alternate World
+    session.discardCard('p1', 'nuke_1');
+
+    // Crucial Bug 2 verification:
+    // Because Nuke has an 8.0s animation, the world switch must NOT have happened immediately!
+    assert.strictEqual(session.isAlternateWorld, true, 'World shift postponed while Nuke animation is playing');
+  });
 });
+
 
 

@@ -176,6 +176,10 @@ io.on('connection', (socket) => {
   socket.on('draw_card', (data: { roomCode: string; secretToken: string; source: 'deck' | 'discard' }) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.gameSession) {
+      if (room.gameSession.isAnimationLocked()) {
+        socket.emit('error_message', 'Turn action locked while animation is playing');
+        return;
+      }
       try {
         room.gameSession.drawCard(data.secretToken, data.source);
       } catch (err: any) {
@@ -187,6 +191,10 @@ io.on('connection', (socket) => {
   socket.on('lay_down_phase', (data: { roomCode: string; secretToken: string; cardGroups: any[][] }) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.gameSession) {
+      if (room.gameSession.isAnimationLocked()) {
+        socket.emit('error_message', 'Turn action locked while animation is playing');
+        return;
+      }
       try {
         room.gameSession.layDownPhase(data.secretToken, data.cardGroups);
       } catch (err: any) {
@@ -220,6 +228,10 @@ io.on('connection', (socket) => {
   socket.on('hit_card', (data: { roomCode: string; secretToken: string; cardId: string | string[]; targetGroupId: string; targetEnd?: 'low' | 'high' }) => {
     const room = roomManager.getRoom(data.roomCode);
     if (room && room.gameSession) {
+      if (room.gameSession.isAnimationLocked()) {
+        socket.emit('error_message', 'Turn action locked while animation is playing');
+        return;
+      }
       try {
         room.gameSession.hitCard(data.secretToken, data.cardId, data.targetGroupId, data.targetEnd);
       } catch (err: any) {
@@ -239,6 +251,10 @@ io.on('connection', (socket) => {
     }) => {
       const room = roomManager.getRoom(data.roomCode);
       if (room && room.gameSession) {
+      if (room.gameSession.isAnimationLocked()) {
+        socket.emit('error_message', 'Turn action locked while animation is playing');
+        return;
+      }
         try {
           room.gameSession.discardCard(
             data.secretToken,

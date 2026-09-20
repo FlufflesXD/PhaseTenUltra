@@ -57,6 +57,25 @@ export class GameSession {
   public isAlternateWorld: boolean = false;
   public alternateDimensionActive: boolean = false;
   public alternateTurnCounter: number = 0;
+  public animationLockUntil: number = 0;
+
+  public isAnimationLocked(): boolean {
+    return Date.now() < this.animationLockUntil;
+  }
+
+  public getCardAnimationDuration(card: Card, shouldActivate: boolean): number {
+    if (!shouldActivate) return 0;
+    if (isUltimateCard(card.type)) {
+      return 6000;
+    }
+    if (isChaosSpecialCard(card.type)) {
+      if (card.type === 'nuke') return 8000;
+      if (card.type === 'time') return 8200;
+      if (card.type === 'crack') return 5000;
+      return 3000;
+    }
+    return 0;
+  }
   private mainWorldState: {
     drawPile: Card[];
     discardPile: Card[];
@@ -295,6 +314,9 @@ export class GameSession {
     if (this.settings.turnTimerSeconds > 0) {
       this.turnTimeRemaining = this.settings.turnTimerSeconds;
       this.turnTimerInterval = setInterval(() => {
+        if (this.isAnimationLocked()) {
+          return;
+        }
         this.turnTimeRemaining -= 1;
         if (this.turnTimeRemaining <= 0) {
           clearInterval(this.turnTimerInterval);
@@ -872,12 +894,17 @@ export class GameSession {
       });
     }
 
+    const animDuration = this.getCardAnimationDuration(card, shouldActivate);
+    if (animDuration > 0) {
+      this.animationLockUntil = Date.now() + animDuration;
+    }
+
     if (current.cards.length === 0) {
       this.endRound(current);
       return;
     }
 
-    this.advanceTurn();
+    this.advanceTurn(animDuration);
   }
 
   private applyNukeEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType): void {
@@ -1476,7 +1503,7 @@ export class GameSession {
     }
   }
 
-  private advanceTurn(): void {
+  private advanceTurn(animationDuration: number = 0): void {
     const active = this.getActivePlayers();
     if (active.length === 0) return;
 
@@ -1484,7 +1511,16 @@ export class GameSession {
       this.alternateTurnCounter++;
       if (this.alternateTurnCounter >= 2) {
         this.alternateTurnCounter = 0;
-        this.toggleDimension();
+        if (animationDuration > 0) {
+          // Bug 2 fix: Delay world switch until card animation finishes in current verse!
+          setTimeout(() => {
+            if (this.status === 'in_game') {
+              this.toggleDimension();
+            }
+          }, animationDuration);
+        } else {
+          this.toggleDimension();
+        }
       }
     }
 
@@ -1692,7 +1728,8 @@ export class GameSession {
       settings: this.settings,
       isAlternateWorld: this.isAlternateWorld,
       voyanceActive: Boolean(this.voyanceCasterId),
-      alternateTurnCounter: this.alternateTurnCounter
+      alternateTurnCounter: this.alternateTurnCounter,
+      animationLockUntil: this.animationLockUntil
     };
   }
 
@@ -1717,13 +1754,16 @@ export class GameSession {
       this.botActionTimeout = undefined;
     }
 
+    const remainingAnim = Math.max(0, this.animationLockUntil - Date.now());
+    const delay = remainingAnim + 1200;
+
     this.botActionTimeout = setTimeout(() => {
       if (this.status !== 'in_game') return;
       const current = this.getCurrentPlayer();
       if (current && current.id === bot.id && (current.isBot || !current.connected)) {
         this.takeTurnForBot(current);
       }
-    }, 1200);
+    }, delay);
     this.botActionTimeout.unref?.();
   }
 
@@ -2180,12 +2220,15 @@ export class GameSession {
       this.applyAvariceEffect(current, ultimateCard);
     }
 
+    const animDuration = 6000;
+    this.animationLockUntil = Date.now() + animDuration;
+
     if (current.cards.length === 0) {
       this.endRound(current);
       return;
     }
 
-    this.advanceTurn();
+    this.advanceTurn(animDuration);
   }
 
   private applySingularityEffect(current: GamePlayerInternal, card: Card): void {

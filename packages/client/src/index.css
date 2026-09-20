@@ -420,14 +420,14 @@ body {
 }
 
 .animate-totem-card {
-  animation: totemFloatPop 2.0s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: totemFloatPop 3.0s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-totem-radiance {
-  animation: totemRadiance 2.0s ease-out forwards;
+  animation: totemRadiance 3.0s ease-out forwards;
 }
 
 .animate-totem-sparkle {
-  animation: totemSparkleRain 1.9s ease-out forwards;
+  animation: totemSparkleRain 2.9s ease-out forwards;
 }
 
