@@ -119,6 +119,27 @@ export const GameTable: React.FC<GameTableProps> = ({
     ultType: string;
   } | null>(null);
   const [dimensionFlipState, setDimensionFlipState] = useState<'idle' | 'flipping_to_alt' | 'flipping_to_main'>('idle');
+  const [eyeOverlay, setEyeOverlay] = useState<{
+    type: 'number_eye' | 'color_eye';
+    texture: string;
+    title: string;
+    playerName: string;
+  } | null>(null);
+  const [plusDrawEvent, setPlusDrawEvent] = useState<{
+    count: 2 | 3;
+    targetCoords: { x: number; y: number };
+    startCoords: { x: number; y: number };
+    targetName: string;
+    currentStep: number;
+  } | null>(null);
+  const [jesterSwapEvent, setJesterSwapEvent] = useState<{
+    casterId: string;
+    casterName: string;
+    targetId?: string;
+    targetName?: string;
+    casterCoords: { x: number; y: number };
+    targetCoords: { x: number; y: number };
+  } | null>(null);
   const [dimensionOverlayOpacity, setDimensionOverlayOpacity] = useState<number>(0);
   const [isDimensionOverlayVisible, setIsDimensionOverlayVisible] = useState<boolean>(false);
 
@@ -133,6 +154,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   const dimensionFlipTimerRef1 = useRef<NodeJS.Timeout | null>(null);
   const dimensionFlipTimerRef2 = useRef<NodeJS.Timeout | null>(null);
   const dimensionFlipTimerRef3 = useRef<NodeJS.Timeout | null>(null);
+  const eyeOverlayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const plusDrawTimersRef = useRef<NodeJS.Timeout[]>([]);
+  const jesterSwapTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
@@ -145,12 +169,15 @@ export const GameTable: React.FC<GameTableProps> = ({
       if (dimensionFlipTimerRef1.current) clearTimeout(dimensionFlipTimerRef1.current);
       if (dimensionFlipTimerRef2.current) clearTimeout(dimensionFlipTimerRef2.current);
       if (dimensionFlipTimerRef3.current) clearTimeout(dimensionFlipTimerRef3.current);
+      if (eyeOverlayTimerRef.current) clearTimeout(eyeOverlayTimerRef.current);
+      plusDrawTimersRef.current.forEach(t => clearTimeout(t));
+      if (jesterSwapTimerRef.current) clearTimeout(jesterSwapTimerRef.current);
     };
   }, []);
 
   // Background soundtrack manager lifecycle
   useEffect(() => {
-    soundtrackManager.start(0.35);
+    soundtrackManager.start(0.18);
     return () => {
       soundtrackManager.stop();
     };
@@ -1524,7 +1551,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
               
               <span className="font-bold">{copiedLink ? 'Link Copied!' : `Room: ${gameState.roomCode}`}</span>
             </button>
-            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.3</span>
+            <span className="text-xs text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-bold">v6.4</span>
             {gameState.isAlternateWorld && (
               <span className="text-xs font-black px-2.5 py-0.5 rounded border border-purple-500/70 bg-purple-950/90 text-purple-200 flex items-center gap-1 shadow-[0_0_12px_rgba(168,85,247,0.7)] animate-pulse">
                 
@@ -2418,11 +2445,10 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
             </div>
           </div>
         </footer>
-      </div>
 
       {/* 5-Second Nuclear Blast VFX Screen Overlay */}
       {nukeActive && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden animate-nuke-flash">
+        <div className="absolute inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden animate-nuke-flash">
           <div className="relative w-full h-full flex flex-col items-center justify-center animate-nuke-shake">
             <div className="w-[500px] h-[500px] rounded-full border-8 border-yellow-400/80 animate-ping absolute opacity-50" />
             <div className="relative z-10 flex flex-col items-center gap-3 drop-shadow-[0_0_40px_rgba(255,0,0,1)] select-none">
@@ -2440,7 +2466,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
 
       {/* JoJo Dio "Za Warudo" Time Warp Cinematic Overlay */}
       {timeWarpEvent && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden animate-za-warudo">
+        <div className="absolute inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden animate-za-warudo">
           <div className="relative w-full h-full flex flex-col items-center justify-center animate-za-warudo-rumble">
             {/* Menacing Floating Kanji Symbols */}
             <div className="absolute top-12 left-12 text-6xl md:text-8xl font-black text-purple-400/80 animate-menacing select-none">
@@ -2553,7 +2579,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
 
       {/* Minecraft Totem of Undying Popping Animation (2.0s) */}
       {activeTotem && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 z-50 pointer-events-none flex flex-col items-center justify-center overflow-hidden">
           {/* Golden Radiance Aura Glow */}
           <div className="absolute w-[520px] h-[520px] rounded-full bg-gradient-to-r from-amber-400/40 via-yellow-300/30 to-emerald-400/20 blur-3xl animate-totem-radiance" />
 
@@ -2609,7 +2635,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
         onMouseLeave={() => {
           if (!isInfoPinned) setIsInfoTabOpen(false);
         }}
-        className={`fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-stretch transition-transform duration-300 ease-out select-none ${
+        className={`absolute left-0 top-1/2 -translate-y-1/2 z-40 flex items-stretch transition-transform duration-300 ease-out select-none ${
           isInfoTabOpen || isInfoPinned ? 'translate-x-0' : '-translate-x-[calc(100%-40px)]'
         }`}
       >
@@ -2834,7 +2860,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
       {/* Bug 3: Alternate World Smooth Black Fade Overlay */}
       {isDimensionOverlayVisible && (
         <div
-          className="fixed inset-0 z-[100] pointer-events-none bg-black select-none"
+          className="absolute inset-0 z-[100] pointer-events-none bg-black select-none"
           style={{
             animation: 'dimensionBlackFadeInOut 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards'
           }}
@@ -2843,7 +2869,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
 
       {/* Admin Password Prompt Modal */}
       {showAdminPasswordModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md">
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md">
           <div className="bg-neutral-950 border-2 border-amber-500/80 rounded-2xl p-6 w-[340px] shadow-[0_0_40px_rgba(245,158,11,0.5)] flex flex-col gap-4 text-white select-none">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -2917,7 +2943,7 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
 
       {/* Floating Admin Spawner Bar */}
       {showAdminSpawner && (
-        <div className="fixed top-16 right-6 z-[95] bg-neutral-950/95 border border-amber-500/60 rounded-2xl p-4 w-[380px] shadow-[0_0_35px_rgba(245,158,11,0.4)] backdrop-blur-xl text-white select-none animate-fade-in flex flex-col gap-3">
+        <div className="absolute top-16 right-6 z-[95] bg-neutral-950/95 border border-amber-500/60 rounded-2xl p-4 w-[380px] shadow-[0_0_35px_rgba(245,158,11,0.4)] backdrop-blur-xl text-white select-none animate-fade-in flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
               
@@ -3012,6 +3038,8 @@ className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
           </div>
         </div>
       )}
+
+      </div>
 
       <style>{`
         @keyframes screenShake {

@@ -81,11 +81,11 @@ class SoundtrackManager {
   private currentTrackIndex = -1;
   private audio: HTMLAudioElement | null = null;
   private isMuted = false;
-  private volume = 0.35;
+  private volume = 0.18;
   private isRunning = false;
   private autoplayListenerAttached = false;
 
-  public start(volume = 0.35): void {
+  public start(volume = 0.18): void {
     if (typeof window === 'undefined') return;
     this.volume = volume;
     this.isRunning = true;

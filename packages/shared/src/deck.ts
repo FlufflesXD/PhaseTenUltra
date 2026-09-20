@@ -38,7 +38,7 @@ export function isChaosSpecialCard(type: CardType): boolean {
   return CHAOS_SPECIAL_CARDS.some(c => c.type === type);
 }
 
-export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idPrefix = ''): Card[] {
+export function createStandardDeck(settingsOrMode?: GameSettings | Partial<GameSettings> | GameMode, idPrefix = ''): Card[] {
   const cards: Card[] = [];
   const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];
   let idCounter = 1;
@@ -72,52 +72,18 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
     enabled = { ...DEFAULT_SPECIAL_CARDS };
   }
 
-  // Count special cards to maintain ~1:15 ratio with colored cards
-  let specialCardsCount = 0;
-  for (const special of CHAOS_SPECIAL_CARDS) {
-    if (enabled[special.type as SpecialCardType]) {
-      const count = special.type === 'status' ? 2 : 1;
-      specialCardsCount += count;
-    }
-  }
+  const specialCounts = (typeof settingsOrMode === 'object' && settingsOrMode?.specialCardCounts) || {};
+  const ultimateCounts = (typeof settingsOrMode === 'object' && settingsOrMode?.ultimateCardCounts) || {};
 
-  // Ratio balancing: ~1 special card per 15 colored cards
-  // Colored cards must be full sets of 48 (1-12 in 4 colors)
-  // If special cards are off, base of 96 colored cards (2 sets)
-  const setsCount = specialCardsCount === 0
-    ? 2
-    : Math.max(2, Math.round((specialCardsCount * 15) / 48));
+  const getSpecialCount = (type: SpecialCardType): number => {
+    if (specialCounts[type] !== undefined) return Math.max(0, specialCounts[type]!);
+    return type === 'status' ? 2 : (type === 'skip' || type === 'reverse' ? 4 : 1);
+  };
 
-  for (let set = 0; set < setsCount; set++) {
-    for (const color of colors) {
-      for (let val = 1; val <= 12; val++) {
-        const points = val <= 9 ? 5 : 10;
-        cards.push({
-          id: `card_${idPrefix}${idCounter++}`,
-          type: 'number',
-          color,
-          value: val,
-          points
-        });
-      }
-    }
-  }
-
-  // Add custom special cards based on host toggles
-  for (const special of CHAOS_SPECIAL_CARDS) {
-    if (enabled[special.type as SpecialCardType]) {
-      const count = special.type === 'status' ? 2 : 1;
-      for (let i = 0; i < count; i++) {
-        cards.push({
-          id: `card_${idPrefix}${idCounter++}`,
-          type: special.type,
-          color: 'none',
-          value: 0,
-          points: special.points
-        });
-      }
-    }
-  }
+  const getUltimateCount = (type: UltimateCardType): number => {
+    if (ultimateCounts[type] !== undefined) return Math.max(0, ultimateCounts[type]!);
+    return 1;
+  };
 
   // Determine enabled ultimate cards
   let enabledUltimates: Record<UltimateCardType, boolean> = {
@@ -139,17 +105,70 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
     enabledUltimates = { ...DEFAULT_ULTIMATE_CARDS };
   }
 
-  // Add 1 copy of each enabled ultimate card
+  // Count active special cards
+  let specialCardsCount = 0;
+  for (const special of CHAOS_SPECIAL_CARDS) {
+    if (enabled[special.type as SpecialCardType]) {
+      specialCardsCount += getSpecialCount(special.type as SpecialCardType);
+    }
+  }
+
+  // Ratio balancing: ~1 special card per 15 colored cards
+  // Colored cards must be full sets of 48 (1-12 in 4 colors)
+  // If scaleColoredCardsRatio is explicitly false, fixed at 96 colored cards (2 sets)
+  const isRatioEnabled = typeof settingsOrMode === 'object' && settingsOrMode?.scaleColoredCardsRatio !== undefined
+    ? Boolean(settingsOrMode.scaleColoredCardsRatio)
+    : true;
+
+  const setsCount = (!isRatioEnabled || specialCardsCount === 0)
+    ? 2
+    : Math.max(2, Math.round((specialCardsCount * 15) / 48));
+
+  for (let set = 0; set < setsCount; set++) {
+    for (const color of colors) {
+      for (let val = 1; val <= 12; val++) {
+        const points = val <= 9 ? 5 : 10;
+        cards.push({
+          id: `card_${idPrefix}${idCounter++}`,
+          type: 'number',
+          color,
+          value: val,
+          points
+        });
+      }
+    }
+  }
+
+  // Add custom special cards based on host toggles and counts
+  for (const special of CHAOS_SPECIAL_CARDS) {
+    if (enabled[special.type as SpecialCardType]) {
+      const count = getSpecialCount(special.type as SpecialCardType);
+      for (let i = 0; i < count; i++) {
+        cards.push({
+          id: `card_${idPrefix}${idCounter++}`,
+          type: special.type,
+          color: 'none',
+          value: 0,
+          points: special.points
+        });
+      }
+    }
+  }
+
+  // Add enabled ultimate cards based on host toggles and counts
   for (const ultimate of CHAOS_ULTIMATE_CARDS) {
     if (enabledUltimates[ultimate.type]) {
-      cards.push({
-        id: `card_${idPrefix}${idCounter++}`,
-        type: ultimate.type,
-        color: 'none',
-        value: 0,
-        points: ultimate.points,
-        ultimateProgress: 0
-      });
+      const count = getUltimateCount(ultimate.type);
+      for (let i = 0; i < count; i++) {
+        cards.push({
+          id: `card_${idPrefix}${idCounter++}`,
+          type: ultimate.type,
+          color: 'none',
+          value: 0,
+          points: ultimate.points,
+          ultimateProgress: 0
+        });
+      }
     }
   }
 
@@ -164,9 +183,10 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
     });
   }
 
-  // 4 Skip cards = 15 points each (if enabled)
+  // Skip cards (if enabled)
   if (enabled.skip !== false) {
-    for (let i = 0; i < 4; i++) {
+    const skipCount = getSpecialCount('skip');
+    for (let i = 0; i < skipCount; i++) {
       cards.push({
         id: `card_${idPrefix}${idCounter++}`,
         type: 'skip',
@@ -177,9 +197,10 @@ export function createStandardDeck(settingsOrMode?: GameSettings | GameMode, idP
     }
   }
 
-  // 4 Reverse cards = 15 points each (if enabled)
+  // Reverse cards (if enabled)
   if (enabled.reverse !== false) {
-    for (let i = 0; i < 4; i++) {
+    const reverseCount = getSpecialCount('reverse');
+    for (let i = 0; i < reverseCount; i++) {
       cards.push({
         id: `card_${idPrefix}${idCounter++}`,
         type: 'reverse',

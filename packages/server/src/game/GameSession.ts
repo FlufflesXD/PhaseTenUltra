@@ -99,6 +99,10 @@ export class GameSession {
       if (card.type === 'nuke') return 8000;
       if (card.type === 'time') return 8200;
       if (card.type === 'crack') return 5000;
+      if (card.type === 'number_eye' || card.type === 'color_eye') return 6000;
+      if (card.type === 'plus_two') return 4400;
+      if (card.type === 'plus_three') return 5100;
+      if (card.type === 'jester') return 4250;
       return 3000;
     }
     return 0;
@@ -386,6 +390,9 @@ export class GameSession {
   }
 
   public drawCard(playerId: string, source: 'deck' | 'discard'): Card {
+    if (this.enableAnimationDelays && this.isAnimationLocked()) {
+      throw new Error('Turn is locked while animation is playing');
+    }
     const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
     if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
@@ -563,6 +570,7 @@ export class GameSession {
   }
 
   public layExtraGroup(playerId: string, cardIds: string[]): void {
+    if (this.enableAnimationDelays && this.isAnimationLocked()) throw new Error('Turn is locked while animation is playing');
     const current = this.getCurrentPlayer();
     if (current.id !== playerId) throw new Error('Not your turn');
     if (this.turnStage !== 'play') throw new Error('Must draw a card first');
@@ -670,6 +678,7 @@ export class GameSession {
     targetGroupId: string,
     targetEnd?: 'low' | 'high'
   ): void {
+    if (this.enableAnimationDelays && this.isAnimationLocked()) throw new Error('Turn is locked while animation is playing');
     const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
     if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
@@ -773,6 +782,9 @@ export class GameSession {
     _skipTargetPlayerId?: string,
     activateAbility: boolean = true
   ): void {
+    if (this.enableAnimationDelays && this.isAnimationLocked()) {
+      throw new Error('Turn is locked while animation is playing');
+    }
     const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
     if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
@@ -820,11 +832,13 @@ export class GameSession {
     current.cards.splice(cardIndex, 1);
     current.cardCount = current.cards.length;
 
-    this.discardPile.push(card);
-
     const animDuration = this.getCardAnimationDuration(card, shouldActivate);
     if (animDuration > 0) {
       this.animationLockUntil = Date.now() + animDuration;
+    }
+
+    if (!this.enableAnimationDelays || animDuration === 0) {
+      this.discardPile.push(card);
     }
 
     if (!shouldActivate) {
@@ -982,7 +996,7 @@ export class GameSession {
     this.advanceTurn(animDuration);
   }
 
-  private applyNukeEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType): void {
+  private applyNukeEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType, skipEmitAction: boolean = false): void {
     const active = this.getActivePlayers();
     for (const player of active) {
       // Ultimate cards cannot be erased by Nuke
@@ -1018,21 +1032,24 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'nuke',
-      playerId: current.id,
-      playerName: current.name,
-      card,
-      randomChosenType,
-      message: `${current.name} detonated a NUKE! Everyone's hand was set to 2 cards!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'nuke',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        randomChosenType,
+        message: `${current.name} detonated a NUKE! Everyone's hand was set to 2 cards!`
+      });
+    }
   }
 
   private applyJesterEffect(
     current: GamePlayerInternal,
     card: Card,
     skipTargetPlayerId?: string,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     let target = skipTargetPlayerId
@@ -1064,29 +1081,33 @@ export class GameSession {
       this.notify({
         id: `notif_${Date.now()}`,
         type: 'info',
-        message: `🃏 ${current.name} played Jester and swapped hands with ${target.name}! (Ultimate cards remained with owners)`,
+        message: `${current.name} played Jester and swapped hands with ${target.name}! (Ultimate cards remained with owners)`,
         playerId: current.id,
         timestamp: Date.now()
       });
 
-      this.emitAction({
-        type: 'jester',
-        playerId: current.id,
-        playerName: current.name,
-        targetPlayerId: target.id,
-        card,
-        randomChosenType,
-        message: `${current.name} swapped hands with ${target.name}!`
-      });
+      if (!skipEmitAction) {
+        this.emitAction({
+          type: 'jester',
+          playerId: current.id,
+          playerName: current.name,
+          targetPlayerId: target.id,
+          card,
+          randomChosenType,
+          message: `${current.name} swapped hands with ${target.name}!`
+        });
+      }
     } else {
-      this.emitAction({
-        type: 'jester',
-        playerId: current.id,
-        playerName: current.name,
-        card,
-        randomChosenType,
-        message: `${current.name} played Jester!`
-      });
+      if (!skipEmitAction) {
+        this.emitAction({
+          type: 'jester',
+          playerId: current.id,
+          playerName: current.name,
+          card,
+          randomChosenType,
+          message: `${current.name} played Jester!`
+        });
+      }
     }
   }
 
@@ -1095,7 +1116,8 @@ export class GameSession {
     card: Card,
     count: 2 | 3,
     skipTargetPlayerId?: string,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     let target = skipTargetPlayerId
@@ -1124,18 +1146,20 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: count === 3 ? 'plus_three' : 'plus_two',
-      playerId: current.id,
-      playerName: current.name,
-      targetPlayerId: target.id,
-      card,
-      randomChosenType,
-      message: `${current.name} gave +${count} cards to ${target.name}!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: count === 3 ? 'plus_three' : 'plus_two',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        randomChosenType,
+        message: `${current.name} gave +${count} cards to ${target.name}!`
+      });
+    }
   }
 
-  private applyDrawTwoEffect(current: GamePlayerInternal, card: Card): void {
+  private applyDrawTwoEffect(current: GamePlayerInternal, card: Card, skipEmitAction: boolean = false): void {
     const active = this.getActivePlayers();
     const nextIndex = (this.currentTurnIndex + this.playDirection + active.length) % active.length;
     const target = active[nextIndex];
@@ -1157,17 +1181,19 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'draw_two',
-      playerId: current.id,
-      playerName: current.name,
-      targetPlayerId: target.id,
-      card,
-      message: `${current.name} played Draw Two on ${target.name}!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'draw_two',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        message: `${current.name} played Draw Two on ${target.name}!`
+      });
+    }
   }
 
-  private applyRedoEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType): void {
+  private applyRedoEffect(current: GamePlayerInternal, card: Card, randomChosenType?: CardType, skipEmitAction: boolean = false): void {
     const freshDeck = createDeck(this.settings);
     const freshHand = freshDeck.slice(0, 10).map((c, idx) => ({
       ...c,
@@ -1184,21 +1210,24 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'redo',
-      playerId: current.id,
-      playerName: current.name,
-      card,
-      randomChosenType,
-      message: `${current.name} replaced their hand with 10 cards from a fresh deck!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'redo',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        randomChosenType,
+        message: `${current.name} replaced their hand with 10 cards from a fresh deck!`
+      });
+    }
   }
 
   private applyTimeEffect(
     current: GamePlayerInternal,
     card: Card,
     skipTargetPlayerId?: string,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     const maxPhase = this.phaseDefinitions.length;
@@ -1246,33 +1275,36 @@ export class GameSession {
       id: `notif_${Date.now()}`,
       type: 'info',
       message: isRewind
-        ? `⏳ ${current.name} used TIME on ${target.name}! ⏪ Rewound from Stage ${oldPhase} back to Stage ${newPhase}!`
-        : `⏳ ${current.name} used TIME on ${target.name}! ⏩ Fast-forwarded from Stage ${oldPhase} to Stage ${newPhase}!`,
+        ? `${current.name} used TIME on ${target.name}! Rewound from Stage ${oldPhase} back to Stage ${newPhase}!`
+        : `${current.name} used TIME on ${target.name}! Fast-forwarded from Stage ${oldPhase} to Stage ${newPhase}!`,
       playerId: current.id,
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'time',
-      playerId: current.id,
-      playerName: current.name,
-      targetPlayerId: target.id,
-      card,
-      randomChosenType,
-      timeResult: rollResult,
-      timeOldPhase: oldPhase,
-      timeNewPhase: newPhase,
-      message: isRewind
-        ? `⏳ ${current.name} rewound ${target.name} to Stage ${newPhase}!`
-        : `⏳ ${current.name} advanced ${target.name} to Stage ${newPhase}!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'time',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        randomChosenType,
+        timeResult: rollResult,
+        timeOldPhase: oldPhase,
+        timeNewPhase: newPhase,
+        message: isRewind
+          ? `${current.name} rewound ${target.name} to Stage ${newPhase}!`
+          : `${current.name} advanced ${target.name} to Stage ${newPhase}!`
+      });
+    }
   }
 
   private applyNumberEyeEffect(
     current: GamePlayerInternal,
     card: Card,
     skipTargetPlayerId?: string,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     let target = skipTargetPlayerId
@@ -1298,22 +1330,25 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'number_eye',
-      playerId: current.id,
-      playerName: current.name,
-      targetPlayerId: target.id,
-      card,
-      randomChosenType,
-      message: `${current.name} obscured ${target.name}'s card numbers with question marks!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'number_eye',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        randomChosenType,
+        message: `${current.name} obscured ${target.name}'s card numbers with question marks!`
+      });
+    }
   }
 
   private applyColorEyeEffect(
     current: GamePlayerInternal,
     card: Card,
     skipTargetPlayerId?: string,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     let target = skipTargetPlayerId
@@ -1339,21 +1374,24 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'color_eye',
-      playerId: current.id,
-      playerName: current.name,
-      targetPlayerId: target.id,
-      card,
-      randomChosenType,
-      message: `${current.name} turned ${target.name}'s cards grayscale!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'color_eye',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        randomChosenType,
+        message: `${current.name} turned ${target.name}'s cards grayscale!`
+      });
+    }
   }
 
   private applyCrackEffect(
     current: GamePlayerInternal,
     card: Card,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     const opponents = active.filter(p => p.id !== current.id);
@@ -1376,20 +1414,23 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'crack',
-      playerId: current.id,
-      playerName: current.name,
-      card,
-      randomChosenType,
-      message: `${current.name} cracked opponents' cards with a ground-shaking tremor!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'crack',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        randomChosenType,
+        message: `${current.name} cracked opponents' cards with a ground-shaking tremor!`
+      });
+    }
   }
 
   private applyStatusEffect(
     current: GamePlayerInternal,
     card: Card,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     current.hasNumberEyeEffect = false;
     current.hasColorEyeEffect = false;
@@ -1409,20 +1450,23 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'status',
-      playerId: current.id,
-      playerName: current.name,
-      card,
-      randomChosenType,
-      message: `${current.name} cleansed all active buffs and debuffs!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'status',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        randomChosenType,
+        message: `${current.name} cleansed all active buffs and debuffs!`
+      });
+    }
   }
 
   private applyLuckEffect(
     current: GamePlayerInternal,
     card: Card,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     current.hasLuck = true;
 
@@ -1434,21 +1478,24 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'luck',
-      playerId: current.id,
-      playerName: current.name,
-      card,
-      randomChosenType,
-      message: `${current.name} gained 2x Luck for card draws!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'luck',
+        playerId: current.id,
+        playerName: current.name,
+        card,
+        randomChosenType,
+        message: `${current.name} gained 2x Luck for card draws!`
+      });
+    }
   }
 
   private applyUnluckyEffect(
     current: GamePlayerInternal,
     card: Card,
     skipTargetPlayerId?: string,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     let target = skipTargetPlayerId
@@ -1470,22 +1517,25 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'unlucky',
-      playerId: current.id,
-      playerName: current.name,
-      targetPlayerId: target.id,
-      card,
-      randomChosenType,
-      message: `${current.name} gave Bad Luck to ${target.name}!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'unlucky',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        randomChosenType,
+        message: `${current.name} gave Bad Luck to ${target.name}!`
+      });
+    }
   }
 
   private applyDoubleEffect(
     current: GamePlayerInternal,
     card: Card,
     skipTargetPlayerId?: string,
-    randomChosenType?: CardType
+    randomChosenType?: CardType,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     let target = skipTargetPlayerId
@@ -1507,21 +1557,24 @@ export class GameSession {
       timestamp: Date.now()
     });
 
-    this.emitAction({
-      type: 'double',
-      playerId: current.id,
-      playerName: current.name,
-      targetPlayerId: target.id,
-      card,
-      randomChosenType,
-      message: `${current.name} cursed ${target.name} with Repeat Stage (Double)!`
-    });
+    if (!skipEmitAction) {
+      this.emitAction({
+        type: 'double',
+        playerId: current.id,
+        playerName: current.name,
+        targetPlayerId: target.id,
+        card,
+        randomChosenType,
+        message: `${current.name} cursed ${target.name} with Repeat Stage (Double)!`
+      });
+    }
   }
 
   private applyRandomEffect(
     current: GamePlayerInternal,
     card: Card,
-    skipTargetPlayerId?: string
+    skipTargetPlayerId?: string,
+    skipEmitAction: boolean = false
   ): void {
     const active = this.getActivePlayers();
     const opponents = active.filter(p => p.id !== current.id);
@@ -1550,31 +1603,31 @@ export class GameSession {
     });
 
     if (chosen === 'nuke') {
-      this.applyNukeEffect(current, card, chosen);
+      this.applyNukeEffect(current, card, chosen, skipEmitAction);
     } else if (chosen === 'jester') {
-      this.applyJesterEffect(current, card, skipTargetPlayerId, chosen);
+      this.applyJesterEffect(current, card, skipTargetPlayerId, chosen, skipEmitAction);
     } else if (chosen === 'plus_two') {
-      this.applyPlusCardsEffect(current, card, 2, skipTargetPlayerId, chosen);
+      this.applyPlusCardsEffect(current, card, 2, skipTargetPlayerId, chosen, skipEmitAction);
     } else if (chosen === 'plus_three') {
-      this.applyPlusCardsEffect(current, card, 3, skipTargetPlayerId, chosen);
+      this.applyPlusCardsEffect(current, card, 3, skipTargetPlayerId, chosen, skipEmitAction);
     } else if (chosen === 'redo') {
-      this.applyRedoEffect(current, card, chosen);
+      this.applyRedoEffect(current, card, chosen, skipEmitAction);
     } else if (chosen === 'time') {
-      this.applyTimeEffect(current, card, skipTargetPlayerId, chosen);
+      this.applyTimeEffect(current, card, skipTargetPlayerId, chosen, skipEmitAction);
     } else if (chosen === 'number_eye') {
-      this.applyNumberEyeEffect(current, card, skipTargetPlayerId, chosen);
+      this.applyNumberEyeEffect(current, card, skipTargetPlayerId, chosen, skipEmitAction);
     } else if (chosen === 'color_eye') {
-      this.applyColorEyeEffect(current, card, skipTargetPlayerId, chosen);
+      this.applyColorEyeEffect(current, card, skipTargetPlayerId, chosen, skipEmitAction);
     } else if (chosen === 'crack') {
-      this.applyCrackEffect(current, card, chosen);
+      this.applyCrackEffect(current, card, chosen, skipEmitAction);
     } else if (chosen === 'status') {
-      this.applyStatusEffect(current, card, chosen);
+      this.applyStatusEffect(current, card, chosen, skipEmitAction);
     } else if (chosen === 'luck') {
-      this.applyLuckEffect(current, card, chosen);
+      this.applyLuckEffect(current, card, chosen, skipEmitAction);
     } else if (chosen === 'unlucky') {
-      this.applyUnluckyEffect(current, card, skipTargetPlayerId, chosen);
+      this.applyUnluckyEffect(current, card, skipTargetPlayerId, chosen, skipEmitAction);
     } else if (chosen === 'double') {
-      this.applyDoubleEffect(current, card, skipTargetPlayerId, chosen);
+      this.applyDoubleEffect(current, card, skipTargetPlayerId, chosen, skipEmitAction);
     }
   }
 
@@ -1710,47 +1763,60 @@ export class GameSession {
       });
     }
 
-    // 2. Schedule mechanical state mutation at 3000ms (end of Totem hover)
+    // 2. Schedule mechanical state mutation at the exact moment its animation completes
+    // Card mutations occur when visual impact lands, passing skipEmitAction: true
+    let effectDelay = 3000;
+    if (card.type === 'nuke') effectDelay = 8000;
+    else if (card.type === 'time') effectDelay = 8200;
+    else if (card.type === 'crack') effectDelay = 5000;
+    else if (card.type === 'number_eye' || card.type === 'color_eye') effectDelay = 6000;
+    else if (card.type === 'plus_two') effectDelay = 4400;
+    else if (card.type === 'plus_three') effectDelay = 5100;
+    else if (card.type === 'jester') effectDelay = 4250;
+
     this.addPendingEffectTimeout(() => {
       if (this.status !== 'in_game') return;
 
       if (card.type === 'nuke') {
-        this.applyNukeEffect(current, card);
+        this.applyNukeEffect(current, card, undefined, true);
       } else if (card.type === 'jester') {
-        this.applyJesterEffect(current, card, skipTargetPlayerId);
+        this.applyJesterEffect(current, card, skipTargetPlayerId, undefined, true);
       } else if (card.type === 'plus_two' || card.type === 'plus_three') {
         const count = card.type === 'plus_three' ? 3 : 2;
-        this.applyPlusCardsEffect(current, card, count, skipTargetPlayerId);
+        this.applyPlusCardsEffect(current, card, count, skipTargetPlayerId, undefined, true);
       } else if (card.type === 'draw_two') {
-        this.applyDrawTwoEffect(current, card);
+        this.applyDrawTwoEffect(current, card, true);
       } else if (card.type === 'redo') {
-        this.applyRedoEffect(current, card);
+        this.applyRedoEffect(current, card, undefined, true);
       } else if (card.type === 'time') {
-        this.applyTimeEffect(current, card, skipTargetPlayerId);
+        this.applyTimeEffect(current, card, skipTargetPlayerId, undefined, true);
       } else if (card.type === 'number_eye') {
-        this.applyNumberEyeEffect(current, card, skipTargetPlayerId);
+        this.applyNumberEyeEffect(current, card, skipTargetPlayerId, undefined, true);
       } else if (card.type === 'color_eye') {
-        this.applyColorEyeEffect(current, card, skipTargetPlayerId);
+        this.applyColorEyeEffect(current, card, skipTargetPlayerId, undefined, true);
       } else if (card.type === 'crack') {
-        this.applyCrackEffect(current, card);
+        this.applyCrackEffect(current, card, undefined, true);
       } else if (card.type === 'status') {
-        this.applyStatusEffect(current, card);
+        this.applyStatusEffect(current, card, undefined, true);
       } else if (card.type === 'luck') {
-        this.applyLuckEffect(current, card);
+        this.applyLuckEffect(current, card, undefined, true);
       } else if (card.type === 'unlucky') {
-        this.applyUnluckyEffect(current, card, skipTargetPlayerId);
+        this.applyUnluckyEffect(current, card, skipTargetPlayerId, undefined, true);
       } else if (card.type === 'double') {
-        this.applyDoubleEffect(current, card, skipTargetPlayerId);
+        this.applyDoubleEffect(current, card, skipTargetPlayerId, undefined, true);
       } else if (card.type === 'random') {
-        this.applyRandomEffect(current, card, skipTargetPlayerId);
+        this.applyRandomEffect(current, card, skipTargetPlayerId, true);
       }
 
       this.onStateChange();
-    }, 3000);
+    }, effectDelay);
 
-    // 3. Advance turn after full animation concludes
+    // 3. Advance turn after full animation concludes and push card to discard pile
     this.addPendingEffectTimeout(() => {
       if (this.status !== 'in_game') return;
+      this.discardPile.push(card);
+      this.onStateChange();
+
       if (current.cards.length === 0) {
         this.endRound(current);
         return;
@@ -2030,6 +2096,10 @@ export class GameSession {
 
   public takeTurnForBot(bot: GamePlayerInternal): void {
     if (this.status !== 'in_game') return;
+    if (this.isAnimationLocked()) {
+      this.scheduleBotTurn(bot);
+      return;
+    }
     const current = this.getCurrentPlayer();
     if (!current || current.id !== bot.id) return;
 
@@ -2430,6 +2500,9 @@ export class GameSession {
   }
 
   public playUltimateCard(playerId: string, ultimateCardId: string): void {
+    if (this.enableAnimationDelays && this.isAnimationLocked()) {
+      throw new Error('Turn is locked while animation is playing');
+    }
     const player = this.players.find(p => p.id === playerId || p.secretToken === playerId);
     if (player?.isResigned) throw new Error('Player has resigned this round');
     const current = this.getCurrentPlayer();
@@ -2443,10 +2516,12 @@ export class GameSession {
       throw new Error('Ultimate card is not fully charged (requires 100% charge)');
     }
 
-    // Remove ultimate card from hand and place on discard pile
+    // Remove ultimate card from hand; defer placement on discard pile until animation finishes
     current.cards.splice(ultIndex, 1);
     current.cardCount = current.cards.length;
-    this.discardPile.push(ultimateCard);
+    if (!this.enableAnimationDelays) {
+      this.discardPile.push(ultimateCard);
+    }
 
     // Universal divine descent action event
     this.emitAction({
@@ -2494,6 +2569,8 @@ export class GameSession {
           // Advance turn after the full 1600ms flip transition concludes:
           this.addPendingEffectTimeout(() => {
             if (this.status !== 'in_game') return;
+            this.discardPile.push(ultimateCard);
+            this.onStateChange();
             if (current.cards.length === 0) {
               this.endRound(current);
               return;
@@ -2505,6 +2582,7 @@ export class GameSession {
         // Singularity, Voyance, Avarice: Execute effect at 6.0s when Divine Descent finishes
         this.addPendingEffectTimeout(() => {
           if (this.status !== 'in_game') return;
+          this.discardPile.push(ultimateCard);
           if (ultimateCard.type === 'singularity') {
             this.applySingularityEffect(current, ultimateCard);
           } else if (ultimateCard.type === 'voyance') {

@@ -182,6 +182,9 @@ export interface GameSettings {
   botCount?: number; // 0 to 3 bots
   enabledSpecialCards?: Record<SpecialCardType, boolean>;
   enabledUltimateCards?: Record<UltimateCardType, boolean>;
+  specialCardCounts?: Partial<Record<SpecialCardType, number>>;
+  ultimateCardCounts?: Partial<Record<UltimateCardType, number>>;
+  scaleColoredCardsRatio?: boolean;
   gameMode?: GameMode; // Optional legacy fallback
   customActionCards?: boolean;
 }

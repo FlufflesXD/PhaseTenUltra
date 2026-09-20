@@ -2580,6 +2580,106 @@ describe('Chaos Game Mode & Custom Card Tests', () => {
     session.cleanup();
     done();
   });
+
+  test('v6.4 Ratio Toggle and Custom Card Counts in Deck Generation', () => {
+    // 1. Ratio toggle OFF (scaleColoredCardsRatio: false) -> exactly 96 colored cards (2 sets)
+    const deckWithoutRatio = createStandardDeck({
+      gameMode: 'chaos',
+      scaleColoredCardsRatio: false
+    });
+    const coloredCards = deckWithoutRatio.filter(c => c.type === 'number');
+    assert.strictEqual(coloredCards.length, 96, 'Should have exactly 96 colored cards when ratio is OFF');
+
+    // 2. Custom special and ultimate card copy counts
+    const deckWithCustomCounts = createStandardDeck({
+      gameMode: 'chaos',
+      scaleColoredCardsRatio: false,
+      specialCardCounts: { nuke: 4, jester: 3 },
+      ultimateCardCounts: { singularity: 2 }
+    });
+    const nukeCards = deckWithCustomCounts.filter(c => c.type === 'nuke');
+    const jesterCards = deckWithCustomCounts.filter(c => c.type === 'jester');
+    const singularityCards = deckWithCustomCounts.filter(c => c.type === 'singularity');
+    assert.strictEqual(nukeCards.length, 4, 'Should have exactly 4 Nuke cards');
+    assert.strictEqual(jesterCards.length, 3, 'Should have exactly 3 Jester cards');
+    assert.strictEqual(singularityCards.length, 2, 'Should have exactly 2 Singularity cards');
+  });
+
+  test('v6.4 Deferred Discard Placement and Bot Locking', (t, done) => {
+    const session = new GameSession(
+      'CHAOS_V64',
+      { turnTimerSeconds: 0, gameMode: 'chaos' },
+      () => {},
+      () => {},
+      () => {}
+    );
+    session.enableAnimationDelays = true;
+
+    session.players = [
+      {
+        id: 'p1',
+        secretToken: 'p1',
+        name: 'P1',
+        isHost: true,
+        isSpectator: false,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: true,
+        cardCount: 3,
+        cards: [
+          { id: 'jester_card', type: 'jester', color: 'none', value: 0, points: 25 },
+          { id: 'c1', type: 'number', color: 'red', value: 1, points: 5 },
+          { id: 'c2', type: 'number', color: 'red', value: 2, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      },
+      {
+        id: 'bot1',
+        secretToken: 'bot1',
+        name: 'Bot 1',
+        isHost: false,
+        isSpectator: false,
+        isBot: true,
+        connected: true,
+        score: 0,
+        currentPhase: 1,
+        phaseCompletedInRound: false,
+        cardCount: 2,
+        cards: [
+          { id: 'b1', type: 'number', color: 'blue', value: 5, points: 5 },
+          { id: 'b2', type: 'number', color: 'blue', value: 6, points: 5 }
+        ],
+        laidDownPhases: [],
+        isSkipped: false
+      }
+    ];
+
+    session.status = 'in_game';
+    session.currentTurnIndex = 0;
+    session.turnStage = 'discard';
+
+    // Discard Jester card targeting bot1
+    session.discardCard('p1', 'jester_card', 'bot1');
+
+    // 1. Jester card removed from P1 hand immediately at t=0
+    assert.strictEqual(session.players[0].cards.some(c => c.id === 'jester_card'), false);
+
+    // 2. Jester card is NOT yet on discard pile (held until animation concludes)
+    assert.strictEqual(session.discardPile.some(c => c.id === 'jester_card'), false);
+    assert.ok(session.isAnimationLocked());
+
+    // 3. Actions rejected while locked
+    assert.throws(() => session.drawCard('p1', 'deck'), /Turn is locked while animation is playing/);
+
+    // 4. Bot does not act while locked
+    session.takeTurnForBot(session.players[1]);
+    assert.strictEqual(session.players[1].cardCount, 2, 'Bot should not draw or act during animation lock');
+
+    session.cleanup();
+    done();
+  });
 });
 
 
